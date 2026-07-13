@@ -1,7 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 dependencies: []
-last_verified:
+last_verified: 2026-07-13
 frame_review: true
 ---
 
@@ -9,7 +9,7 @@ frame_review: true
 
 ## Status
 
-Proposed (2026-07-13)
+Accepted (2026-07-13)
 
 ## Context
 
@@ -41,6 +41,11 @@ The following owner-approved statement is authoritative as of 2026-07-13:
 - Source projects are read-only. Gauge owns its registry, daily observations,
   history, forecasts, risks, and recommendations in a central private Gauge
   instance, never through mandatory writes to each source repository.
+- Gauge owns the **cross-project attention policy** and an optional central
+  portfolio-priority overlay because no individual project can author a global
+  ordering. That overlay ranks observations; it never rewrites a project's
+  goal, deadline, priority, or lifecycle state. A missing source-owned deadline
+  remains `unknown` and cannot produce an `on_track` / `at_risk` forecast.
 - The core is adapter-based and degrades gracefully. Jig, Shaper, and Servo are
   optional signal providers; generic projects remain valid Gauge projects.
 - Progress, deadline risk, and priority recommendations are deterministic,
@@ -87,7 +92,17 @@ Choose **Option B**. The Gauge product direction above is authoritative as of
 deterministic collection, read-only source access, tolerant ingestion, honest
 progress, workstream pinning, worktree-only warnings, and a local single-page
 UI. Portfolio authority, history, forecasts, risk, and prioritization move to
-Gauge's central instance boundary.
+Gauge's central instance boundary. “Portfolio authority” is deliberately
+narrow: Gauge owns membership, cross-project attention policy, and derived
+observations; source projects continue to own their goals, deadlines, local
+priority, and lifecycle state.
+
+The MVP must validate the forecast and recommendation model against at least
+three real configured projects with readable source-owned goals/deadlines before
+claiming those capabilities as shipped. The recommendation queue may still rank
+categorical evidence (explicit blocker, human-required action, in-progress work,
+ready work) when a date is unavailable, but it must label deadline confidence
+`unknown` and explain which policy produced the ordering.
 
 ## Re-baselining manifest
 
@@ -130,7 +145,9 @@ accepted and the manifest's draft retirement is executed:
    Jig execution state, and Shaper release/target-date mapping. Servo remains a
    later optional evaluation-signal adapter.
 3. Define transparent progress strategies, historical velocity, deadline-risk
-   confidence, and deterministic recommendation ranking.
+   confidence, and deterministic recommendation ranking, including the central
+   cross-project attention policy/priority overlay and the rule that missing
+   source dates stay `unknown`.
 4. Add the daily collector that writes only to the private Gauge instance.
 5. Add authenticated hosted delivery as a close follow-up; later extend access
    to GitHub organizations/teams and support multi-repository projects plus
@@ -197,6 +214,8 @@ edge-patched.
 - Keeping daily history and portfolio policy in one private, auditable place.
 - Explaining progress, risk, freshness, and recommended attention from source
   evidence without creating a competing lifecycle authority.
+- Ranking cross-project attention without pretending that project-local work
+  units or priorities are inherently comparable.
 - Evolving toward team/org use without placing that complexity in the MVP.
 
 **Becomes harder:**
@@ -224,6 +243,9 @@ unverified load-bearing assumptions — do not pad with boilerplate._
   explicit permission or a license before redistributing derived code.
 - A Shaper-owned deadline field does not exist in the reviewed Shaper artifact
   shape today; the adapter contract must be coordinated rather than inferred.
+- The initial real-project set has not yet demonstrated three readable,
+  source-owned deadlines. Forecasting stays unproven until the MVP release check
+  exercises that fixture set; absent dates must remain `unknown` meanwhile.
 
 ## Kill criteria
 
@@ -239,6 +261,10 @@ when there is no meaningful kill condition; do not invent ceremonial ones._
 - Deterministic progress/risk cannot be expressed honestly for the initial real
   projects without project-specific manual upkeep; narrow the MVP to sourced
   facts and recommendations until a workable progress strategy exists.
+- Cross-project recommendations require so much central manual prioritization
+  that Gauge becomes a second project-management authority; in that case keep
+  the queue categorical/advisory or remove it rather than duplicating project
+  state centrally.
 
 ## Open questions
 
@@ -248,3 +274,6 @@ when there is no meaningful kill condition; do not invent ceremonial ones._
   repository-configured goal, or both with explicit precedence?
 - What minimum history and confidence threshold must exist before Gauge labels a
   project `on_track` or `at_risk` instead of `unknown`?
+- What is the smallest central priority overlay that expresses genuine
+  portfolio intent without duplicating project-local priority—ordered projects,
+  coarse tiers, or deadline-plus-attention rules only?

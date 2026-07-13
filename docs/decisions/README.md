@@ -7,7 +7,9 @@
 
 ## Index
 
-_No ADRs yet. First ADR will be written when the first architectural decision is made._
+- [ADR-0001: (untitled)](adr-0001-runtime-zero-deps.md) — The dashboard is a local, single-user tool that must outlive framework churn and never block on a broken install. ((unknown))
+- [ADR-0002: (untitled)](adr-0002-compass-snapshot-contract.md) — Compass is deliberately read-only: it reports in chat and persists nothing, so "what did compass say last" has no data source. ((unknown))
+- [ADR-0003: Reframe project-dashboard onto Gauge portfolio product](adr-0003-reframe-onto-gauge-portfolio-product.md) — The fork began as `project-dashboard`: a local, zero-dependency viewer over Jig-managed projects. (2026-07-13, Accepted)
 
 ## Format
 
