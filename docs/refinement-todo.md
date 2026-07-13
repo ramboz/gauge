@@ -25,7 +25,8 @@
 schema evolution, retention, and central instance-state location.
 
 **Resolution trigger:** before spec 004 enters READY_FOR_IMPLEMENTATION.
-**Resolved by:** [ADR-0004: Central observation and history contract](decisions/adr-0004-central-observation-history-contract.md).
+**Resolved by:** [ADR-0005: Symmetric source and state isolation](decisions/adr-0005-symmetric-source-state-isolation.md),
+which supersedes ADR-0004 while retaining its observation/history contract.
 
 ### Generic goal and deadline source
 

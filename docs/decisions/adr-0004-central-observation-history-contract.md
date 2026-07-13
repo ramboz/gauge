@@ -1,5 +1,5 @@
 ---
-status: Accepted
+status: Superseded
 dependencies: []
 last_verified: 2026-07-13
 frame_review: true
@@ -10,6 +10,7 @@ frame_review: true
 ## Status
 
 Accepted (2026-07-13)
+Superseded by [ADR-0005](./adr-0005-symmetric-source-state-isolation.md) (2026-07-13)
 
 ## Context
 
