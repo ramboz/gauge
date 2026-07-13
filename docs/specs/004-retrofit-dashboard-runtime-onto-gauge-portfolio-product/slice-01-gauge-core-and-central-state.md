@@ -1,7 +1,8 @@
 ---
 status: DRAFT
-dependencies: [adr-0003]
+dependencies: [adr-0003, adr-0004]
 last_verified:
+frame_review: true
 arch_review: true
 ---
 
@@ -14,7 +15,9 @@ and history live only in the private Gauge instance—not in surveyed projects.
 **DoR:**
 - ADR-0003 is accepted after frame critique.
 - The central observation/history contract and its schema/versioning semantics
-  are accepted in a follow-up ADR spawned by ADR-0003.
+  are accepted in
+  [ADR-0004](../../decisions/adr-0004-central-observation-history-contract.md)
+  after frame critique.
 - POC reuse/redistribution permission is recorded through the repository's MIT
   license and preserved upstream attribution.
 
