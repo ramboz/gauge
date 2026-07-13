@@ -13,7 +13,9 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 
 ## Appetite
 
-- TBD — owner to set the fixed time or attention budget; variable scope must preserve one complete daily portfolio loop.
+- Maximum two weeks from implementation start.
+- Fixed constraints: deliver one complete private daily portfolio loop across at least three configured single-repository projects; preserve read-only source access, central observations/history, source-owned goals, explicit unknown states, and explainable recommendations.
+- Variable scope: visual polish, the number of source-specific progress strategies, historical analysis beyond retaining daily observations, and forecast sophistication. Cut these before extending the appetite; a simple evidenced rule or `unknown` is acceptable where a trustworthy forecast is not.
 
 ## Solution Outline
 
@@ -54,6 +56,7 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 | Multi-repository projects and concurrent goals | Long-term vision | Explicitly excluded by the owner-approved MVP topology. |
 | Sessions panel / PR badges | Retired spec 003 | Expands the old local-viewer frame rather than proving Gauge's portfolio loop. |
 | Notifications, write-back, lifecycle mutation | Gauge no-go | Would turn an observer into a control plane before trust is established. |
+| Advanced velocity models, predictive analytics, and extra progress strategies | Two-week appetite | Retain observations and honest unknowns; sophistication can follow after real usage. |
 
 ### Split
 
@@ -73,6 +76,7 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 | Prove source-owned goal/date availability on three real projects | ADR-0003 release gate | Forecasting must not be designed around hypothetical signals. |
 | Prove no source-repository writes | ADR-0003 authority boundary | Central history is the most important behavioral correction. |
 | Threat-model central snapshots and credentials | Private portfolio data | Prevent secrets or private project context from entering committed observations. |
+| Review the cutline at the end of week one | Two-week appetite | Preserve enough time to finish the complete vertical loop rather than carrying several partial subsystems into week two. |
 
 ## JIG Handoff
 
