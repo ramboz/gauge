@@ -19,12 +19,13 @@
 
 ## Blocking the runtime retrofit
 
-### Normalized observation and history contract
+### ~~Normalized observation and history contract~~ — RESOLVED 2026-07-13
 
 **Decision needed:** versioned observation shape, provenance, freshness/error,
 schema evolution, retention, and central instance-state location.
 
 **Resolution trigger:** before spec 004 enters READY_FOR_IMPLEMENTATION.
+**Resolved by:** [ADR-0004: Central observation and history contract](decisions/adr-0004-central-observation-history-contract.md).
 
 ### Generic goal and deadline source
 
