@@ -2,13 +2,13 @@
 
 > Status: Draft (wizard-generated)
 >
-> Architectural Decision Records for project-dashboard. Nygard convention: immutable
+> Architectural Decision Records for Gauge. Nygard convention: immutable
 > after acceptance. New decisions supersede old ones — never edit an accepted ADR.
 
 ## Index
 
-- [ADR-0001: (untitled)](adr-0001-runtime-zero-deps.md) — The dashboard is a local, single-user tool that must outlive framework churn and never block on a broken install. ((unknown))
-- [ADR-0002: (untitled)](adr-0002-compass-snapshot-contract.md) — Compass is deliberately read-only: it reports in chat and persists nothing, so "what did compass say last" has no data source. ((unknown))
+- [ADR-0001: Runtime — Node >= 18, ESM, zero runtime dependencies](adr-0001-runtime-zero-deps.md) — Accepted 2026-07-13; reaffirmed by ADR-0003.
+- [ADR-0002: Compass snapshot contract](adr-0002-compass-snapshot-contract.md) — Superseded by ADR-0003 on 2026-07-13; retained as POC history and migration context.
 - [ADR-0003: Reframe project-dashboard onto Gauge portfolio product](adr-0003-reframe-onto-gauge-portfolio-product.md) — The fork began as `project-dashboard`: a local, zero-dependency viewer over Jig-managed projects. (2026-07-13, Accepted)
 
 ## Format

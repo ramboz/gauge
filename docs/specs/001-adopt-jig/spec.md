@@ -1,6 +1,7 @@
 ---
 status: DONE
 skill: scaffold-init
+last_verified: 2026-07-13
 ---
 
 # Spec 001: Adopt jig
@@ -20,7 +21,7 @@ for the full slice shape — Goal, DoR, Acceptance Criteria, DoD,
 anti-horizontal-phasing check, and a short real deviation log — and use
 it as the template for your own slices.
 
-The next spec, [002-first-spec](../002-first-spec/spec.md), is a `DRAFT`
+The next spec, [002-first-spec](../002-dashboard-mvp/spec.md), is a `DRAFT`
 stub waiting for your first real piece of work.
 
 ## Decomposition
@@ -35,3 +36,12 @@ present and wired." A single vertical slice delivers it end-to-end.
    with the jig docs tree, CLAUDE.md, an honest status board, and the
    `.claude/` runtime machinery. DONE — see
    [slice-01-bootstrap.md](slice-01-bootstrap.md).
+
+## Amendments
+
+- **2026-07-13 — Gauge reframe:** This remains permanent history of Jig
+  adoption. The product was subsequently renamed and re-scoped by
+  [ADR-0003](../../decisions/adr-0003-reframe-onto-gauge-portfolio-product.md);
+  the historical `project-dashboard` wording above is intentionally preserved.
+  The scaffold-time `002-first-spec` placeholder's target was corrected to the
+  real successor, `002-dashboard-mvp`, without rewriting its historical prose.

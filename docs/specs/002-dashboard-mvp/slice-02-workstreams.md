@@ -77,3 +77,10 @@ at-risk caption runbook.
   40 docs per project and the badge names only the first offender; a
   workstream with no H1 falls back to its repo-relative path as title;
   pinning a path under `docs/releases/` is ignored (already rendered).
+
+### Amendments
+
+- **2026-07-13 — Gauge reframe:** Workstream parsing and worktree-only warnings
+  are reaffirmed as useful POC behavior; Jig-specific collection moves behind
+  the optional adapter boundary in
+  [spec 004](../004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md).

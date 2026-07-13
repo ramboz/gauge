@@ -1,51 +1,63 @@
-# project-dashboard
+# Gauge
 
-One local page that answers **"where is every project and what's next"** by
-reading the artifacts jig-managed projects already write. Read-only over
-other repos, deterministic, zero dependencies (Node ≥ 18).
+Gauge is a private cross-project delivery dashboard for answering three daily
+questions: how are my projects advancing, which deadlines are at risk, and
+what deserves attention next?
 
-## Run
+The committed MVP is local and single-user. It tracks one repository and one
+active goal per project, reads source projects without modifying them, stores
+daily observations centrally, and explains progress, risk, blockers, and its
+recommended attention order. See the
+[product vision](docs/product-vision.md),
+[accepted reframe](docs/decisions/adr-0003-reframe-onto-gauge-portfolio-product.md),
+and [MVP release plan](docs/releases/local-portfolio-loop.md).
+
+## Current state
+
+Gauge began from a working `project-dashboard` proof of concept. The current
+runtime still provides the inherited local Jig-oriented cards, workstream
+discovery, worktree-only warnings, and legacy Compass snapshot reader. The
+[retrofit spec](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md)
+tracks the move to adapters, normalized observations, and central instance
+state. Until that lands, current runtime output is POC behavior rather than the
+complete Gauge MVP.
+
+## Run the POC
 
 ```bash
-cp dashboard.config.example.json dashboard.config.json   # then edit it
-node src/server.mjs                                       # → http://localhost:5111
+cp dashboard.config.example.json dashboard.config.json
+node src/server.mjs
 ```
 
-Point [`dashboard.config.example.json`](dashboard.config.example.json) at your
-own jig projects (copy it to `dashboard.config.json`, which stays git-ignored).
-Every browser refresh rescans from disk — nothing to regenerate, nothing to
-sync. `~` paths are allowed; per-project `pinnedWorkstreams` /
-`hiddenWorkstreams` are repo-relative md paths.
+Then open <http://localhost:5111>. Configure project paths and optional
+workstream pins in `dashboard.config.json`, which remains ignored by Git.
 
-## What a card shows
+## Product boundaries
 
-- **Spec progress** from `docs/specs/*/spec.md` + slice frontmatter —
-  `DONE / (total − ABANDONED)`, DEFERRED reported separately.
-- **Counts**: open bugs, deferred decisions, inbox items.
-- **Workstreams**: `docs/releases/*.md` plans and pinned runbooks (checkbox
-  progress, current phase, next step, `(you)`/`(Claude)` owner), plus
-  discovered-but-unpinned checkbox docs.
-- **Worktree-only docs**: warns when a doc exists only under
-  `.claude/worktrees/` — one cleanup away from being lost.
-- **Last compass**: latest line of `docs/status/compass-history.jsonl`
-  ([ADR-0002](docs/decisions/adr-0002-compass-snapshot-contract.md)); wire
-  compass via [docs/compass-integration.md](docs/compass-integration.md),
-  append manually with `scripts/snapshot.mjs`, or schedule
-  `scripts/snapshot.mjs --all --auto` for twice-daily deterministic
-  history points (routine mode).
+- Source projects own goals, deadlines, local priority, and lifecycle state.
+- Gauge owns its project registry, daily observations, history, forecasts,
+  risks, and cross-project attention policy.
+- Source repositories are read-only; instance history belongs in Gauge.
+- Jig, Shaper, Servo, and generic GitHub sources are optional adapters rather
+  than hard dependencies.
+- Missing or stale evidence renders as `unknown`, never as healthy or zero.
 
 ## Develop
 
 ```bash
-npm test                   # node --test, fixtures under test/fixtures/
-node src/scan.mjs          # scanner only, JSON to stdout
+npm test
+node src/scan.mjs
 ```
 
-Spec-driven via jig: see [docs/specs/README.md](docs/specs/README.md) and
-[docs/product-vision.md](docs/product-vision.md).
+Development follows Jig's spec workflow. Start with the
+[spec status board](docs/specs/README.md),
+[bug status board](docs/bugs/README.md), and
+[workflow](docs/workflow.md).
 
-## Credits
+## Credits and licensing
 
-Idea and original design by **[@Kyarha](https://github.com/Kyarha)** — built as
-a personal tool for tracking many parallel [jig](https://github.com/ramboz/jig)
-projects from one local page, and shared so others can reuse it for their own.
+The original POC and design were created by
+**[@Kyarha](https://github.com/Kyarha)** and shared through
+[Jig issue 91](https://github.com/ramboz/jig/issues/91). Gauge preserves that
+provenance while broadening the product boundary. The original author and Gauge
+contributors release the project under the [MIT License](LICENSE).

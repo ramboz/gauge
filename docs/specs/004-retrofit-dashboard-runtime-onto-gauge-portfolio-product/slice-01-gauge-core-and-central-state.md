@@ -15,8 +15,8 @@ and history live only in the private Gauge instance—not in surveyed projects.
 - ADR-0003 is accepted after frame critique.
 - The central observation/history contract and its schema/versioning semantics
   are accepted in a follow-up ADR spawned by ADR-0003.
-- POC reuse/redistribution permission is recorded, or implementation remains
-  private until it is.
+- POC reuse/redistribution permission is recorded through the repository's MIT
+  license and preserved upstream attribution.
 
 **Acceptance Criteria:**
 

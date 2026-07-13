@@ -1,32 +1,96 @@
-> Status: Draft (wizard-generated)
+> Status: Active (reframed 2026-07-13 by
+> [ADR-0003](decisions/adr-0003-reframe-onto-gauge-portfolio-product.md)).
 >
-> Decisions the initial setup explicitly deferred. Each item has a resolution trigger.
-> Resolve by writing an ADR and linking it here.
+> Deferred decisions with concrete resolution triggers. Resolve hard-to-reverse
+> choices through ADRs and link them here.
 
-# Refinement Todo: project-dashboard
+# Refinement Todo: Gauge
 
-## Architecture
+## Resolved foundations
 
-### Decision: Tech stack
-**RESOLVED (2026-07-13):** Node ≥ 18, ESM, zero runtime dependencies —
-see [ADR-0001](decisions/adr-0001-runtime-zero-deps.md).
+- **Runtime and tests:** Node >= 18, ES modules, zero runtime dependencies,
+  and `node:test`; see
+  [ADR-0001](decisions/adr-0001-runtime-zero-deps.md).
+- **Product and authority boundary:** Gauge is a central portfolio observer;
+  source projects remain read-only systems of record; see
+  [ADR-0003](decisions/adr-0003-reframe-onto-gauge-portfolio-product.md).
+- **MVP appetite:** committed, maximum two weeks; see
+  [local-portfolio-loop](releases/local-portfolio-loop.md).
 
-### Decision: Module boundaries
-**Deferred:** No modules yet — boundaries become explicit when the first contract is defined.
-**Resolution trigger:** First spec that introduces a contract or interface.
+## Blocking the runtime retrofit
 
-## Conventions
+### Normalized observation and history contract
 
-### Decision: Code style and linting
-**Deferred:** No signal from the initial pitch.
-**Resolution trigger:** First spec that produces non-trivial code, or first time inconsistency causes friction.
+**Decision needed:** versioned observation shape, provenance, freshness/error,
+schema evolution, retention, and central instance-state location.
 
-### Decision: Testing framework
-**RESOLVED (2026-07-13):** built-in `node:test` with fixture trees under
-`test/fixtures/` — see [ADR-0001](decisions/adr-0001-runtime-zero-deps.md).
+**Resolution trigger:** before spec 004 enters READY_FOR_IMPLEMENTATION.
 
-## Operations
+### Generic goal and deadline source
 
-### Decision: CI/CD setup
-**Deferred:** No signal that CI is set up.
-**Resolution trigger:** First spec that crosses a deploy boundary.
+**Decision needed:** whether the first generic adapter uses one active GitHub
+milestone, repository configuration, or both with explicit precedence.
+
+**Resolution trigger:** before drafting the generic goal-adapter slice.
+
+## MVP derivation policy
+
+### Progress strategies
+
+**Decision needed:** which sourced completion strategies are supported in the
+two-week MVP and how each reports unsupported or unknown work.
+
+**Resolution trigger:** after probing three real projects and before drafting
+the progress/risk slice.
+
+### Forecast confidence
+
+**Decision needed:** minimum date/history evidence required for `on_track` or
+`at_risk`; below it the only valid result is `unknown`.
+
+**Resolution trigger:** after enough central observations exist to test a rule
+against the three-project validation set.
+
+### Cross-project attention overlay
+
+**Decision needed:** smallest central policy that expresses portfolio intent
+without duplicating project-local priorities—ordered projects, coarse tiers, or
+deadline-plus-attention rules.
+
+**Resolution trigger:** before implementing the global attention queue.
+
+## Collection and security
+
+### Daily collection
+
+**Decision needed:** local scheduler, GitHub Actions, or another central runner;
+credential scope and failure visibility are part of the choice.
+
+**Resolution trigger:** before automated daily writes to Gauge instance state.
+
+### Hosted small-team access
+
+**Decision needed:** GitHub App registration, server-side session model,
+organization/team membership revalidation window, hosting platform, and
+collector credential separation.
+
+**Resolution trigger:** after the local MVP ships and before follow-up 1 is
+committed.
+
+## Optional ecosystem adapters
+
+### Shaper target date
+
+**Decision needed:** project-owned `target_date` field and semantics; do not
+infer a deadline from appetite prose.
+
+**Resolution trigger:** before drafting the Shaper adapter.
+
+### Servo evidence mapping
+
+**Decision needed:** stable export seam and typed mapping for suitability,
+gate/regression state, and freshness. Servo scores never become delivery
+completion.
+
+**Resolution trigger:** after MVP usage demonstrates a need for evaluation
+signals in Gauge.

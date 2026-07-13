@@ -1,6 +1,6 @@
 > Status: Draft (wizard-generated)
 
-# Workflow: project-dashboard
+# Workflow: Gauge
 
 ## How we build
 

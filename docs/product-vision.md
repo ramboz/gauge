@@ -1,126 +1,115 @@
-> Status: Active (filled 2026-07-13 from the design-session brief).
+> Status: Active (reframed 2026-07-13 by
+> [ADR-0003](decisions/adr-0003-reframe-onto-gauge-portfolio-product.md)).
 >
-> Captures *why* this project exists, *for whom*, and *with what
-> principles*. Architectural mechanics live in [architecture.md](architecture.md).
+> Captures what Gauge is, for whom, and why. Technical mechanics live in
+> [architecture.md](architecture.md); release boundaries live in
+> [releases/](releases/).
 
-# Vision: project-dashboard
+# Vision: Gauge
 
 ## Identity
 
-- **Vision statement:** One local page that answers "where is every project
-  and what's next" by reading the artifacts jig-managed projects already
-  write — no new rituals, no manual updates.
-- **Tagline:** project-dashboard (noun): compass, rendered persistent and
-  cross-project.
+- **Vision:** a private cross-project dashboard that shows how each project is
+  advancing toward its goal, whether deadlines are likely to hold, and what
+  deserves attention next.
+- **Tagline:** Gauge — know where every project stands and where to focus next.
+- **Relationship to sibling tools:** Jig owns daily engineering execution,
+  Shaper owns release shaping inside a project, and Servo owns
+  evaluation-driven development evidence. Gauge aggregates their optional
+  signals alongside generic project sources without depending on any of them.
 
 ## Target users
 
-- **For:** a solo builder running several jig-managed projects in parallel
-  who loses track of progress, sub-projects, and next actions across long
-  Claude sessions with generated names.
-- **Not for:** teams, remote/hosted use, or projects with no on-disk
-  workflow artifacts (those render as "not jig-managed", nothing more).
+- **MVP:** one person running several independent software projects.
+- **Follow-up:** a small trusted group authenticated through one configured
+  GitHub organization team.
+- **Long term:** teams and organizations with richer portfolio policy,
+  multi-repository projects, and concurrent goals.
+
+Gauge is not a replacement for project-local planning or lifecycle tools. It
+is the portfolio view over them.
 
 ## Core problem
 
-Progress lives scattered across spec frontmatter, runbooks, release plans,
-and chat transcripts. Claude reports a lot, all at once, per project — but
-nothing aggregates across projects, and sub-project roadmaps (a runbook in a
-worktree, five release plans) exceed what human memory can track.
+Goals, deadlines, implementation state, decisions, blockers, and next actions
+live in different repositories and tools. Each project can be internally
+coherent while the person responsible for several projects still cannot answer:
 
-- **Today's paths and where they fall short:**
-  - Run `/compass` per project — accurate but ephemeral (chat-only) and
-    single-project.
-  - Re-open old sessions to remember state — session names are opaque;
-    reading takes longer than the work.
-  - Keep a manual board (Notion, paper) — rots immediately because it
-    duplicates what the repo already knows.
+- Which projects are on track?
+- Which deadlines are becoming risky?
+- What changed since yesterday?
+- Which implementation task, decision, draft, or blocker needs attention next?
 
-## Competitive landscape
+Manual portfolio boards duplicate source state and quickly become stale. Gauge
+derives an explainable daily view from project-owned evidence instead.
 
-| Option | What it does | Where it falls short for this gap |
-|---|---|---|
-| `/compass` | honest per-project briefing | ephemeral, one project at a time |
-| GitHub Projects | boards, issues | remote, manual sync, ignores jig artifacts |
-| Notion/manual board | free-form | duplicates disk state, always stale |
+## Authority model
 
-**Where this project fits:** the only view fed 100% from artifacts that
-already exist on disk, so it is never stale and costs zero upkeep.
+- Projects own goals, deadlines, local priorities, and lifecycle state.
+- Gauge owns portfolio membership, central observations/history, forecasts,
+  risk classifications, and cross-project attention policy.
+- Gauge reads source projects without writing to them.
+- A central priority overlay may rank attention, but it never rewrites a
+  project's own priority or status.
+- Missing dates or insufficient history remain `unknown`; Gauge does not invent
+  precision.
 
-## Scope
+## Committed MVP
 
-### Core features (prioritized)
+The MVP has a maximum two-week appetite and delivers one complete local daily
+portfolio loop:
 
-1. Project cards: spec/slice progress, bug and todo counts, git dates.
-2. Workstreams: runbooks and release plans per project, with next step and owner.
-3. Compass narrative: last snapshot headline + next action per project.
-4. Worktree-only-doc warning (docs at risk of silent loss).
+1. Configure at least three single-repository projects.
+2. Select one active source-owned goal for each project.
+3. Collect generic GitHub milestone and optional Jig execution evidence.
+4. Store dated observations in the private central Gauge instance.
+5. Show progress, freshness, blockers, deadline confidence, and next action per
+   project.
+6. Show an explainable global attention queue.
 
-### MVP scope
+Visual polish, extra progress strategies, advanced prediction, and historical
+analysis beyond retaining daily observations are variable scope. The fixed
+cutline lives in
+[local-portfolio-loop.md](releases/local-portfolio-loop.md).
 
-Features 1–4 = spec 002. Deferred to later specs: hours-worked estimation
-from session files, evolution graphs from snapshot history, cross-project
-"waiting on you / ready for Claude" queue, upstreaming into jig.
+## Follow-up direction
 
-### Out of scope (deliberately)
+1. **Secure small-team hosting:** GitHub App sign-in for one owner and one
+   configured organization team, with server-side membership authorization.
+2. **Multi-source signals:** optional Shaper and Servo adapters, history-derived
+   views, and bounded project-specific metrics.
 
-- Any lifecycle mutation — read-only over other repos, like compass.
-- LLM calls in the scanner — parsing only.
-- Multi-user, auth, hosting.
+Multi-repository projects, concurrent goals, organization-wide roles, source
+write-back, and automated lifecycle transitions remain outside these releases.
 
-## Use cases
+## Design principles
 
-- UC-1: the owner can see every project's spec/slice progress on one page.
-- UC-2: the owner can see each project's workstreams with their next
-  unchecked step and who owns it (her or Claude).
-- UC-3: the owner can see each project's last compass headline, next
-  action, and when it ran.
-- UC-4: the owner is warned when a doc exists only in a worktree.
-- UC-5: the owner can see, per project, which Claude Code sessions are
-  recently active (and which are running now) and what each is about — so she
-  knows where she is working on what, without re-opening opaquely-named
-  sessions (spec 003).
+1. **Read-only sources.** Collection never mutates surveyed repositories.
+2. **Deterministic and explainable.** Every progress, risk, and recommendation
+   links to evidence, collection time, and policy.
+3. **Graceful degradation.** An uninstrumented project is still valid; missing
+   signals are unavailable or unknown, not failed.
+4. **Central history, project-owned intent.** Observations live in Gauge while
+   goals and deadlines remain in projects.
+5. **Private by construction.** The MVP binds locally; hosted access requires
+   real authentication and authorization, never an unguessable URL.
+6. **No composite-health fiction.** Delivery progress, scope readiness, and
+   evaluation quality remain distinct typed signals.
 
-## Stack
+## Success criteria
 
-- **Runtime / language:** Node ≥ 18, ESM, **zero runtime dependencies**.
-- **Platform commitments:**
-  - Cloud target: none — local only (`localhost`).
-  - Deployment shape: `node src/server.mjs`, no build step.
-  - Package manager: npm (dev only; `node:test` for tests).
-  - Database: none — rescan on every request.
-  - Key external services: none.
-- **Locked-in vs. still open:** zero-deps and local-only are locked
-  (principles below); snapshot schema is versioned and open to extension
-  (ADR-0001).
+- Three real projects complete daily collection with no source-repository
+  writes and with explicit provenance and freshness.
+- Readable source dates produce confidence-aware risk; absent dates remain
+  unknown.
+- The attention queue explains its deterministic ordering without assuming
+  project-local work units are comparable.
+- The local server binds to loopback, committed observations contain no
+  secrets, and the full test suite is green.
 
-## Design principles & constraints
+## Open product questions
 
-1. **Read-only over other repos.** The dashboard never writes outside its
-   own repo; the only sanctioned external write is compass appending its
-   own snapshot in the surveyed project.
-2. **Deterministic.** Everything is parsed; same disk state → same page.
-3. **Zero new rituals.** Every feature must work from artifacts that
-   already exist; anything requiring new user habits is opt-in.
-4. **Zero dependencies, one page.** Nothing to install, break, or update.
-5. **Honest numbers.** ABANDONED is excluded from denominators, DEFERRED is
-   shown as parked, unknown states are surfaced rather than guessed.
-
-**Non-obvious constraints:** scanning ~30 worktrees per project must stay
-fast (path comparison only, never content diff); the page must render
-acceptably with a project that has 70+ specs.
-
-## How new work enters
-
-- **Prioritization model:** pain-driven, single stakeholder.
-- **Spec-triggering rules:** a layer proves insufficient during the daily
-  morning/evening compass ritual; or the jig-upstream PR conversation
-  requires a contract change.
-
-## Open questions
-
-- Hours-worked estimation: session-file clustering threshold and privacy
-  flag (deferred to a later spec; spec 003 became the sessions panel, which
-  reads the same session store and can host the hours layer later).
-- Pin-registry location if upstreamed into jig (central config vs per-doc
-  frontmatter).
+Implementation-blocking decisions are tracked in
+[refinement-todo.md](refinement-todo.md). The most important are the normalized
+observation contract, goal/deadline source precedence, minimum forecast
+confidence, and the smallest useful portfolio-priority overlay.

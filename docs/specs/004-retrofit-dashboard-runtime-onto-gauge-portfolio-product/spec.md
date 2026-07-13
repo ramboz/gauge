@@ -30,9 +30,9 @@ ADR-0003 and require their own shaped specs.
   `package.json` and `dashboard.config.example.json`; tests live under `test/`.
   A targeted source probe found direct Jig and project-local Compass coupling in
   each of those runtime surfaces.
-- **Unresolved external assumption:** inherited POC reuse/redistribution rights
-  need an explicit license or permission before Gauge is redistributed. This
-  does not block drafting, but it blocks a public release.
+- **Verified permission (2026-07-13):** the original POC author and Gauge owner
+  are collaborating on this derivative and approved release under the repository's
+  MIT license, with upstream attribution preserved.
 
 ## Decomposition
 

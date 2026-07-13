@@ -1,9 +1,15 @@
 ---
-status: DRAFT
+status: ABANDONED
 use_cases: [UC-5]
 ---
 
 # Spec 003: Sessions panel
+
+> **Retired 2026-07-13 by
+> [ADR-0003](../../decisions/adr-0003-reframe-onto-gauge-portfolio-product.md).**
+> The unimplemented session-centric expansion belongs to the superseded local
+> Jig-dashboard frame. Revisit only through a new Gauge-shaped spec if
+> portfolio attention routing later demonstrates the need.
 
 ## Overview
 

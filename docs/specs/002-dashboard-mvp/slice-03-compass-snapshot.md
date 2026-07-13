@@ -69,3 +69,11 @@ the data the future evolution graphs will read.
   schema (`v` required, `specs {done,total}` shape); integration tests
   added for snapshot.mjs append/refusal and the missing-history-file path
   (temp-dir project, fixtures stay pristine).
+
+### Amendments
+
+- **2026-07-13 — Gauge reframe:** ADR-0003 supersedes the mandatory
+  project-local writer contract. The reader and snapshot utility remain POC
+  history and temporary migration surfaces; Gauge history moves to central
+  instance state through
+  [spec 004](../004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md).

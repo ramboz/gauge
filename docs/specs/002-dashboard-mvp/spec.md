@@ -1,6 +1,7 @@
 ---
 status: DONE
 use_cases: [UC-1, UC-2, UC-3, UC-4]
+last_verified: 2026-07-13
 ---
 
 # Spec 002: Dashboard MVP
@@ -40,3 +41,11 @@ delivers no observable value.
 
 Deferred to a later spec (see vision → MVP scope): hours-worked layer,
 evolution graphs, cross-project owner queue, jig upstreaming.
+
+## Amendments
+
+- **2026-07-13 — Gauge reframe:** This spec remains the closed record of the
+  working POC. [ADR-0003](../../decisions/adr-0003-reframe-onto-gauge-portfolio-product.md)
+  replaces its Jig/Compass-centered product premise and routes shipped runtime
+  changes through [spec 004](../004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md).
+  Historical acceptance criteria are intentionally unchanged.

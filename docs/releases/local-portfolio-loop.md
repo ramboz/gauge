@@ -2,7 +2,7 @@
 
 ## Status
 
-`candidate`
+`committed`
 
 Allowed statuses: `candidate`, `committed`, `shipping`, `shipped`, `dropped`.
 Do not move a plan from `candidate` to `committed` without an explicit user decision.
@@ -25,7 +25,8 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 
 - False precision: retire by keeping source-specific progress strategies, unknown states, provenance, and confidence labels.
 - Authority drift: retire by keeping goals/deadlines/lifecycle in projects while Gauge owns only observations and cross-project attention policy.
-- Existing POC baseline has one failing fixture test; diagnose and restore a green baseline before retrofit implementation.
+- Bug 001 restored the missing worktree fixture; the POC baseline is green at
+  29 of 29 tests before retrofit implementation.
 
 ## No-Gos
 
@@ -71,8 +72,8 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 
 | Item | Evidence | Rationale |
 |---|---|---|
-| Restore a trustworthy baseline | Existing `node --test` result: 28 pass / 1 fixture failure | Do not retrofit against a falsely green or unexplained baseline. |
-| Confirm POC permission/license | ADR-0003 assumption | Blocks public redistribution even though private shaping can continue. |
+| Restore a trustworthy baseline | Bug 001 resolved; `node --test` passes 29 of 29 | Do not retrofit against a falsely green or unexplained baseline. |
+| Preserve upstream attribution under the MIT license | Owner confirmation + `LICENSE` + spec 004 evidence | Permission is verified; keep the inherited POC provenance explicit as Gauge evolves. |
 | Prove source-owned goal/date availability on three real projects | ADR-0003 release gate | Forecasting must not be designed around hypothetical signals. |
 | Prove no source-repository writes | ADR-0003 authority boundary | Central history is the most important behavioral correction. |
 | Threat-model central snapshots and credentials | Private portfolio data | Prevent secrets or private project context from entering committed observations. |

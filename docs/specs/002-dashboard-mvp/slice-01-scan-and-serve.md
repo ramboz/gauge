@@ -71,3 +71,9 @@ value, before workstreams or narrative exist.
   `/api/data` sends `Cache-Control: no-store`.
 - Addition beyond ACs: the page auto-reloads every 120 s alongside
   rescan-on-refresh.
+
+### Amendments
+
+- **2026-07-13 — Gauge reframe:** POC behavior remains historical evidence;
+  generic projects, adapter boundaries, and central instance state are owned by
+  [spec 004](../004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md).

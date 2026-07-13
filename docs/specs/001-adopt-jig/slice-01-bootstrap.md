@@ -1,7 +1,7 @@
 ---
 status: DONE
 dependencies: []
-last_verified:
+last_verified: 2026-07-13
 ---
 
 ## Slice 001-01 — bootstrap
@@ -72,3 +72,9 @@ The original spec is preserved above. Implementation notes:
    theater. The review boxes above are annotated as verified by the
    scaffold-completion check accordingly. Your first *real* subagent
    review is spec 002, where there is genuine implementation to inspect.
+
+### Amendments
+
+- **2026-07-13 — Gauge reframe:** Reaffirmed as accurate adoption history by
+  [ADR-0003](../../decisions/adr-0003-reframe-onto-gauge-portfolio-product.md).
+  Product-name references remain historical rather than being rewritten.
