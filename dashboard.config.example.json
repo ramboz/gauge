@@ -1,0 +1,19 @@
+{
+  "port": 5111,
+  "projects": [
+    {
+      "path": "~/code/project-a",
+      "label": "project-a — short description"
+    },
+    {
+      "path": "~/code/project-b",
+      "label": "project-b — short description",
+      "pinnedWorkstreams": ["docs/releases/launch.md"]
+    },
+    {
+      "path": "~/code/project-c",
+      "label": "project-c — short description",
+      "hiddenWorkstreams": []
+    }
+  ]
+}

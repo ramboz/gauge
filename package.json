@@ -1,0 +1,15 @@
+{
+  "name": "project-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local dashboard over jig-managed projects — read-only, zero dependencies.",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "scan": "node src/scan.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

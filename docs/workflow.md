@@ -1,0 +1,182 @@
+> Status: Draft (wizard-generated)
+
+# Workflow: project-dashboard
+
+## How we build
+
+Spec-driven development with SPIDR slicing, independent review, and reconciliation.
+
+## Spec lifecycle
+
+```
+DRAFT → READY_FOR_REVIEW → READY_FOR_IMPLEMENTATION → IN_PROGRESS
+  → REVIEWED → RECONCILED → DONE
+```
+
+## SPIDR splitting
+
+All non-trivial specs are SPIDR-split before implementation:
+
+- **S — Spike**: last resort, only when none of P/I/D/R apply
+- **P — Path**: split by alternative paths (happy path first)
+- **I — Interface**: split by UI/platform/channel (minimal first)
+- **D — Data**: split by data subset (less data first)
+- **R — Rules**: split by business rules (simple first)
+
+**Anti-horizontal-phasing rule:** every slice must touch the user-facing layer
+and deliver end-to-end value.
+
+## Session workflow
+
+1. Check `docs/specs/README.md` and `docs/bugs/README.md`; route feedback/triage defects to `bug-fix` before drafting spec ACs.
+2. Pick up next `READY_FOR_IMPLEMENTATION` spec slice.
+3. Spawn the `implementer` subagent with the spec path.
+4. After the deliverable is on disk, run the post-implementation review (three passes — see below).
+5. Address findings; `[blocker]`-tagged craft/arch entries block the REVIEWED transition, `[nit]`-tagged ones become reconciliation-log items.
+6. Reconcile: update docs, write deviation log, run reconciliation review.
+7. Run `/jig:memory-sync` to consolidate learnings.
+8. Update spec status to DONE.
+
+## Phase-Mode Guidance
+
+Use Claude Code plan mode to shape the slice, confirm unknowns, and decide the next action. Once the slice is `IN_PROGRESS`, switch back to normal edit mode for file changes, tests, and review follow-up. Do not create a parallel Claude plan artifact as lifecycle state; update the jig slice, `plan.md`, `tasks.md`, or review evidence instead.
+
+Host-native modes are advisory workflow affordances. They never replace
+`workflow.py` transitions, review evidence, dependency checks, or
+reconciliation gates.
+
+## Post-implementation review
+
+Every slice runs up to three review passes between IN_PROGRESS and REVIEWED:
+
+1. **Compliance** — `jig:independent-review` (always). Spec-AC check by a fresh reviewer subagent.
+2. **Craft** — `pr-review` (always). Routes to the most-specific installed skill (user > project > `jig:pr-review`).
+3. **Architecture** — `arch-review` (on-demand). Runs only when the slice's frontmatter declares `arch_review: true`. Same precedence as craft.
+
+Order: compliance → craft → (arch if flagged). All required passes must `pass` for REVIEWED.
+
+### Review evidence gates the transition
+
+Each pass produces a durable verdict artifact — these gates are mechanical,
+not honour-system prose, and no `Stop` hook is involved:
+
+1. Build the prompt (`review.py implementation` / `pr-review` / `arch-review`)
+   and spawn the reviewer.
+2. Record the verdict:
+
+   ```bash
+   python3 ${CLAUDE_PROJECT_DIR}/.claude/skills/jig-independent-review/review.py \
+     record-review docs/specs/NNN-slug/spec.md "<slice>" \
+     --pass compliance --verdict pass --reviewer jig:reviewer \
+     --prompt-source "review.py implementation ..." --summary-file verdict.md
+   ```
+
+   This writes `docs/specs/NNN-slug/reviews/slice-NN-<pass>.md`
+   (`<pass>` ∈ compliance / craft / arch / reconciliation).
+3. Run the gated transition:
+
+   ```bash
+   python3 ${CLAUDE_PROJECT_DIR}/.claude/skills/jig-spec-workflow/workflow.py \
+     transition docs/specs/NNN-slug/spec.md "<slice>" REVIEWED
+   ```
+
+`workflow.py transition` **refuses** REVIEWED / RECONCILED / DONE unless the
+required verdicts exist and carry `verdict: pass` (RECONCILED also needs a
+`### Deviation log` subsection; DONE re-validates the full set plus
+`dependencies:`). A refusal names the missing artifact and the
+`record-review` command. The gate enforces evidence consistency, not human
+sign-off — it lives in the agent's trust boundary, so a deliberate
+out-of-band flow can bypass it with `JIG_REVIEW_EVIDENCE_GATE=0`.
+
+**Recovering from a failed review:** address findings, re-run the pass,
+`record-review` again (overwrites the earlier file for that `(slice, pass)`
+in place — git history keeps the prior verdict), then re-run the transition.
+
+## Stocktake
+
+After every few reconciled slices, review what was deferred during scaffolding to see if any items now have signal:
+
+```bash
+python3 ${CLAUDE_PROJECT_DIR}/.claude/skills/jig-scaffold-init/stocktake.py .
+```
+
+The stocktake reports:
+- Number of slices in `STATUS: DONE` or `STATUS: RECONCILED`
+- Deferred items from `docs/refinement-todo.md`, grouped by category
+- A promotion suggestion when ≥3 slices have reconciled — review which items can now be promoted to specs or ADRs
+
+This is a `skill, not a hook` (per slice 001-04 design): it requires judgment about which deferred items are now ripe. Run it manually as part of a reconciliation step, or whenever you want a snapshot.
+
+## Semantic-Index Exploration
+
+For broad architecture, lifecycle, change, or review questions, prefer the
+configured public semantic-index provider first when it is available. One index
+query can replace several speculative search/read turns; fall back to targeted
+search/read when no provider is configured, unavailable, or stale.
+
+Scaffolded Claude and Codex sessions run `jig-semantic-index` on `SessionStart`.
+Opt in by creating `.jig/semantic-index.json` with `auto_attach: true` and a
+public provider name, for example:
+
+```json
+{
+  "auto_attach": true,
+  "provider": "tokensave"
+}
+```
+
+After opt-in, the hook makes a bounded best-effort readiness call and records
+content-free activation telemetry. When a public provider is installed but the
+project has not opted in, the host gets at most one compact suggestion. The
+hook never installs providers, downloads models, or blocks a workflow.
+
+## Hook Strictness Profiles
+
+jig hooks support three enforcement levels via the `SCAFFOLD_HOOK_PROFILE` env var:
+
+- **minimal** — telemetry only, no blocking
+- **standard** — blocks on spec gates and reconciliation; warns on contract changes
+- **strict** — blocks on everything including style/lint failures
+
+> **Deferred — `SCAFFOLD_HOOK_PROFILE` is not yet read by any hook.** The default
+> behavior is currently fixed (equivalent to `standard`). Implementation lives in
+> a future jig slice. Set the env var in advance to express intent; effective
+> enforcement will catch up once the dispatch logic ships.
+
+<!-- >>> jig self-defining-vocabulary >>> -->
+## Self-defining vocabulary (authoring convention)
+
+**Soft, forward-only, not a gate.** When you author a spec or slice,
+expand each acronym on first use and link the term to the project
+glossary (`docs/memory/glossary.md`) or jig's lexicon, in plain words —
+so the *next* artifact is readable without a decoder ring. This stops
+the dense-jargon pile from growing; it does **not** retrofit existing
+specs, and **nothing lints or blocks a transition** on an undefined
+acronym (the barrier is lowered by convention, not enforced by a gate).
+
+On demand, `/jig:explain <term>` defines a single term and
+`/jig:explain <spec-or-adr-path>` walks a whole artifact through plain
+language — the back-catalogue escape hatch this convention complements.
+<!-- <<< jig self-defining-vocabulary <<< -->
+
+<!-- >>> jig reframe-practice >>> -->
+## Bringing in a new load-bearing reference
+
+**Soft, forward-only — a reminder, not a gate, not a detector.** When you
+bring a new **load-bearing reference** into the project — a design system, a
+vendor / API contract, a test-infrastructure choice, a compliance regime, a
+target platform, or a product-positioning / strategic-vision shift — run
+`/jig:reframe <reference>` **before building on it**.
+
+A new reference dropped into the repo otherwise enters as an inert file with
+no authority: the corpus keeps carrying the *old* premise and work patches at
+the edges. `/jig:reframe` re-baselines the corpus onto the new reference
+through one named operation — a keystone reframe-ADR (new reference
+authoritative, old premise superseded) + a re-baselining manifest — instead
+of edge-patching.
+
+This is **best-effort defense-in-depth, not a detector**: it reduces silent
+drift by making the reframe trigger a standing habit; it does **not**
+automatically detect that a reference moved — systematic detection is parked.
+jig recommends; the human acts.
+<!-- <<< jig reframe-practice <<< -->

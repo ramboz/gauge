@@ -1,0 +1,3 @@
+{"v":1,"ts":"2026-07-10T08:00:00Z","headline":"old snapshot","next":"old next"}
+{"v":1,"ts":"2026-07-12T20:00:00Z","headline":"beta is close","next":"finish slice 002-02","blockers":["waiting on curation"]}
+this line is not json

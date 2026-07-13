@@ -1,0 +1,27 @@
+{
+  "jig_version": "2.5.0",
+  "timestamp": "2026-07-13T17:40:15Z",
+  "project_name": "project-dashboard",
+  "installed_tiers": [
+    "tier-0"
+  ],
+  "installed_skills": [
+    "tier-0/scaffold-init",
+    "tier-0/memory-sync",
+    "tier-0/spec-workflow",
+    "tier-0/independent-review",
+    "tier-0/migrate",
+    "tier-0/vision-elicitation",
+    "tier-0/contracts"
+  ],
+  "scaffold_signals": {
+    "has_llm_agent_files": false,
+    "has_ci": false,
+    "has_tests": false,
+    "is_team": false
+  },
+  "hook_profile": "standard",
+  "project_runtime": "node",
+  "scaffold_mode": "in-repo",
+  "host_renderer": "claude"
+}
