@@ -6,6 +6,11 @@ dashboard.config.json
 .claude/
 .jig/
 
+# Synthetic scanner input: keep real Claude state ignored while allowing the
+# worktree-only regression fixture to model the on-disk shape.
+!test/fixtures/proj-jig/.claude/
+!test/fixtures/proj-jig/.claude/**
+
 # >>> jig secret-ignore >>>
 # jig secret-prevention floor (ADR-0013) — git-ignore common secret
 # files so they can't be staged by accident. Edit above/below the
