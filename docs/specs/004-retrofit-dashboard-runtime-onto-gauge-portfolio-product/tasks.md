@@ -1,6 +1,7 @@
 # Tasks: Spec 004 runtime retrofit
 
-- [ ] Record and accept ADR-0004 with a passing frame critique.
+- [x] Record the observation/history contract, accept its symmetric-isolation
+      correction as ADR-0005, and pass both ADR frame critiques.
 - [ ] Add `schemas/observation-v1.schema.json` and matching runtime validation.
 - [ ] Normalize `gauge.config.json` plus legacy `dashboard.config.json`.
 - [ ] Add safe id, state containment, and source-overlap checks.

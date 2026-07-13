@@ -1,9 +1,10 @@
 ---
-status: DRAFT
-dependencies: [adr-0003, adr-0004]
+status: IN_PROGRESS
+dependencies: [adr-0003, adr-0005]
 last_verified:
 frame_review: true
 arch_review: true
+claimed_by: main
 ---
 
 ## Slice 004-01 — Gauge core and central state
@@ -16,8 +17,8 @@ and history live only in the private Gauge instance—not in surveyed projects.
 - ADR-0003 is accepted after frame critique.
 - The central observation/history contract and its schema/versioning semantics
   are accepted in
-  [ADR-0004](../../decisions/adr-0004-central-observation-history-contract.md)
-  after frame critique.
+  [ADR-0005](../../decisions/adr-0005-symmetric-source-state-isolation.md)
+  after frame critique; ADR-0005 retains and corrects ADR-0004's contract.
 - POC reuse/redistribution permission is recorded through the repository's MIT
   license and preserved upstream attribution.
 
