@@ -16,8 +16,12 @@
   [ADR-0003](decisions/adr-0003-reframe-onto-gauge-portfolio-product.md).
 - **MVP appetite:** committed, maximum two weeks; see
   [local-portfolio-loop](releases/local-portfolio-loop.md).
+- **Normalized observations and central history:** typed additive capability
+  contract plus symmetric source/state isolation; see
+  [ADR-0005](decisions/adr-0005-symmetric-source-state-isolation.md), which
+  retains and corrects ADR-0004.
 
-## Blocking the runtime retrofit
+## Runtime retrofit foundation
 
 ### ~~Normalized observation and history contract~~ — RESOLVED 2026-07-13
 

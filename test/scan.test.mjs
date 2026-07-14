@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { scanProject } from '../src/scan.mjs';
+import { execFileSync } from 'node:child_process';
+import { gitInfo, scanProject } from '../src/scan.mjs';
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+const ROOT = path.join(FIXTURES, '..', '..');
 
 const jig = () =>
   scanProject({
@@ -48,6 +50,11 @@ test('scanProject: non-jig project degrades gracefully (002-01 AC3)', () => {
 test('scanProject: missing path is an error entry, not a crash', () => {
   const p = scanProject({ path: path.join(FIXTURES, 'does-not-exist'), pinnedWorkstreams: [], hiddenWorkstreams: [] });
   assert.ok(p.error);
+});
+
+test('gitInfo captures the exact HEAD revision for provenance', () => {
+  const expected = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  assert.equal(gitInfo(ROOT).revision, expected);
 });
 
 test('workstreams: releases + pinned runbook parsed, README excluded (002-02 AC1+AC2)', () => {

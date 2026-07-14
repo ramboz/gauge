@@ -1,7 +1,7 @@
 > Status: Active target architecture (reframed 2026-07-13 by
 > [ADR-0003](decisions/adr-0003-reframe-onto-gauge-portfolio-product.md)).
 >
-> The shipped POC is being retrofitted through
+> The POC runtime was retrofitted onto the Gauge boundary through
 > [spec 004](specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md).
 
 # Architecture: Gauge
@@ -12,23 +12,25 @@ Gauge is a local-first portfolio observer with an adapter boundary. Source
 projects are read-only systems of record; Gauge owns only its private instance
 configuration, observations, history, and derived portfolio views.
 
-ADR-0001 currently fixes the MVP runtime at Node >= 18, ES modules, built-in
-tests, and zero runtime dependencies. ADR-0003 fixes the product and authority
-boundary. The normalized observation schema remains a required follow-up ADR,
-so this document names responsibilities without pre-deciding its fields.
+ADR-0001 fixes the MVP runtime at Node >= 18, ES modules, built-in tests, and
+zero runtime dependencies. ADR-0003 fixes the product and authority boundary.
+ADR-0005 retains ADR-0004's versioned observation/history contract while
+requiring symmetric filesystem-identity isolation between instance state and
+every configured source.
 
 ## Repository structure
 
 ```text
 gauge/
-├── src/                         # current scanner/server; target core + adapters
-├── public/                      # local single-page dashboard
-├── scripts/                     # POC utilities and future collection entrypoints
+├── schemas/                     # canonical versioned observation contracts
+├── src/                         # config, observation core, state, adapters, delivery
+├── public/                      # local single-page Gauge dashboard
+├── scripts/                     # explicit central collection entrypoint
 ├── test/                        # unit/integration tests and synthetic project trees
 ├── docs/decisions/              # architectural authority
 ├── docs/specs/                  # Jig implementation lifecycle
 ├── docs/releases/               # Shaper release boundaries
-├── dashboard.config.example.json# current POC configuration example
+├── gauge.config.example.json    # canonical version-1 instance registry
 └── scaffold.json                # Jig scaffold metadata
 ```
 
@@ -69,6 +71,11 @@ Owns project membership, source configuration, optional portfolio-priority
 overlay, daily observations, and retention. It does not own project goals,
 deadlines, or lifecycle state.
 
+`src/config.mjs` normalizes `gauge.config.json` relative to the config file,
+requires stable project ids, and provides deterministic legacy migration.
+`src/state.mjs` validates observations and writes immutable JSON records beneath
+the explicit `stateDir`; it never derives a write path from a source root.
+
 ### Source adapters
 
 Translate source evidence into normalized observations. Planned adapters are:
@@ -83,10 +90,16 @@ adapter cannot mutate its source or redefine another adapter's semantics.
 
 ### Observation/history contract
 
-A versioned contract will carry source identity, provenance, collection time,
-freshness/error state, and typed signals. Schema evolution and retention require
-an ADR before spec 004 implementation. The superseded project-local Compass
-JSONL file may be read only as a temporary legacy input.
+`schemas/observation-v1.schema.json` is canonical. `src/observation.mjs` derives
+shared patterns/enums from it, validates the typed v1 repository, execution,
+workstream, hygiene, and narrative capabilities, and preserves unknown
+capability types or versions without letting v1 readers interpret them.
+
+Adapters produce candidates. Exclusive signals require one candidate or an
+explicit unambiguous policy; merge-safe signals retain contributor identity and
+compose only compatible supported versions. Provenance and freshness remain
+per adapter and signal. The superseded project-local Compass JSONL file is an
+optional read-only Jig narrative input.
 
 ### Derivation engine
 
@@ -97,29 +110,39 @@ cannot yield `on_track` or `at_risk`.
 
 ### Delivery
 
-The MVP is an HTTP server bound to loopback plus one local page. Authenticated
+`src/cli.mjs`, `src/server.mjs`, and `public/index.html` consume the canonical
+observation envelope. The page gates every known capability by exact v1 and
+isolates malformed cards. The HTTP server binds to loopback. Authenticated
 hosting is a separate release and trust boundary; it must protect both rendered
 HTML and underlying data.
 
-## Current POC bridge
+## Landed POC bridge
 
-The shipped code still scans configured local Jig roots directly, reads
-project-local Compass history, and rescans on browser refresh. During spec 004:
+Spec 004 retained the useful POC behavior behind the Gauge boundary:
 
-- direct Jig reads move behind the Jig adapter;
-- generic projects become valid Gauge projects;
-- observations/history move beneath the instance-state boundary;
-- the source-repository snapshot writer is removed, disabled, or converted to
-  an instance writer;
-- useful progress, workstream, warning, and tolerant-ingestion behavior stays.
+- direct Jig reads live behind the optional Jig adapter;
+- generic projects produce valid repository observations and explicit unknown
+  or unsupported signals;
+- scans remain read-only while the explicit collector writes central immutable
+  history;
+- `scripts/snapshot.mjs` retains its compatibility filename but no longer
+  accepts or performs source-project writes;
+- progress, workstreams, pins, worktree warnings, and tolerant ingestion remain.
+
+Goal/deadline collection, scheduled daily runs, forecast/risk derivation, and
+the global attention queue remain later MVP slices.
 
 ## Contract surfaces
 
-- **Configuration:** current `dashboard.config.json`; replacement/migration
-  behavior belongs to spec 004.
-- **Normalized observations:** ADR required before implementation.
-- **Local HTTP:** `/` and `/api/data` are inherited POC surfaces; spec 004 may
-  evolve their payload while preserving one actionable migration path.
+- **Configuration:** `gauge.config.json` version 1; legacy
+  `dashboard.config.json` normalizes with one actionable warning.
+- **Normalized observations:**
+  `schemas/observation-v1.schema.json`, with independently versioned typed
+  capability records.
+- **Local HTTP:** `/` serves the Gauge page; `/api/data` returns the canonical
+  portfolio observation envelope.
+- **CLI:** `npm run scan` is read-only; `npm run collect` owns durable central
+  writes.
 - **Adapter inputs:** source-owned files/APIs, always read-only and explicitly
   versioned where Gauge defines an export seam.
 
@@ -133,7 +156,6 @@ project-local Compass history, and rescans on browser refresh. During spec 004:
 
 ## Open architecture decisions
 
-See [refinement-todo.md](refinement-todo.md). The normalized observation and
-central history contract is the next blocking decision; adapter precedence,
-collection scheduling, forecast thresholds, and hosted delivery follow behind
-it.
+See [refinement-todo.md](refinement-todo.md). Generic goal selection,
+collection scheduling, forecast thresholds, attention policy, and hosted
+delivery remain open behind the landed observation/history foundation.

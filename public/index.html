@@ -3,172 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Project dashboard</title>
+<title>Gauge</title>
 <style>
-  :root {
-    --bg: #faf9f5; --card: #ffffff; --inset: #f1efe8;
-    --text: #1a1a17; --text-2: #5f5e5a; --muted: #8a8880;
-    --border: #e3e1d9;
-    --accent: #185fa5; --accent-bg: #e6f1fb; --accent-text: #0c447c;
-    --good: #3b6d11; --good-bg: #eaf3de; --good-text: #27500a;
-    --warn: #ba7517; --warn-bg: #faeeda; --warn-text: #633806;
-    --bad: #a32d2d; --bad-bg: #fcebeb; --bad-text: #791f1f;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #1d1d1a; --card: #262622; --inset: #31312c;
-      --text: #eceae4; --text-2: #b4b2a9; --muted: #888780;
-      --border: #3a3a34;
-      --accent: #85b7eb; --accent-bg: #0c447c33; --accent-text: #b5d4f4;
-      --good: #97c459; --good-bg: #27500a33; --good-text: #c0dd97;
-      --warn: #ef9f27; --warn-bg: #63380633; --warn-text: #fac775;
-      --bad: #f09595; --bad-bg: #791f1f33; --bad-text: #f7c1c1;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 24px; background: var(--bg); color: var(--text);
-    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  }
-  header { display: flex; align-items: baseline; justify-content: space-between; max-width: 1200px; margin: 0 auto 18px; }
-  h1 { font-size: 19px; font-weight: 600; margin: 0; }
-  .meta { font-size: 12px; color: var(--muted); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; max-width: 1200px; margin: 0 auto; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
-  .card h2 { font-size: 15px; font-weight: 600; margin: 0; }
-  .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .chip { font-size: 11px; padding: 2px 10px; border-radius: 10px; white-space: nowrap; }
-  .chip.accent { background: var(--accent-bg); color: var(--accent-text); }
-  .chip.good { background: var(--good-bg); color: var(--good-text); }
-  .chip.warn { background: var(--warn-bg); color: var(--warn-text); }
-  .chip.mutedc { background: var(--inset); color: var(--muted); }
-  .barrow { display: flex; align-items: center; gap: 10px; }
-  .bar { flex: 1; height: 6px; background: var(--inset); border-radius: 3px; overflow: hidden; }
-  .bar > div { height: 100%; background: var(--accent); }
-  .bar > div.full { background: var(--good); }
-  .pct { font-size: 13px; font-weight: 600; min-width: 38px; text-align: right; }
-  .counts { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
-  .sect { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; font-size: 13px; }
-  .sect .lbl { color: var(--text-2); font-size: 12px; margin-bottom: 4px; display: block; }
-  .ws { padding: 6px 0; }
-  .ws + .ws { border-top: 1px dashed var(--border); }
-  .ws .t { display: flex; justify-content: space-between; gap: 8px; }
-  .ws .t b { font-weight: 600; font-size: 13px; }
-  .ws .t span { color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .ws .next { margin: 2px 0 0; color: var(--text-2); }
-  .warnbox { margin-top: 8px; background: var(--warn-bg); color: var(--warn-text); border-radius: 8px; padding: 6px 10px; font-size: 12px; }
-  .warnbox b { font-weight: 600; }
-  .compass { margin-top: 2px; }
-  .compass .none { color: var(--muted); }
-  .compass.stale { opacity: 0.6; }
-  .git { margin-top: 10px; font-size: 12px; color: var(--muted); }
-  details { margin-top: 8px; }
-  summary { cursor: pointer; font-size: 12px; color: var(--text-2); user-select: none; }
-  .speclist { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12.5px; }
-  .speclist li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
-  .speclist .done { color: var(--muted); text-decoration: line-through; }
-  .speclist .st { white-space: nowrap; font-size: 11px; }
-  .st.DONE { color: var(--good); } .st.IN_PROGRESS { color: var(--accent); }
-  .st.DRAFT, .st.ABANDONED { color: var(--muted); }
-  .st.DEFERRED { color: var(--warn); }
-  .st.READY_FOR_IMPLEMENTATION, .st.READY_FOR_REVIEW, .st.REVIEWED, .st.RECONCILED { color: var(--accent-text); }
-  .err { color: var(--bad); }
-  .owner { font-size: 11px; padding: 1px 8px; border-radius: 8px; margin-left: 6px; }
-  .owner.you { background: var(--warn-bg); color: var(--warn-text); }
-  .owner.claude { background: var(--accent-bg); color: var(--accent-text); }
-  .disc { margin-top: 6px; font-size: 12px; color: var(--muted); }
-  button { background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); font-size: 12px; padding: 4px 12px; cursor: pointer; }
-  button:hover { background: var(--inset); }
+  :root { --bg:#faf9f5; --card:#fff; --inset:#f1efe8; --text:#1a1a17; --muted:#74726c; --border:#e3e1d9; --accent:#185fa5; --good:#3b6d11; --warn:#9a5b0b; --bad:#a32d2d; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1d1d1a; --card:#262622; --inset:#31312c; --text:#eceae4; --muted:#aaa89f; --border:#3a3a34; --accent:#85b7eb; --good:#97c459; --warn:#ef9f27; --bad:#f09595; } }
+  * { box-sizing:border-box } body { margin:0; padding:24px; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif }
+  header,.grid { max-width:1200px; margin:auto } header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:18px } h1 { font-size:20px; margin:0 }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px }.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px }
+  .head { display:flex; justify-content:space-between; gap:8px }.head h2 { font-size:15px; margin:0 }.chip { font-size:11px; padding:2px 9px; border-radius:10px; background:var(--inset) }.ok { color:var(--good) }.partial { color:var(--warn) }.error,.err { color:var(--bad) }.meta,.counts { color:var(--muted); font-size:12px }
+  .barrow { display:flex; align-items:center; gap:10px; margin-top:10px }.bar { flex:1; height:6px; background:var(--inset); border-radius:4px; overflow:hidden }.bar div { height:100%; background:var(--accent) }.pct { min-width:38px; text-align:right; font-weight:600 }
+  .sect { border-top:1px solid var(--border); margin-top:10px; padding-top:8px }.ws { padding:5px 0 }.warnbox { background:color-mix(in srgb,var(--warn) 14%,transparent); color:var(--warn); padding:7px 9px; border-radius:8px }.stale { opacity:.65 }
+  ul { margin:6px 0; padding-left:20px } button { color:inherit; background:var(--card); border:1px solid var(--border); border-radius:7px; padding:4px 10px; cursor:pointer }
 </style>
 </head>
 <body>
-<header>
-  <h1>Projects</h1>
-  <div class="meta"><span id="scanned"></span> <button onclick="load()">refresh</button></div>
-</header>
-<div class="grid" id="grid"><div class="meta">scanning…</div></div>
+<header><h1>Gauge</h1><div class="meta"><span id="scanned"></span> <button onclick="load()">refresh</button></div></header>
+<div class="grid" id="grid"><div class="meta">collecting current observations…</div></div>
 <script>
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-
-function statusCounts(p) {
-  const by = p.progress.by;
-  const order = ['DONE','IN_PROGRESS','REVIEWED','RECONCILED','READY_FOR_IMPLEMENTATION','READY_FOR_REVIEW','DRAFT','DEFERRED','ABANDONED'];
-  const label = { DONE:'done', IN_PROGRESS:'in progress', DRAFT:'draft', ABANDONED:'abandoned', DEFERRED:'deferred', READY_FOR_IMPLEMENTATION:'ready', READY_FOR_REVIEW:'in review', REVIEWED:'reviewed', RECONCILED:'reconciled' };
-  const parts = order.filter((s) => by[s]).map((s) => by[s] + ' ' + (label[s] || s.toLowerCase()));
-  Object.keys(by).forEach((s) => { if (!order.includes(s)) parts.push(by[s] + ' ' + s.toLowerCase()); });
-  return parts.join(' · ') + ' — ' + p.progress.total + ' specs';
-}
-
-function wsRow(w) {
-  const prog = w.steps && w.steps.total
-    ? `${w.steps.done}/${w.steps.total}` + (w.currentPhase ? ' · ' + esc(shorten(w.currentPhase, 26)) : '')
-    : (w.kind !== 'release' && w.phases && w.phases.length ? w.phases.length + ' phases' : '');
-  const owner = w.next && w.next.owner ? `<span class="owner ${w.next.owner}">${w.next.owner === 'you' ? 'waiting on you' : 'ready for claude'}</span>` : '';
-  const next = w.next ? `<p class="next">Next: ${esc(shorten(w.next.text, 90))}${owner}</p>` : '';
-  return `<div class="ws"><div class="t"><b>${esc(w.title || w.path)}</b><span>${esc(w.kind)}${prog ? ' · ' + prog : ''}</span></div>${next}</div>`;
-}
-
-function shorten(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
-
+const esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
+const SIGNAL_VERSIONS = Object.freeze({ repository:1, execution:1, workstreams:1, hygiene:1, narrative:1 });
+function signal(p,type) { if(!Object.hasOwn(SIGNAL_VERSIONS,type)) return undefined; return p.signals.find((entry) => entry.type === type && entry.version === SIGNAL_VERSIONS[type]); }
+function shorten(value,n=90) { value=String(value); return value.length>n?value.slice(0,n-1)+'…':value; }
+function workstreamRow(item) { const steps=item.steps?.total?`${item.steps.done}/${item.steps.total}`:''; const next=item.next?`<div class="counts">Next: ${esc(shorten(item.next.text))}</div>`:''; return `<div class="ws"><b>${esc(item.title||item.path)}</b> <span class="meta">${esc(item.kind)} ${steps}</span>${next}</div>`; }
 function card(p) {
-  if (p.error) return `<div class="card"><div class="head"><h2>${esc(p.name)}</h2><span class="chip mutedc">error</span></div><p class="err">${esc(p.error)}: ${esc(p.path)}</p></div>`;
-  if (!p.jigManaged) {
-    return `<div class="card"><div class="head"><h2>${esc(p.name)}</h2><span class="chip mutedc">not jig-managed</span></div>
-      <p class="counts">No docs/specs/ found. ${gitLine(p.git)}</p></div>`;
-  }
-  const pct = p.progress.pct;
-  const chip = pct === 100 ? '<span class="chip good">all specs done</span>' : '<span class="chip accent">active</span>';
-  const specRows = p.specs.map((s) => {
-    const cls = s.status === 'DONE' ? 'done' : '';
-    const slices = s.slices.length ? ` <span class="meta">(${s.slices.filter((x) => x.status === 'DONE').length}/${s.slices.length} slices)</span>` : '';
-    return `<li><span class="${cls}">${esc(s.id)}${slices}</span><span class="st ${esc(s.status || '')}">${esc(s.status || '?')}</span></li>`;
-  }).join('');
-  const ws = (p.workstreams || []).map(wsRow).join('');
-  const disc = (p.discovered || []).length
-    ? `<p class="disc">discovered, not pinned: ${p.discovered.map((d) => esc(shorten(d.title || d.path, 40)) + ` (${d.steps.done}/${d.steps.total})`).join(' · ')}</p>` : '';
-  const wtWarn = (p.worktreeOnlyDocs || []).length
-    ? `<div class="warnbox"><b>⚠ ${p.worktreeOnlyDocs.length} doc(s) exist only in a worktree</b> — e.g. ${esc(p.worktreeOnlyDocs[0].path)} <i>(${esc(p.worktreeOnlyDocs[0].worktree)})</i></div>` : '';
-  const c = p.compass;
-  const compassBlock = c
-    ? `<div class="compass${c.stale ? ' stale' : ''}"><span class="lbl">last ${c.source === 'auto' ? 'snapshot (auto)' : 'compass'} · ${esc(c.ageLabel || 'unknown age')}</span>
-        ${esc(c.headline)}${c.next ? `<p class="next">Next: ${esc(c.next)}</p>` : ''}
-        ${(c.blockers || []).length ? `<p class="next err">Blocked: ${esc(c.blockers.join('; '))}</p>` : ''}</div>`
-    : `<div class="compass"><span class="lbl">last compass</span><span class="none">no compass snapshot yet — see docs/compass-integration.md</span></div>`;
-  const counts = p.counts;
-  const extra = [
-    counts.bugs.total ? `${counts.bugs.open} open bug${counts.bugs.open === 1 ? '' : 's'}` : null,
-    counts.refinement.total ? `${counts.refinement.open} deferred decision${counts.refinement.open === 1 ? '' : 's'}` : null,
-    counts.inbox ? `${counts.inbox} inbox` : null,
-  ].filter(Boolean).join(' · ');
-  return `<div class="card">
-    <div class="head"><h2>${esc(p.name)}</h2>${chip}</div>
-    <div class="barrow"><div class="bar"><div class="${pct === 100 ? 'full' : ''}" style="width:${pct ?? 0}%"></div></div><span class="pct">${pct === null ? '—' : pct + '%'}</span></div>
-    <p class="counts">${statusCounts(p)}${extra ? ' · ' + extra : ''}</p>
-    <details><summary>specs</summary><ul class="speclist">${specRows}</ul></details>
-    ${ws || disc ? `<div class="sect"><span class="lbl">workstreams</span>${ws}${disc}</div>` : ''}
-    ${wtWarn}
-    <div class="sect">${compassBlock}</div>
-    <div class="git">${gitLine(p.git)}</div>
-  </div>`;
+  const execution=signal(p,'execution'), workstreams=signal(p,'workstreams'), hygiene=signal(p,'hygiene'), narrative=signal(p,'narrative'), repository=signal(p,'repository');
+  const progress=execution?.status==='supported'?execution.value.progress:null;
+  const pct=progress?.pct??null;
+  const specs=execution?.status==='supported'?execution.value.items:[];
+  const rows=specs.map((item)=>`<li>${esc(item.id)} <span class="meta">${esc(item.status||'unknown')}</span></li>`).join('');
+  const streams=workstreams?.status==='supported'?[...(workstreams.value.items||[]),...(workstreams.value.discovered||[])]:[];
+  const worktreeOnly=hygiene?.status==='supported'?(hygiene.value.worktreeOnlyDocs||[]):[];
+  const problems=(p.errors||[]).map((error)=>esc(error.message)).join(' · ');
+  const narrativeBlock=narrative?.status==='supported'?`<div class="sect ${narrative.freshness.state==='stale'?'stale':''}"><span class="meta">legacy narrative · ${esc(narrative.freshness.state)}</span><br>${esc(narrative.value.headline)}</div>`:'';
+  return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2><span class="chip ${p.collection.status}">${esc(p.collection.status)}</span></div>
+    <div class="counts">${repository?.status==='supported'?'repository observed':'repository unavailable'} · ${esc(p.collectedAt)}</div>
+    ${progress?`<div class="barrow"><div class="bar"><div style="width:${pct??0}%"></div></div><span class="pct">${pct===null?'—':pct+'%'}</span></div><div class="counts">${progress.done}/${progress.denom} specs done${progress.deferred?` · ${progress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
+    ${rows?`<details><summary>specs</summary><ul>${rows}</ul></details>`:''}
+    ${streams.length?`<div class="sect"><span class="meta">workstreams</span>${streams.map(workstreamRow).join('')}</div>`:''}
+    ${worktreeOnly.length?`<div class="warnbox">⚠ ${worktreeOnly.length} document(s) exist only in a worktree — ${esc(worktreeOnly[0].path)}</div>`:''}
+    ${narrativeBlock}${problems?`<p class="err">${problems}</p>`:''}</article>`;
 }
-
-function gitLine(g) {
-  if (!g) return 'git: —';
-  return `started ${esc(g.firstCommit)} · ${g.commits} commits · last ${esc(g.lastCommit)}`;
-}
-
-async function load() {
-  const res = await fetch('/api/data');
-  const data = await res.json();
-  if (data.error) {
-    document.getElementById('grid').innerHTML = `<p class="err">${esc(data.error)}</p>`;
-    return;
-  }
-  document.getElementById('scanned').textContent = 'scanned ' + new Date(data.generatedAt).toLocaleString();
-  document.getElementById('grid').innerHTML = data.projects.map(card).join('');
-}
-load();
-setInterval(load, 120000);
+function safeCard(project) { try { return card(project); } catch(error) { const label=project?.project?.label||project?.project?.id||'malformed project'; return `<article class="card"><div class="head"><h2>${esc(label)}</h2><span class="chip error">error</span></div><p class="err">Invalid project observation: ${esc(error?.message||error)}</p></article>`; } }
+async function load() { try { const response=await fetch('/api/data'); const data=await response.json(); if(data.error) throw new Error(data.error); document.getElementById('scanned').textContent='observed '+new Date(data.generatedAt).toLocaleString(); document.getElementById('grid').innerHTML=data.projects.map(safeCard).join(''); } catch(error) { document.getElementById('grid').innerHTML=`<p class="err">${esc(error.message)}</p>`; } }
+load(); setInterval(load,120000);
 </script>
 </body>
 </html>

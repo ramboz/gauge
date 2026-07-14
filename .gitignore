@@ -1,6 +1,8 @@
-# Local config — copy dashboard.config.example.json → dashboard.config.json
+# Local config — copy gauge.config.example.json → gauge.config.json
 # and point it at your own projects. The real one stays out of git.
+gauge.config.json
 dashboard.config.json
+.gauge/
 
 # Local Claude Code / jig state (machine-specific, not part of the project)
 .claude/

@@ -1,12 +1,13 @@
 {
-  "name": "project-dashboard",
-  "version": "0.1.0",
+  "name": "gauge",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Local dashboard over jig-managed projects — read-only, zero dependencies.",
+  "description": "Gauge: a private, read-only cross-project delivery dashboard.",
   "scripts": {
     "start": "node src/server.mjs",
-    "scan": "node src/scan.mjs",
+    "scan": "node src/cli.mjs",
+    "collect": "node scripts/snapshot.mjs",
     "test": "node --test"
   },
   "engines": {

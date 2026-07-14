@@ -1,10 +1,9 @@
-// Deterministic scanner over configured jig project roots (spec 002).
-// Read-only over other repos; the only writes anywhere are in this repo.
+// Optional Jig adapter implementation retained from the POC (spec 002).
+// This module is read-only; Gauge callers consume its output only through
+// src/observation.mjs's canonical signal boundary.
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { pathToFileURL, fileURLToPath } from 'node:url';
 import {
   parseFrontmatter,
   normStatus,
@@ -18,22 +17,6 @@ import {
   ageDays,
   BUG_CLOSED,
 } from './lib.mjs';
-
-export function expandHome(p) {
-  return p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
-}
-
-export function loadConfig(configPath) {
-  const raw = fs.readFileSync(configPath, 'utf8');
-  const cfg = JSON.parse(raw);
-  cfg.projects = (cfg.projects || []).map((p) => ({
-    pinnedWorkstreams: [],
-    hiddenWorkstreams: [],
-    ...p,
-    path: expandHome(p.path),
-  }));
-  return cfg;
-}
 
 function isDir(p) {
   try {
@@ -114,17 +97,18 @@ function scanBugs(root) {
   return { open, total };
 }
 
-function gitInfo(root) {
+export function gitInfo(root) {
   const run = (args) =>
     execFileSync('git', ['-C', root, ...args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
   try {
+    const revision = run(['rev-parse', 'HEAD']);
     const commits = parseInt(run(['rev-list', '--count', 'HEAD']), 10);
     const lastCommit = run(['log', '-1', '--format=%cs']);
     const firstCommit = run(['log', '--reverse', '--format=%cs']).split('\n')[0];
-    return { firstCommit, lastCommit, commits };
+    return { revision, firstCommit, lastCommit, commits };
   } catch {
     return null;
   }
@@ -260,11 +244,4 @@ export function scanAll(config) {
     generatedAt: new Date().toISOString(),
     projects: config.projects.map(scanProject),
   };
-}
-
-const DEFAULT_CONFIG = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dashboard.config.json');
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const cfg = loadConfig(process.env.DASHBOARD_CONFIG || DEFAULT_CONFIG);
-  process.stdout.write(JSON.stringify(scanAll(cfg), null, 2) + '\n');
 }

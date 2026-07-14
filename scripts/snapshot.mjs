@@ -1,107 +1,53 @@
-// Compass-snapshot writer (ADR-0002, slice 002-03 AC4).
-//
-// Manual (narrative supplied by you or by compass):
-//   node scripts/snapshot.mjs --project <path> --headline "..." \
-//     [--next "..."] [--blockers "a;b"] [--ts <iso>]
-//
-// Auto (deterministic headline from scan data; for scheduled routines):
-//   node scripts/snapshot.mjs --project <path> --auto
-//   node scripts/snapshot.mjs --all --auto     # every jig project in dashboard.config.json
-import fs from 'node:fs';
+// Compatibility-named Gauge collector. Unlike the retired Compass snapshot
+// command, this writes validated observations only beneath the instance stateDir.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateSnapshot } from '../src/lib.mjs';
-import { expandHome, loadConfig, scanProject } from '../src/scan.mjs';
+import { loadConfig, resolveConfigPath } from '../src/config.mjs';
+import { observeProject } from '../src/observation.mjs';
+import { collectObservation } from '../src/state.mjs';
 
-const DEFAULT_CONFIG = path.join(
-  path.dirname(fileURLToPath(import.meta.url)), '..', 'dashboard.config.json'
-);
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i++) {
     if (!argv[i].startsWith('--')) continue;
     const key = argv[i].slice(2);
-    if (argv[i + 1] === undefined || argv[i + 1].startsWith('--')) {
-      args[key] = true;
-    } else {
-      args[key] = argv[i + 1];
-      i++;
-    }
+    if (!argv[i + 1] || argv[i + 1].startsWith('--')) args[key] = true;
+    else args[key] = argv[++i];
   }
   return args;
 }
 
-function autoFields(scanned) {
-  const p = scanned.progress;
-  const parts = [`${p.done}/${p.denom} specs done`];
-  if (p.by.IN_PROGRESS) parts.push(`${p.by.IN_PROGRESS} in progress`);
-  if (scanned.counts.bugs.open) parts.push(`${scanned.counts.bugs.open} open bug(s)`);
-  const inProgress = scanned.specs.find((s) => s.status === 'IN_PROGRESS');
-  return {
-    headline: `auto: ${parts.join(' · ')}`,
-    ...(inProgress ? { next: `in progress: ${inProgress.id}` } : {}),
-  };
-}
-
-function writeSnapshot(root, args) {
-  const scanned = scanProject({ path: root, pinnedWorkstreams: [], hiddenWorkstreams: [] });
-  if (scanned.error) return { root, error: scanned.error };
-  if (!scanned.jigManaged) return { root, skipped: 'not jig-managed' };
-
-  const snapshot = { v: 1, ts: args.ts || new Date().toISOString() };
-  if (args.auto) {
-    Object.assign(snapshot, autoFields(scanned), { source: 'auto' });
-  } else {
-    snapshot.headline = args.headline;
-    if (args.next) snapshot.next = args.next;
-    if (args.blockers) {
-      snapshot.blockers = args.blockers.split(';').map((s) => s.trim()).filter(Boolean);
-    }
-    snapshot.source = 'manual';
-  }
-  snapshot.specs = { done: scanned.progress.done, total: scanned.progress.denom };
-
-  const errors = validateSnapshot(snapshot);
-  if (errors.length) return { root, error: 'invalid snapshot: ' + errors.join('; ') };
-
-  const dir = path.join(root, 'docs', 'status');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.appendFileSync(path.join(dir, 'compass-history.jsonl'), JSON.stringify(snapshot) + '\n');
-  return { root, snapshot };
-}
-
 const args = parseArgs(process.argv.slice(2));
-const usage =
-  'usage: node scripts/snapshot.mjs --project <path> --headline "..." [--next "..."] [--blockers "a;b"] [--ts <iso>]\n' +
-  '       node scripts/snapshot.mjs --project <path> --auto\n' +
-  '       node scripts/snapshot.mjs --all --auto [--config <path>]';
-
-let targets;
-if (args.all) {
-  if (!args.auto) {
-    console.error('--all requires --auto (a shared manual headline would be wrong per project)\n' + usage);
-    process.exit(1);
-  }
-  const cfg = loadConfig(args.config ? expandHome(args.config) : process.env.DASHBOARD_CONFIG || DEFAULT_CONFIG);
-  targets = cfg.projects.map((p) => p.path);
-} else if (args.project && (args.auto || args.headline)) {
-  targets = [expandHome(args.project)];
-} else {
-  console.error(usage);
+const usage = 'usage: node scripts/snapshot.mjs [--config <gauge.config.json>] [--project-id <id>]';
+const retired = ['project', 'headline', 'next', 'blockers', 'ts', 'auto', 'all'].find((name) => args[name] !== undefined);
+if (retired) {
+  console.error(`--${retired} belonged to the retired source-writing Compass command.\n${usage}`);
   process.exit(1);
 }
 
+const configPath = resolveConfigPath(ROOT, args.config || process.env.GAUGE_CONFIG);
 let failed = 0;
-for (const root of targets) {
-  const res = writeSnapshot(root, args);
-  if (res.error) {
-    failed++;
-    console.error(`✗ ${root}: ${res.error}`);
-  } else if (res.skipped) {
-    console.log(`- ${root}: skipped (${res.skipped})`);
-  } else {
-    console.log(`✓ ${root}: ${res.snapshot.headline}`);
+try {
+  const config = loadConfig(configPath);
+  for (const warning of config.warnings) console.error(`warning: ${warning}`);
+  const projects = args['project-id']
+    ? config.projects.filter((project) => project.id === args['project-id'])
+    : config.projects;
+  if (args['project-id'] && projects.length === 0) throw new Error(`unknown project id: ${args['project-id']}`);
+  for (const project of projects) {
+    try {
+      const observation = observeProject(project);
+      const recordPath = collectObservation(config, observation);
+      console.log(`Gauge collected ${project.label} → ${recordPath}`);
+    } catch (error) {
+      failed++;
+      console.error(`Gauge failed ${project.label}: ${error.message}`);
+    }
   }
+} catch (error) {
+  failed++;
+  console.error(`Gauge collector: ${error.message}\n${usage}`);
 }
 process.exit(failed ? 1 : 0);

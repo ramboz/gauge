@@ -26,7 +26,9 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 - False precision: retire by keeping source-specific progress strategies, unknown states, provenance, and confidence labels.
 - Authority drift: retire by keeping goals/deadlines/lifecycle in projects while Gauge owns only observations and cross-project attention policy.
 - Bug 001 restored the missing worktree fixture; the POC baseline is green at
-  29 of 29 tests before retrofit implementation.
+  29 of 29 tests before retrofit implementation. Spec 004's Gauge core and
+  central-state retrofit is green at 64 tests after independent compliance,
+  craft, and architecture review.
 
 ## No-Gos
 
@@ -63,8 +65,8 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 
 | Item | Evidence | Rationale |
 |---|---|---|
-| Runtime reframe | Spec 004 | Land the adapter/state boundary as one visible local Gauge path. |
-| Observation/history contract | Emergent work from ADR-0003 | Separate schema/authority decision from collection mechanics. |
+| Runtime reframe | Spec 004 | Landed: the adapter/state boundary now produces one visible local Gauge path. |
+| Observation/history contract | ADR-0005 retaining ADR-0004 | Landed: schema, versioning, authority, and collection mechanics are explicit. |
 | Goal and execution adapters | Emergent work from ADR-0003 | Generic GitHub and Jig can land independently behind the same contract. |
 | Risk and attention policy | ADR-0003 frame-critique resolution | Keep portfolio ranking explicit and independently testable. |
 
@@ -81,9 +83,9 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 
 ## JIG Handoff
 
-- [ADR-0003](../decisions/adr-0003-reframe-onto-gauge-portfolio-product.md): accepted after frame critique; execute its retire/amend/rewrite dispositions before implementation.
-- [Spec 004](../specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md): runtime retrofit and central-state seam.
-- New JIG work to draft after manifest execution: observation/history contract, generic GitHub goal adapter, Jig adapter, daily collector, risk/attention policy and UI.
+- [ADR-0003](../decisions/adr-0003-reframe-onto-gauge-portfolio-product.md): accepted after frame critique; its runtime reframe dispositions landed through spec 004.
+- [Spec 004](../specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md): reviewed runtime retrofit, optional Jig adapter, normalized observations, and central-state seam.
+- New JIG work to draft after the retrofit: generic GitHub goal adapter, daily scheduling, and the risk/attention policy and UI.
 - No Servo signals were found or required; release-check criteria remain deterministic and advisory.
 
 ## Release-Check Criteria

@@ -4,10 +4,11 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig, scanAll } from './scan.mjs';
+import { loadConfig, resolveConfigPath } from './config.mjs';
+import { observeAll } from './observation.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CONFIG_PATH = process.env.DASHBOARD_CONFIG || path.join(ROOT, 'dashboard.config.json');
+const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
 const INDEX = path.join(ROOT, 'public', 'index.html');
 
 const config = loadConfig(CONFIG_PATH);
@@ -20,7 +21,7 @@ const server = http.createServer((req, res) => {
     res.end(fs.readFileSync(INDEX));
   } else if (url === '/api/data') {
     try {
-      const data = scanAll(loadConfig(CONFIG_PATH));
+      const data = observeAll(loadConfig(CONFIG_PATH));
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',
@@ -37,5 +38,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`project dashboard → http://localhost:${port}`);
+  console.log(`Gauge → http://localhost:${port}`);
 });

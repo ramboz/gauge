@@ -1,0 +1,288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ramboz/gauge/schemas/observation-v1.schema.json",
+  "title": "Gauge project observation v1",
+  "type": "object",
+  "required": ["schemaVersion", "recordId", "project", "collectedAt", "collection", "provenance", "signals", "extensions", "errors"],
+  "$defs": {
+    "nullableRevision": { "type": ["string", "null"] },
+    "nullableTimestamp": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8]))|(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:0[48]|[2468][048]|[13579][26])00)-02-29)T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+        }
+      ]
+    },
+    "freshness": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": { "enum": ["fresh", "stale", "unknown", "error"] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "enum": ["stale", "unknown", "error"] } }, "required": ["state"] },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+    "sourceProvenance": {
+      "type": "object",
+      "required": ["adapterId", "collectedAt", "sourceRevision", "sourceTimestamp"],
+      "properties": {
+        "adapterId": { "type": "string", "minLength": 1 },
+        "collectedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8]))|(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:0[48]|[2468][048]|[13579][26])00)-02-29)T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+        },
+        "sourceRevision": { "$ref": "#/$defs/nullableRevision" },
+        "sourceTimestamp": { "$ref": "#/$defs/nullableTimestamp" }
+      }
+    },
+    "progressValue": {
+      "type": "object",
+      "required": ["done", "total", "abandoned", "deferred", "denom", "pct", "by"],
+      "properties": {
+        "done": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "abandoned": { "type": "integer", "minimum": 0 },
+        "deferred": { "type": "integer", "minimum": 0 },
+        "denom": { "type": "integer", "minimum": 0 },
+        "pct": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+        "by": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }
+      }
+    },
+    "repositoryValue": {
+      "type": "object",
+      "required": ["git"],
+      "properties": {
+        "git": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["revision", "firstCommit", "lastCommit", "commits"],
+              "properties": {
+                "revision": { "type": "string", "minLength": 1 },
+                "firstCommit": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                "lastCommit": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                "commits": { "type": "integer", "minimum": 0 }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "executionValue": {
+      "type": "object",
+      "required": ["strategy", "progress", "items", "counts"],
+      "properties": {
+        "strategy": { "type": "string", "minLength": 1 },
+        "progress": { "$ref": "#/$defs/progressValue" },
+        "sliceProgress": { "oneOf": [{ "$ref": "#/$defs/progressValue" }, { "type": "null" }] },
+        "items": { "type": "array", "items": { "type": "object" } },
+        "counts": { "type": "object" }
+      }
+    },
+    "workstreamsValue": {
+      "type": "object",
+      "required": ["items", "discovered"],
+      "properties": {
+        "items": { "type": "array", "items": { "type": "object" } },
+        "discovered": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "hygieneValue": {
+      "type": "object",
+      "required": ["worktreeOnlyDocs", "warnings"],
+      "properties": {
+        "worktreeOnlyDocs": { "type": "array", "items": { "type": "object" } },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "required": ["message"],
+                "properties": { "message": { "type": "string", "minLength": 1 } }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "narrativeValue": {
+      "type": "object",
+      "required": ["headline"],
+      "properties": {
+        "headline": { "type": "string" },
+        "next": { "type": ["string", "null"] },
+        "blockers": { "type": "array", "items": { "type": "string" } },
+        "ts": { "$ref": "#/$defs/nullableTimestamp" },
+        "ageLabel": { "type": ["string", "null"] },
+        "ageDays": { "type": ["number", "null"] },
+        "stale": { "type": "boolean" }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": ["adapterId", "id", "version", "value", "freshness", "provenance"],
+      "properties": {
+        "adapterId": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "integer", "minimum": 1 },
+        "value": {},
+        "freshness": { "$ref": "#/$defs/freshness" },
+        "provenance": { "$ref": "#/$defs/sourceProvenance" }
+      }
+    }
+  },
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "recordId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "project": {
+      "type": "object",
+      "required": ["id", "label", "path"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+        "label": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "collectedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8]))|(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:0[48]|[2468][048]|[13579][26])00)-02-29)T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+    },
+    "collection": {
+      "type": "object",
+      "required": ["status"],
+      "properties": { "status": { "enum": ["ok", "partial", "error"] } }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["sourceRevision", "adapters"],
+      "properties": {
+        "sourceRevision": { "$ref": "#/$defs/nullableRevision" },
+        "adapters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "status", "collectedAt", "sourceRevision", "sourceTimestamp", "freshness"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "status": { "enum": ["ok", "unsupported", "error"] },
+              "collectedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8]))|(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:0[48]|[2468][048]|[13579][26])00)-02-29)T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+              },
+              "sourceRevision": { "$ref": "#/$defs/nullableRevision" },
+              "sourceTimestamp": { "$ref": "#/$defs/nullableTimestamp" },
+              "freshness": { "$ref": "#/$defs/freshness" }
+            }
+          }
+        }
+      }
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "version", "status", "candidates", "resolution", "freshness", "provenance"],
+        "properties": {
+          "type": { "type": "string", "minLength": 1 },
+          "version": { "type": "integer", "minimum": 1 },
+          "status": { "enum": ["supported", "unsupported", "unknown", "error"] },
+          "candidates": { "type": "array", "items": { "$ref": "#/$defs/candidate" } },
+          "resolution": {
+            "type": "object",
+            "required": ["strategy"],
+            "properties": {
+              "strategy": { "type": "string", "minLength": 1 },
+              "selected": { "type": "string", "minLength": 1 },
+              "reason": { "type": "string", "minLength": 1 },
+              "contributors": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+            }
+          },
+          "freshness": { "$ref": "#/$defs/freshness" },
+          "provenance": { "$ref": "#/$defs/sourceProvenance" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "supported" } }, "required": ["status"] },
+            "then": { "required": ["value"] },
+            "else": { "properties": { "resolution": { "required": ["reason"] } } }
+          },
+          {
+            "if": { "properties": { "type": { "const": "repository" } }, "required": ["type"] },
+            "then": {
+              "allOf": [
+                { "if": { "properties": { "version": { "const": 1 }, "status": { "const": "supported" } }, "required": ["version", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/repositoryValue" } } } },
+                { "properties": { "candidates": { "items": { "if": { "properties": { "version": { "const": 1 } }, "required": ["version"] }, "then": { "properties": { "value": { "$ref": "#/$defs/repositoryValue" } } } } } } }
+              ]
+            }
+          },
+          {
+            "if": { "properties": { "type": { "const": "execution" } }, "required": ["type"] },
+            "then": {
+              "allOf": [
+                { "if": { "properties": { "version": { "const": 1 }, "status": { "const": "supported" } }, "required": ["version", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/executionValue" } } } },
+                { "properties": { "candidates": { "items": { "if": { "properties": { "version": { "const": 1 } }, "required": ["version"] }, "then": { "properties": { "value": { "$ref": "#/$defs/executionValue" } } } } } } }
+              ]
+            }
+          },
+          {
+            "if": { "properties": { "type": { "const": "workstreams" } }, "required": ["type"] },
+            "then": {
+              "allOf": [
+                { "if": { "properties": { "version": { "const": 1 }, "status": { "const": "supported" } }, "required": ["version", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/workstreamsValue" } } } },
+                { "properties": { "candidates": { "items": { "if": { "properties": { "version": { "const": 1 } }, "required": ["version"] }, "then": { "properties": { "value": { "$ref": "#/$defs/workstreamsValue" } } } } } } }
+              ]
+            }
+          },
+          {
+            "if": { "properties": { "type": { "const": "hygiene" } }, "required": ["type"] },
+            "then": {
+              "allOf": [
+                { "if": { "properties": { "version": { "const": 1 }, "status": { "const": "supported" } }, "required": ["version", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/hygieneValue" } } } },
+                { "properties": { "candidates": { "items": { "if": { "properties": { "version": { "const": 1 } }, "required": ["version"] }, "then": { "properties": { "value": { "$ref": "#/$defs/hygieneValue" } } } } } } }
+              ]
+            }
+          },
+          {
+            "if": { "properties": { "type": { "const": "narrative" } }, "required": ["type"] },
+            "then": {
+              "allOf": [
+                { "if": { "properties": { "version": { "const": 1 }, "status": { "const": "supported" } }, "required": ["version", "status"] }, "then": { "properties": { "value": { "$ref": "#/$defs/narrativeValue" } } } },
+                { "properties": { "candidates": { "items": { "if": { "properties": { "version": { "const": 1 } }, "required": ["version"] }, "then": { "properties": { "value": { "$ref": "#/$defs/narrativeValue" } } } } } } }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "extensions": { "type": "object" },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 },
+          "adapterId": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

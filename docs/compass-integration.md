@@ -6,27 +6,28 @@ superseded by
 Gauge history belongs in the private central instance; new integrations must
 not add writers to surveyed source repositories.
 
-## Current POC behavior
+## Landed compatibility behavior
 
-Until [spec 004](specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md)
-lands, the inherited scanner can still read the latest valid line from a
-project-local Compass history file, and `scripts/snapshot.mjs` can still append
-one. Treat both as compatibility behavior for existing POC users, not as the
-Gauge integration contract.
+The optional Jig adapter may read the latest valid line from a project-local
+Compass history file as a legacy `narrative@1` candidate. Missing, stale, or
+malformed history remains explicit in freshness/errors and never becomes a
+healthy default.
 
-Do not wire new Compass or scheduled jobs to write these files. Existing files
-may remain read-only legacy adapter inputs during migration.
+`scripts/snapshot.mjs` retains its compatibility filename but is now the
+explicit Gauge collector. It rejects the old source-writing flags and writes
+validated immutable observations only beneath the configured `stateDir`.
+Existing Compass files remain read-only legacy inputs during migration.
 
-## Gauge target
+## Gauge contract
 
-The normalized observation/history ADR must define:
+- `schemas/observation-v1.schema.json` defines the versioned central shape.
+- Adapter, signal, candidate, freshness, provenance, and error semantics follow
+  ADR-0004 as corrected by ADR-0005.
+- Central records live at
+  `<stateDir>/observations/<project-id>/<utc-timestamp>-<record-id>.json`.
+- Collection refuses unverifiable or overlapping sources and unqualified state
+  filesystems before a durable write.
+- No Gauge command writes `docs/status/compass-history.jsonl`.
 
-- the versioned central observation shape;
-- provenance, freshness, error, and schema-evolution semantics;
-- how optional narrative signals enter through adapters;
-- retention and secret-safety rules;
-- an instance-state writer that never targets source projects.
-
-Spec 004 will then remove, disable, or convert `scripts/snapshot.mjs` into a
-Gauge-instance writer and provide deterministic migration behavior for legacy
-history.
+New narrative integrations should implement an adapter candidate rather than
+extending the legacy Compass file.

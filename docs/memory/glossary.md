@@ -24,6 +24,19 @@ Gauge's explained cross-project ordering of what deserves attention next. It
 may use blockers, human-required actions, active work, deadlines, and a small
 portfolio overlay, but it never rewrites project-local priority.
 
+## Candidate resolution
+
+The deterministic rule that turns adapter candidates into one signal: select
+one unambiguous candidate, merge compatible merge-safe candidates with
+contributor identity, or remain unknown with an explicit reason.
+
+## Capability signal
+
+An independently versioned, typed observation record such as `repository@1` or
+`execution@1`. Adapters contribute candidates; readers consume only
+type/version pairs they understand, and unknown types or versions remain
+preserved but uninterpreted.
+
 ## Forecast confidence
 
 The evidence level supporting a deadline-risk classification. Missing dates,
@@ -44,9 +57,11 @@ location is explicit and independent from every surveyed source repository.
 
 ## Observation
 
-A versioned, provenance-bearing record of source evidence collected at a point
-in time. Exact fields, retention, freshness, and evolution semantics require a
-follow-up ADR before spec 004 implementation.
+A versioned, provenance-bearing record of one project's source evidence at a
+point in time. Observation v1 contains a stable record/project identity,
+collection summary, adapter provenance, typed independently versioned
+capability signals with candidates and resolution evidence, extensions, and
+structured errors. Immutable records live only in Gauge instance state.
 
 ## Progress strategy
 

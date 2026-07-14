@@ -14,23 +14,45 @@ and [MVP release plan](docs/releases/local-portfolio-loop.md).
 
 ## Current state
 
-Gauge began from a working `project-dashboard` proof of concept. The current
-runtime still provides the inherited local Jig-oriented cards, workstream
-discovery, worktree-only warnings, and legacy Compass snapshot reader. The
-[retrofit spec](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md)
-tracks the move to adapters, normalized observations, and central instance
-state. Until that lands, current runtime output is POC behavior rather than the
-complete Gauge MVP.
+Gauge began from a working `project-dashboard` proof of concept. The runtime is
+now Gauge-shaped: configured projects become versioned observations, optional
+adapters contribute typed signals, durable history stays in private instance
+state, and the local page consumes only capability versions it understands.
+The Jig adapter preserves the useful POC progress, workstream, pin, and
+worktree-warning behavior; generic projects remain valid without Jig.
 
-## Run the POC
+This is the normalized core of the MVP, not the complete portfolio loop. The
+generic goal/deadline adapter, daily scheduling, forecasts, risk, and global
+attention queue remain follow-up slices in the
+[MVP release plan](docs/releases/local-portfolio-loop.md).
+
+## Run Gauge
 
 ```bash
-cp dashboard.config.example.json dashboard.config.json
-node src/server.mjs
+cp gauge.config.example.json gauge.config.json
+npm start
 ```
 
-Then open <http://localhost:5111>. Configure project paths and optional
-workstream pins in `dashboard.config.json`, which remains ignored by Git.
+Then open <http://localhost:5111>. Give every canonical project an explicit,
+stable `id`; configure optional adapters and workstream pins in
+`gauge.config.json`, which remains ignored by Git. `stateDir` defaults to
+`.gauge` beside the config and must be disjoint from every configured source.
+
+Read current observations without persisting them:
+
+```bash
+npm run scan
+```
+
+Collect immutable history beneath `stateDir`:
+
+```bash
+npm run collect
+```
+
+Durable collection is deliberately fail-closed outside the Darwin/APFS
+environment qualified by ADR-0005; scanning and the local page remain usable.
+Legacy `dashboard.config.json` is still read with one migration warning.
 
 ## Product boundaries
 
@@ -46,7 +68,7 @@ workstream pins in `dashboard.config.json`, which remains ignored by Git.
 
 ```bash
 npm test
-node src/scan.mjs
+npm run scan
 ```
 
 Development follows Jig's spec workflow. Start with the

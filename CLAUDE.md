@@ -11,9 +11,11 @@ project-owned goals, deadline confidence, blockers, and recommended attention
 without mutating source repositories. The committed MVP is local, single-user,
 single-repository-per-project, and limited to one active goal per project.
 
-The shipped runtime is still the inherited Jig-oriented POC. Do not mistake its
-direct Jig/Compass coupling for the target product boundary; follow
+The shipped runtime now implements the Gauge adapter, normalized-observation,
+and central-state boundary from
 [spec 004](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md).
+The remaining MVP work is goal/deadline collection, daily scheduling,
+forecast/risk derivation, and the global attention queue.
 
 ## Hot Cache
 
@@ -28,9 +30,10 @@ This is an index. Durable detail lives in `docs/`; update it through
   state; Gauge reads them without writing.
 - **Committed MVP** — maximum two weeks; see
   [local-portfolio-loop](docs/releases/local-portfolio-loop.md).
-- **Active implementation draft** —
-  [spec 004](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md),
-  blocked until the normalized observation/history ADR is accepted.
+- **Landed runtime foundation** —
+  [spec 004](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md)
+  defines Gauge identity, adapters, normalized observations, and central state;
+  later MVP slices add goals, forecasts, scheduling, and attention policy.
 - **Retired work** — spec 003's local session panel was abandoned by ADR-0003.
 
 ### Key terms
@@ -38,7 +41,8 @@ This is an index. Durable detail lives in `docs/`; update it through
 - **Adapter** — optional read-only translator from a source convention into
   Gauge observations.
 - **Observation** — versioned, provenance-bearing evidence collected at a point
-  in time; exact schema pending ADR.
+  in time; v1 is canonical in `schemas/observation-v1.schema.json` with typed,
+  independently versioned capability signals.
 - **Instance state** — Gauge-owned private registry and history, separate from
   product code and source repositories.
 - **Attention queue** — deterministic, explained cross-project ordering; never
@@ -54,8 +58,8 @@ This is an index. Durable detail lives in `docs/`; update it through
    [spec](docs/specs/README.md) plus [bug](docs/bugs/README.md) boards.
 2. Route defects through `jig:bug-fix`; route non-trivial behavior through
    `jig:spec-workflow`.
-3. Before spec 004 implementation, accept the normalized observation/history
-   contract and verify the slice's other definition-of-ready items.
+3. Select the next shaped MVP slice from the status board and resolve any
+   trigger-bound decision in `docs/refinement-todo.md` first.
 4. Implement with tests, required independent review passes, reconciliation,
    and memory sync.
 

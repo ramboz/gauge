@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "stateDir": ".gauge",
+  "port": 5111,
+  "projects": [
+    {
+      "id": "project-a",
+      "path": "~/code/project-a",
+      "label": "Project A",
+      "adapters": ["jig"],
+      "pinnedWorkstreams": ["docs/releases/launch.md"],
+      "hiddenWorkstreams": []
+    },
+    {
+      "id": "plain-project",
+      "path": "~/code/plain-project",
+      "label": "Plain project",
+      "adapters": []
+    }
+  ]
+}

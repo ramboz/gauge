@@ -110,6 +110,7 @@ write-back, and automated lifecycle transitions remain outside these releases.
 ## Open product questions
 
 Implementation-blocking decisions are tracked in
-[refinement-todo.md](refinement-todo.md). The most important are the normalized
-observation contract, goal/deadline source precedence, minimum forecast
-confidence, and the smallest useful portfolio-priority overlay.
+[refinement-todo.md](refinement-todo.md). The observation/history foundation is
+accepted; the most important remaining questions are goal/deadline source
+precedence, minimum forecast confidence, daily collection, and the smallest
+useful portfolio-priority overlay.
