@@ -1,5 +1,5 @@
 ---
-status: RECONCILED
+status: DONE
 dependencies: [adr-0003, adr-0005]
 last_verified: 2026-07-13
 frame_review: true

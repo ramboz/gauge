@@ -15,4 +15,4 @@
 - [x] Pass compliance, craft, and architecture reviews.
 - [x] Reconcile docs, memory, deviations, and status board.
 - [x] Pass reconciliation review.
-- [ ] Land the slice as DONE.
+- [x] Land the slice as DONE.

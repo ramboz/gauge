@@ -22,7 +22,7 @@
 | [003-sessions-panel](003-sessions-panel/spec.md) | 003-01 — sessions-scan-and-render | ABANDONED | retired by ADR-0003; session-centric expansion is outside the committed Gauge MVP |
 | [003-sessions-panel](003-sessions-panel/spec.md) | 003-02 — recency-expand-toggle | ABANDONED | retired with spec 003 by ADR-0003 |
 | [003-sessions-panel](003-sessions-panel/spec.md) | 003-03 — pr-badges | ABANDONED | retired with spec 003 by ADR-0003 |
-| [004-retrofit-dashboard-runtime-onto-gauge-portfolio-product](004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md) | 004-01 — Gauge core and central state | RECONCILED | 64 tests green; all implementation and reconciliation reviews pass; ADR-0005 is the corrected contract |
+| [004-retrofit-dashboard-runtime-onto-gauge-portfolio-product](004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md) | 004-01 — Gauge core and central state | **DONE** | 64 tests green; all implementation and reconciliation reviews pass; ADR-0005 is the corrected contract |
 
 ## Abandoned slices
 
