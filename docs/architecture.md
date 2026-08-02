@@ -103,10 +103,25 @@ optional read-only Jig narrative input.
 
 ### Derivation engine
 
-Computes progress strategies, observed pace, deadline confidence, categorical
-risk, and attention ordering. Policies are deterministic, independently
-testable, and explain their evidence. Missing dates or insufficient history
-cannot yield `on_track` or `at_risk`.
+Gauge reads its observations through two layers over the shared
+adapter → observation → history substrate, separated by time
+([ADR-0006](decisions/adr-0006-two-layer-derivation.md)):
+
+- **Current-state layer** — reads only the latest observation per project and
+  renders the project card. This is the shipped path (`observeAll` in
+  `src/observation.mjs`, consumed by `src/cli.mjs`, `src/server.mjs`, and
+  `public/index.html`); it never reads history.
+- **History-derived layer** — reads the observation series through
+  `readObservationHistory()` (`src/state.mjs`) and folds it into observed pace,
+  deadline confidence, categorical risk, forecast, and the cross-project
+  attention ordering that ranks them. It is not built yet; it lands in a
+  dedicated module (`src/derive.mjs`, or `src/derive/` if it grows) that imports
+  only the history reader and observation-contract helpers, never adapters or
+  `src/scan.mjs`, and never writes to a source or to instance state.
+
+Policies are deterministic, independently testable, and explain their evidence.
+Missing dates or insufficient history cannot yield `on_track` or `at_risk`, and
+the `collection.status` envelope is never derivation evidence.
 
 ### Delivery
 

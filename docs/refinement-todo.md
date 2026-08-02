@@ -57,6 +57,10 @@ the progress/risk slice.
 **Resolution trigger:** after enough central observations exist to test a rule
 against the three-project validation set.
 
+**Architectural home:** the history-derived layer defined by
+[ADR-0006](decisions/adr-0006-two-layer-derivation.md); this item resolves the
+policy, not the placement.
+
 ### Cross-project attention overlay
 
 **Decision needed:** smallest central policy that expresses portfolio intent
@@ -64,6 +68,10 @@ without duplicating project-local priorities—ordered projects, coarse tiers, o
 deadline-plus-attention rules.
 
 **Resolution trigger:** before implementing the global attention queue.
+
+**Architectural home:** the history-derived layer defined by
+[ADR-0006](decisions/adr-0006-two-layer-derivation.md), downstream of
+forecast/risk; this item resolves the policy, not the placement.
 
 ## Collection and security
 

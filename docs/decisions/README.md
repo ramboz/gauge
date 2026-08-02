@@ -12,6 +12,7 @@
 - [ADR-0003: Reframe project-dashboard onto Gauge portfolio product](adr-0003-reframe-onto-gauge-portfolio-product.md) — The fork began as `project-dashboard`: a local, zero-dependency viewer over Jig-managed projects. (2026-07-13, Accepted)
 - [ADR-0004: Central observation and history contract](adr-0004-central-observation-history-contract.md) — Gauge must separate source-owned project state from the private portfolio history it derives. (2026-07-13, Superseded)
 - [ADR-0005: Symmetric source and state isolation](adr-0005-symmetric-source-state-isolation.md) — Accepted ADR-0004 requires Gauge to reject a `stateDir` nested inside a configured source project, but its rule is one-directional. (2026-07-13, Accepted)
+- [ADR-0006: Single instance, two-layer derivation](adr-0006-two-layer-derivation.md) — Status/progress reporting and cross-project analytics are two read layers (current-state and history-derived) over one shared observation/history substrate, not two products. (2026-08-02, Accepted)
 
 ## Format
 
