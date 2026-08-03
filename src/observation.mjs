@@ -667,11 +667,16 @@ export function observeProject(project, options = {}) {
   }
   const signals = composeSignals(contributions, project.signalPolicies || {}, collectedAt);
   const hasUsable = signals.some((entry) => entry.status === 'supported');
-  const adaptersDegraded = adapterProvenance.some((entry) => entry.status !== 'ok' || entry.freshness.state !== 'fresh');
+  // collection.status reflects whether collection completed with usable evidence,
+  // not source recency. `stale` is surfaced per signal (and on the card) but never
+  // degrades the envelope — a quiet but cleanly-collected project stays `ok`. Only
+  // genuine gaps mark `partial`: `unknown`/`error` freshness or a non-ok adapter.
+  const collectionGap = (state) => state === 'unknown' || state === 'error';
+  const adaptersDegraded = adapterProvenance.some((entry) => entry.status !== 'ok' || collectionGap(entry.freshness.state));
   const resolvedSignalsDegraded = signals.some((entry) =>
     entry.type === 'repository'
-      ? entry.status !== 'supported' || entry.freshness.state !== 'fresh'
-      : entry.candidates.length > 0 && (entry.status !== 'supported' || entry.freshness.state !== 'fresh'));
+      ? entry.status !== 'supported' || collectionGap(entry.freshness.state)
+      : entry.candidates.length > 0 && (entry.status !== 'supported' || collectionGap(entry.freshness.state)));
   const collectionStatus = !hasUsable ? 'error' : adaptersDegraded || resolvedSignalsDegraded ? 'partial' : 'ok';
   return {
     schemaVersion: 1,

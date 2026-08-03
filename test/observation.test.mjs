@@ -367,20 +367,21 @@ test('a source quiet past the threshold reads stale on repository and jig signal
       pinnedWorkstreams: [], hiddenWorkstreams: [], signalPolicies: {},
     }, { now: '2026-08-03T12:00:00.000Z' });
     // Recency is derived, not asserted: a ~63-day-quiet source is stale on both
-    // the repository signal and the jig execution signal, and collection is
-    // conservatively partial — never a false `fresh`/`ok`.
+    // the repository signal and the jig execution signal — never a false `fresh`.
     assert.equal(signal(observation, 'repository').freshness.state, 'stale');
     assert.match(signal(observation, 'repository').freshness.reason, /\d+d-ago/);
     assert.equal(signal(observation, 'execution').freshness.state, 'stale');
     assert.equal(observation.provenance.adapters[0].freshness.state, 'stale');
-    assert.equal(observation.collection.status, 'partial');
+    // Decoupled: stale is recency, not a collection failure, so the envelope
+    // stays `ok`. The staleness is surfaced per-signal (and on the card).
+    assert.equal(observation.collection.status, 'ok');
     assert.deepEqual(validateObservation(observation), []);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('stale legacy Jig narrative makes adapter freshness and collection partial', () => {
+test('stale legacy Jig narrative surfaces as stale recency without degrading collection (decoupled)', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stale-jig-'));
   try {
     fs.mkdirSync(path.join(dir, 'docs', 'specs', '001-x'), { recursive: true });
@@ -388,26 +389,33 @@ test('stale legacy Jig narrative makes adapter freshness and collection partial'
     fs.mkdirSync(path.join(dir, 'docs', 'status'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'docs', 'status', 'compass-history.jsonl'),
       '{"v":1,"ts":"2020-01-01T00:00:00Z","headline":"old"}\n');
+    // Recent git so the jig signals are fresh — the only stale input is the
+    // legacy narrative, isolating its effect on the collection envelope.
+    initGitRepo(dir, '2026-08-01T00:00:00');
     const observation = observeProject({
       id: 'stale-jig', label: 'Stale Jig', path: dir, adapters: ['jig'],
       pinnedWorkstreams: [], hiddenWorkstreams: [], signalPolicies: {},
-    });
+    }, { now: '2026-08-03T12:00:00.000Z' });
+    // Staleness is still reported on the signal and aggregated into adapter
+    // freshness, but it no longer pulls the collection envelope to `partial`.
     assert.equal(signal(observation, 'narrative').freshness.state, 'stale');
     assert.equal(observation.provenance.adapters[0].freshness.state, 'stale');
-    assert.equal(observation.collection.status, 'partial');
+    assert.equal(observation.collection.status, 'ok');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('stale and unknown adapter signals conservatively aggregate to partial', () => {
+test('unknown adapter signals mark partial; stale is recency-only (decoupled)', () => {
   const registry = {
     stale: fakeAdapter('narrative', { headline: 'old' }, { state: 'stale', reason: 'old-source' }),
     unknown: () => ({ status: 'ok', signals: [{ type: 'execution', status: 'unknown', freshness: { state: 'unknown', reason: 'no-data' } }], errors: [] }),
   };
+  // Stale adapter freshness is still reported, but collection stays `ok`.
   const stale = observeProject(project('proj-plain', { adapters: ['stale'] }), { adapterRegistry: registry });
   assert.equal(stale.provenance.adapters[0].freshness.state, 'stale');
-  assert.equal(stale.collection.status, 'partial');
+  assert.equal(stale.collection.status, 'ok');
+  // An `unknown` signal is a genuine collection gap and still degrades to partial.
   const unknown = observeProject(project('proj-plain', { adapters: ['unknown'] }), { adapterRegistry: registry });
   assert.equal(unknown.provenance.adapters[0].freshness.state, 'unknown');
   assert.equal(unknown.collection.status, 'partial');
