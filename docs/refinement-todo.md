@@ -82,6 +82,14 @@ credential scope and failure visibility are part of the choice.
 
 **Resolution trigger:** before automated daily writes to Gauge instance state.
 
+**Shaping in progress (team tier):** the pull→push inversion in
+[ADR-0007](decisions/adr-0007-invert-collection-central-pull-to-edge-push.md) and
+[ADR-0008](decisions/adr-0008-ingest-identity-attestation-freshness.md), with
+[spec 005](specs/005-central-observation-ingest-boundary/spec.md) (ingest) and
+[spec 006](specs/006-edge-collection-client/spec.md) (edge client), reframes this
+as edge-triggered push rather than a central runner. Both remain Proposed/DRAFT;
+central pull stays the local-MVP default.
+
 ### Hosted small-team access
 
 **Decision needed:** GitHub App registration, server-side session model,
@@ -90,6 +98,15 @@ collector credential separation.
 
 **Resolution trigger:** after the local MVP ships and before follow-up 1 is
 committed.
+
+**Related:** the push topology
+([ADR-0007](decisions/adr-0007-invert-collection-central-pull-to-edge-push.md),
+[ADR-0008](decisions/adr-0008-ingest-identity-attestation-freshness.md)) is an
+alternative to the "least-privilege scheduled collector" line in
+[secure-small-team-hosting](releases/secure-small-team-hosting.md): edge clients
+push with per-project credentials, so central needs no source access. The hosted
+multi-tenant runtime and the ADR-0001 dependency/loopback question stay with that
+release and are not resolved by ADR-0008.
 
 ## Optional ecosystem adapters
 
