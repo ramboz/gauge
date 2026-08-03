@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -39,6 +41,30 @@ test('scanProject: counts — bugs (README excluded), inbox, refinement, adrs (0
   assert.equal(p.counts.inbox, 2);
   assert.deepEqual(p.counts.refinement, { open: 2, total: 3 });
   assert.equal(p.counts.adrs, 1);
+});
+
+test('jigManaged requires concrete evidence, not a bare docs/specs dir (#6)', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'jig-detect-'));
+  const cfg = (name) => ({ path: path.join(base, name), pinnedWorkstreams: [], hiddenWorkstreams: [] });
+  try {
+    // (a) a bare, empty docs/specs dir is NOT evidence → degrades to generic.
+    fs.mkdirSync(path.join(base, 'bare', 'docs', 'specs'), { recursive: true });
+    assert.equal(scanProject(cfg('bare')).jigManaged, false);
+    // (b) scaffold.json alone → jig-managed, even with no docs/specs.
+    fs.mkdirSync(path.join(base, 'scaffolded'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'scaffolded', 'scaffold.json'), '{}');
+    assert.equal(scanProject(cfg('scaffolded')).jigManaged, true);
+    // (c) a real docs/specs/*/spec.md → jig-managed.
+    fs.mkdirSync(path.join(base, 'withspec', 'docs', 'specs', '001-x'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'withspec', 'docs', 'specs', '001-x', 'spec.md'), '---\nstatus: DONE\n---\n# X\n');
+    assert.equal(scanProject(cfg('withspec')).jigManaged, true);
+    // (d) a jig-convention ADR → jig-managed, even without specs.
+    fs.mkdirSync(path.join(base, 'withadr', 'docs', 'decisions'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'withadr', 'docs', 'decisions', 'adr-0001-x.md'), '# ADR 1\n');
+    assert.equal(scanProject(cfg('withadr')).jigManaged, true);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
 });
 
 test('scanProject: non-jig project degrades gracefully (002-01 AC3)', () => {

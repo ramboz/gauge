@@ -12,6 +12,8 @@ import {
   ownerOf,
   ageLabel,
   ageDays,
+  gitFreshness,
+  STALE_AFTER_DAYS,
 } from '../src/lib.mjs';
 
 test('parseFrontmatter: flat keys, arrays, quotes, comments', () => {
@@ -59,6 +61,24 @@ test('progressOf: ABANDONED leaves denominator, DEFERRED reported separately (AC
   const withDeferred = progressOf([{ status: 'DONE' }, { status: 'DEFERRED' }]);
   assert.equal(withDeferred.deferred, 1);
   assert.equal(withDeferred.pct, 50);
+});
+
+test('gitFreshness: recency, not assertion — fresh/stale/unknown by commit age', () => {
+  const now = '2026-08-03T12:00:00.000Z';
+  // Recent commit is fresh (no reason needed).
+  assert.deepEqual(gitFreshness('2026-08-01', now), { state: 'fresh' });
+  // A source quiet past the threshold is stale, with the age surfaced.
+  const stale = gitFreshness('2026-07-01', now);
+  assert.equal(stale.state, 'stale');
+  assert.match(stale.reason, /source-last-committed-33d-ago/);
+  // Exactly at the threshold is still fresh; one day past flips to stale.
+  assert.equal(gitFreshness('2026-07-20', now, 14).state, 'fresh');
+  assert.equal(gitFreshness('2026-07-19', now, 14).state, 'stale');
+  // No git metadata is unknown (never coerced to fresh); future-dated commits
+  // (in-repo fixtures) read fresh, not negative-stale.
+  assert.deepEqual(gitFreshness(null, now), { state: 'unknown', reason: 'no-git-metadata' });
+  assert.equal(gitFreshness('2026-09-01', now).state, 'fresh');
+  assert.equal(typeof STALE_AFTER_DAYS, 'number');
 });
 
 test('progressOf: empty and all-abandoned yield null pct, not NaN', () => {

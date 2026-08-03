@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { gitInfo, scanProject as scanJigProject } from './scan.mjs';
+import { gitFreshness } from './lib.mjs';
 
 const OBSERVATION_SCHEMA = JSON.parse(
   fs.readFileSync(new URL('../schemas/observation-v1.schema.json', import.meta.url), 'utf8'),
@@ -127,24 +128,36 @@ function runJigAdapter(project, { collectedAt }) {
     };
   }
   const sourceRevision = scanned.git?.revision || null;
+  // Signal freshness reflects source recency (ADR-0006 evidence), not a hardcoded
+  // assertion: a repository quiet past the threshold reads stale, absent git
+  // metadata reads unknown. Derived once from the scanned repository head.
+  const jigFreshness = gitFreshness(scanned.git?.lastCommit, collectedAt);
+  const executionSignal = scanned.specs.length
+    ? {
+        type: 'execution', status: 'supported', strategy: 'jig-specs',
+        value: {
+          strategy: 'jig-specs', progress: scanned.progress, sliceProgress: scanned.sliceProgress,
+          items: scanned.specs, counts: scanned.counts,
+        },
+        freshness: jigFreshness,
+      }
+    : {
+        // Jig-managed but no specs at the conventional docs/specs root — insufficient
+        // evidence, never a coerced supported 0/0 (product-vision: unknown, not zero).
+        type: 'execution', status: 'unknown',
+        freshness: freshness('unknown', 'no-specs-at-conventional-root'),
+      };
   const signals = [
-    {
-      type: 'execution', status: 'supported', strategy: 'jig-specs',
-      value: {
-        strategy: 'jig-specs', progress: scanned.progress, sliceProgress: scanned.sliceProgress,
-        items: scanned.specs, counts: scanned.counts,
-      },
-      freshness: freshness('fresh'),
-    },
+    executionSignal,
     {
       type: 'workstreams', status: 'supported',
       value: { items: scanned.workstreams, discovered: scanned.discovered },
-      freshness: freshness('fresh'),
+      freshness: jigFreshness,
     },
     {
       type: 'hygiene', status: 'supported',
       value: { worktreeOnlyDocs: scanned.worktreeOnlyDocs, warnings: scanned.warnings },
-      freshness: freshness('fresh'),
+      freshness: jigFreshness,
     },
   ];
   // The legacy Compass narrative is a retired, optional source. Contribute it
@@ -630,7 +643,10 @@ export function observeProject(project, options = {}) {
   const repository = normalizeContribution('filesystem', exists
     ? {
         type: 'repository', status: 'supported', value: { git },
-        sourceRevision: git?.revision || null, freshness: freshness('fresh'),
+        sourceRevision: git?.revision || null,
+        // Recency-derived, not asserted: stale when the source is quiet, unknown
+        // when the directory exists but carries no git metadata.
+        freshness: gitFreshness(git?.lastCommit, collectedAt),
       }
     : {
         type: 'repository', status: 'error',

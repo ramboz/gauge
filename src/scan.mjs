@@ -193,14 +193,30 @@ function scanCompass(root) {
   return parseCompassHistory(raw);
 }
 
+// Concrete jig evidence, not a bare directory: a scaffolded marker, at least one
+// real spec (a docs/specs/*/spec.md), or at least one jig-convention ADR. A lone
+// empty docs/specs/ dir — or an incidental one in an otherwise generic repo — no
+// longer counts, so such projects degrade to generic instead of a false 0/0.
+function hasJigEvidence(root) {
+  if (fs.existsSync(path.join(root, 'scaffold.json'))) return true;
+  const specsDir = path.join(root, 'docs', 'specs');
+  if (isDir(specsDir)) {
+    for (const entry of fs.readdirSync(specsDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && fs.existsSync(path.join(specsDir, entry.name, 'spec.md'))) return true;
+    }
+  }
+  const decisionsDir = path.join(root, 'docs', 'decisions');
+  if (isDir(decisionsDir) && fs.readdirSync(decisionsDir).some((f) => /^adr-\d+.*\.md$/.test(f))) return true;
+  return false;
+}
+
 export function scanProject(projectCfg) {
   const root = projectCfg.path;
   const name = projectCfg.label || path.basename(root);
   if (!isDir(root)) {
     return { name, path: root, error: 'path does not exist' };
   }
-  const specs = scanSpecs(root);
-  const jigManaged = specs !== null;
+  const jigManaged = hasJigEvidence(root);
   const result = {
     name,
     path: root,
@@ -209,10 +225,19 @@ export function scanProject(projectCfg) {
   };
   if (!jigManaged) return result;
 
-  const allSlices = specs.flatMap((s) => s.slices);
+  // A jig-managed project may still have no specs at the conventional root
+  // (e.g. artifacts nested under a subpath). Keep specs an array and leave
+  // progress null so the adapter can report insufficient evidence, not 0/0.
+  const specs = scanSpecs(root) || [];
   result.specs = specs;
-  result.progress = progressOf(specs);
-  result.sliceProgress = allSlices.length ? progressOf(allSlices) : null;
+  if (specs.length) {
+    const allSlices = specs.flatMap((s) => s.slices);
+    result.progress = progressOf(specs);
+    result.sliceProgress = allSlices.length ? progressOf(allSlices) : null;
+  } else {
+    result.progress = null;
+    result.sliceProgress = null;
+  }
   result.counts = {
     bugs: scanBugs(root),
     refinement: countRefinement(readIf(path.join(root, 'docs', 'refinement-todo.md')) || ''),

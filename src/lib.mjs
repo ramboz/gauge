@@ -252,3 +252,19 @@ export function ageDays(ts, now = Date.now()) {
   if (Number.isNaN(t)) return null;
   return Math.floor((now - t) / 86400000);
 }
+
+// Default recency policy: a source with no commit in this many days reads
+// `stale`. A deliberate default — tracked as a tunable in docs/refinement-todo.md.
+export const STALE_AFTER_DAYS = 14;
+
+// Freshness derived from repository recency rather than asserted. Absent git
+// metadata is `unknown` (no evidence), a source quiet longer than the threshold
+// is `stale` with the age in its reason, and a recent — or, in in-repo test
+// fixtures, future-dated — commit is `fresh`. `now` accepts an ISO string or ms.
+export function gitFreshness(lastCommit, now, staleAfterDays = STALE_AFTER_DAYS) {
+  if (!lastCommit) return { state: 'unknown', reason: 'no-git-metadata' };
+  const age = ageDays(lastCommit, typeof now === 'number' ? now : Date.parse(now));
+  if (age === null) return { state: 'unknown', reason: 'unparseable-commit-date' };
+  if (age > staleAfterDays) return { state: 'stale', reason: `source-last-committed-${age}d-ago` };
+  return { state: 'fresh' };
+}

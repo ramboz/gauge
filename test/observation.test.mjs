@@ -3,8 +3,24 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { observeAll, observeProject, validateObservation } from '../src/observation.mjs';
+
+// Build a throwaway git repo with a controlled commit date, so freshness
+// derivation (git recency) is exercised deterministically and in isolation
+// from the enclosing gauge repo.
+function initGitRepo(dir, commitDate) {
+  const env = {
+    ...process.env,
+    GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null',
+    GIT_AUTHOR_DATE: commitDate, GIT_COMMITTER_DATE: commitDate,
+  };
+  const git = (...args) => execFileSync('git', ['-C', dir, ...args], { env, stdio: ['ignore', 'ignore', 'ignore'] });
+  git('init', '-q');
+  git('-c', 'user.email=t@example.com', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false',
+    'commit', '-q', '--allow-empty', '-m', 'seed', '--no-verify');
+}
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = path.join(HERE, 'fixtures');
@@ -301,10 +317,11 @@ test('absent legacy Compass no longer degrades a healthy jig project (retired fe
   try {
     fs.mkdirSync(path.join(dir, 'docs', 'specs', '001-x'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'docs', 'specs', '001-x', 'spec.md'), '---\nstatus: DONE\n---\n# X\n');
+    initGitRepo(dir, '2026-08-01T00:00:00');
     const observation = observeProject({
       id: 'nocompass-jig', label: 'No Compass', path: dir, adapters: ['jig'],
       pinnedWorkstreams: [], hiddenWorkstreams: [], signalPolicies: {},
-    });
+    }, { now: '2026-08-03T12:00:00.000Z' });
     // The retired Compass narrative source is absent, so the adapter contributes
     // no narrative signal; it resolves to a non-degrading unsupported signal,
     // never `unknown`, and must not pull collection health to `partial`.
@@ -317,10 +334,57 @@ test('absent legacy Compass no longer degrades a healthy jig project (retired fe
   }
 });
 
+test('jig-managed with no specs at the root reports execution unknown, not a false 0/0 (#6)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nospecs-jig-'));
+  try {
+    // Jig evidence via an ADR, but no docs/specs at the conventional root
+    // (its specs live elsewhere — the Pattern B/C case).
+    fs.mkdirSync(path.join(dir, 'docs', 'decisions'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', 'decisions', 'adr-0001-x.md'), '# ADR 1\n');
+    initGitRepo(dir, '2026-08-01T00:00:00');
+    const observation = observeProject({
+      id: 'nospecs-jig', label: 'No Specs', path: dir, adapters: ['jig'],
+      pinnedWorkstreams: [], hiddenWorkstreams: [], signalPolicies: {},
+    }, { now: '2026-08-03T12:00:00.000Z' });
+    const execution = signal(observation, 'execution');
+    assert.equal(execution.status, 'unknown');
+    assert.equal(execution.resolution.reason, 'no-specs-at-conventional-root');
+    assert.equal(execution.value, undefined);
+    assert.deepEqual(validateObservation(observation), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a source quiet past the threshold reads stale on repository and jig signals (#5)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stale-git-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'docs', 'specs', '001-x'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', 'specs', '001-x', 'spec.md'), '---\nstatus: DONE\n---\n# X\n');
+    initGitRepo(dir, '2026-06-01T00:00:00');
+    const observation = observeProject({
+      id: 'stale-git', label: 'Stale Git', path: dir, adapters: ['jig'],
+      pinnedWorkstreams: [], hiddenWorkstreams: [], signalPolicies: {},
+    }, { now: '2026-08-03T12:00:00.000Z' });
+    // Recency is derived, not asserted: a ~63-day-quiet source is stale on both
+    // the repository signal and the jig execution signal, and collection is
+    // conservatively partial — never a false `fresh`/`ok`.
+    assert.equal(signal(observation, 'repository').freshness.state, 'stale');
+    assert.match(signal(observation, 'repository').freshness.reason, /\d+d-ago/);
+    assert.equal(signal(observation, 'execution').freshness.state, 'stale');
+    assert.equal(observation.provenance.adapters[0].freshness.state, 'stale');
+    assert.equal(observation.collection.status, 'partial');
+    assert.deepEqual(validateObservation(observation), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('stale legacy Jig narrative makes adapter freshness and collection partial', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stale-jig-'));
   try {
-    fs.mkdirSync(path.join(dir, 'docs', 'specs'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'docs', 'specs', '001-x'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', 'specs', '001-x', 'spec.md'), '---\nstatus: DONE\n---\n# X\n');
     fs.mkdirSync(path.join(dir, 'docs', 'status'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'docs', 'status', 'compass-history.jsonl'),
       '{"v":1,"ts":"2020-01-01T00:00:00Z","headline":"old"}\n');
