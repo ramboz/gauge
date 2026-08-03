@@ -125,3 +125,31 @@ completion.
 
 **Resolution trigger:** after MVP usage demonstrates a need for evaluation
 signals in Gauge.
+## Project onboarding and multi-entry sources
+
+### Convention discovery and multi-entry decomposition for non-flat projects
+
+**Decision needed:** how gauge observes projects whose jig artifacts are not at
+`<repoRoot>/docs/{specs,decisions}` and/or that host multiple sub-projects in one
+repo. The Jig adapter currently hardcodes that layout and assumes one repo = one
+portfolio entry. Two of three real validation patterns break: PATTERN B nested
+sub-projects (mystique → `docs/opportunities/cwv/…`) and PATTERN C umbrella
+multi-track workspace (personalization-workspace → `tracks/<name>/…`, no root
+`docs/specs`, so the whole repo degrades to generic). Folder and status
+conventions also vary (specs vs specifications; decisions vs adrs vs none; status
+in a frontmatter property vs prose).
+
+**Proposed shape:** an onboarding/profiling step (a skill run in the thin client)
+that discovers each source's artifact roots, folder names, and status encoding
+once and writes a per-project profile the thin client reads at report time when
+hooks fire; one repo may yield N portfolio entries, each with its own goal and
+progress. Projects that already declare their shape (personalization-workspace via
+`repos.yaml` scope tags) should feed that in rather than be reverse-engineered —
+aligns with the push/thin-client direction.
+
+**Resolution trigger:** before onboarding any PATTERN B/C project for real, or when
+generic goal/deadline collection is scheduled. Validate against mystique and
+personalization-workspace (see the reference-project corpus in `docs/inbox.md`).
+
+**Interaction:** a sub-project's git recency may span multiple external code repos,
+which interacts with the freshness-from-git-recency work.
