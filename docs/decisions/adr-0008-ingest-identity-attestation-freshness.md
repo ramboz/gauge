@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 dependencies: [adr-0001, adr-0003, adr-0005, adr-0006, adr-0007]
 last_verified: 2026-08-03
 frame_review: true
@@ -9,7 +9,7 @@ frame_review: true
 
 ## Status
 
-Proposed (2026-08-03)
+Accepted (2026-08-03)
 
 Resolves the execution-blocking open questions ADR-0007 left for the push path:
 per-project identity, attested-vs-observed provenance, and server-side freshness
@@ -18,6 +18,14 @@ committed local MVP. It deliberately does **not** resolve the hosted-runtime
 question (whether ADR-0001's zero-dependency / loopback-only constraint is
 amended for a multi-tenant deployment); that remains open and is bound to the
 [secure-small-team-hosting](../releases/secure-small-team-hosting.md) release.
+
+**Owner acceptance (2026-08-03):** the per-project API/bearer-token baseline
+(identity option A) is confirmed as sufficient "to get us started for a good
+while." CI-provider OIDC (B) and the GitHub App identity (C) remain the recorded
+upgrade path behind the verifier seam, not prerequisites; the "auth mechanism
+convergence" question is settled in favor of the token baseline. Token
+issuance/rotation mechanics (below) stay open as an operational detail, not a
+blocker.
 
 ## Context
 

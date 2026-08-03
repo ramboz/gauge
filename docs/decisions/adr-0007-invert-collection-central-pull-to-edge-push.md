@@ -1,7 +1,7 @@
 ---
-status: Proposed
+status: Accepted
 dependencies: [adr-0001, adr-0003, adr-0005, adr-0006]
-last_verified: 2026-08-02
+last_verified: 2026-08-03
 frame_review: true
 ---
 
@@ -9,7 +9,7 @@ frame_review: true
 
 ## Status
 
-Proposed (2026-08-02)
+Accepted (2026-08-03)
 
 This ADR is a forward-looking frame decision for the team/organization tier named
 as a long-term direction in [product-vision.md](../product-vision.md). It does not
