@@ -296,6 +296,27 @@ test('malformed adapter results are isolated as valid error observations', () =>
   }
 });
 
+test('absent legacy Compass no longer degrades a healthy jig project (retired feature)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nocompass-jig-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'docs', 'specs', '001-x'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', 'specs', '001-x', 'spec.md'), '---\nstatus: DONE\n---\n# X\n');
+    const observation = observeProject({
+      id: 'nocompass-jig', label: 'No Compass', path: dir, adapters: ['jig'],
+      pinnedWorkstreams: [], hiddenWorkstreams: [], signalPolicies: {},
+    });
+    // The retired Compass narrative source is absent, so the adapter contributes
+    // no narrative signal; it resolves to a non-degrading unsupported signal,
+    // never `unknown`, and must not pull collection health to `partial`.
+    assert.equal(signal(observation, 'narrative').status, 'unsupported');
+    assert.equal(observation.provenance.adapters[0].freshness.state, 'fresh');
+    assert.equal(observation.collection.status, 'ok');
+    assert.deepEqual(validateObservation(observation), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('stale legacy Jig narrative makes adapter freshness and collection partial', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stale-jig-'));
   try {

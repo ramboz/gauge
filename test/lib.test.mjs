@@ -32,6 +32,17 @@ test('parseFrontmatter: no frontmatter → empty data, body untouched', () => {
   assert.equal(body, '# just a doc');
 });
 
+test('parseFrontmatter: strips unquoted inline comments, keeps quoted # (real jig defect)', () => {
+  const { data } = parseFrontmatter(
+    '---\nstatus: IN_PROGRESS  # 083-08 handoff remains DRAFT —\nlang: "C#"\nnote:  # only a comment\n---\n'
+  );
+  // A whitespace-preceded # begins a YAML comment and must not pollute the value.
+  assert.equal(data.status, 'IN_PROGRESS');
+  // A quoted value keeps its #, and a bare-# value is an empty (null) scalar.
+  assert.equal(data.lang, 'C#');
+  assert.equal(data.note, null);
+});
+
 test('progressOf: ABANDONED leaves denominator, DEFERRED reported separately (AC2)', () => {
   const items = [
     ...Array(27).fill({ status: 'DONE' }),

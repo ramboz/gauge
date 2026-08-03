@@ -146,19 +146,21 @@ function runJigAdapter(project, { collectedAt }) {
       value: { worktreeOnlyDocs: scanned.worktreeOnlyDocs, warnings: scanned.warnings },
       freshness: freshness('fresh'),
     },
-    scanned.compass
-      ? {
-          type: 'narrative', status: 'supported', value: scanned.compass,
-          sourceTimestamp: scanned.compass.ts,
-          freshness: scanned.compass.stale
-            ? freshness('stale', 'legacy-compass-older-than-seven-days')
-            : freshness('fresh'),
-        }
-      : {
-          type: 'narrative', status: 'unknown',
-          freshness: freshness('unknown', 'legacy-compass-absent'),
-        },
   ];
+  // The legacy Compass narrative is a retired, optional source. Contribute it
+  // only when a Compass history file is actually present; its absence is the
+  // normal case for a modern jig project and must not degrade adapter freshness
+  // (which would otherwise force every such project to `partial`). With no
+  // contribution, narrative resolves to a non-degrading unsupported signal.
+  if (scanned.compass) {
+    signals.push({
+      type: 'narrative', status: 'supported', value: scanned.compass,
+      sourceTimestamp: scanned.compass.ts,
+      freshness: scanned.compass.stale
+        ? freshness('stale', 'legacy-compass-older-than-seven-days')
+        : freshness('fresh'),
+    });
+  }
   return {
     status: 'ok',
     sourceRevision,

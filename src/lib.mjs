@@ -23,7 +23,13 @@ export function parseFrontmatter(text) {
       const inner = raw.slice(1, -1).trim();
       value = inner ? inner.split(',').map((s) => stripQuotes(s.trim())) : [];
     } else {
-      value = stripQuotes(raw);
+      // Drop an unquoted trailing YAML comment ("IN_PROGRESS  # note" → "IN_PROGRESS").
+      // The marker must be at line start or whitespace-preceded, so values like
+      // "C#" survive; a bare "# comment" scalar collapses to an empty value.
+      const scalar = raw.startsWith('"') || raw.startsWith("'")
+        ? raw
+        : raw.replace(/(?:^|\s)#.*$/, '').trim();
+      value = stripQuotes(scalar);
       if (value === '') value = null;
     }
     out.data[key] = value;
