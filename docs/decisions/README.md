@@ -14,6 +14,7 @@
 - [ADR-0005: Symmetric source and state isolation](adr-0005-symmetric-source-state-isolation.md) — Accepted ADR-0004 requires Gauge to reject a `stateDir` nested inside a configured source project, but its rule is one-directional. (2026-07-13, Accepted)
 - [ADR-0006: Single instance, two-layer derivation](adr-0006-two-layer-derivation.md) — Status/progress reporting and cross-project analytics are two read layers (current-state and history-derived) over one shared observation/history substrate, not two products. (2026-08-02, Accepted)
 - [ADR-0007: Invert collection from central pull to edge push for the team tier](adr-0007-invert-collection-central-pull-to-edge-push.md) — The single-user MVP collects by central pull; the team tier inverts to edge-push clients that emit observation-v1 to an authenticated ingest, keeping the observation contract as the invariant seam and derivation central. (2026-08-02, Proposed)
+- [ADR-0008: Ingest identity, attestation, and freshness-aging contract for pushed observations](adr-0008-ingest-identity-attestation-freshness.md) — Resolves ADR-0007's open push-path questions: per-project bearer-token identity behind a verifier seam, a central ingest-attribution sidecar that keeps records immutable and provenance attested-not-verified, and degrade-only server-side freshness aging homed in the current-state read layer. (2026-08-03, Proposed)
 
 ## Format
 
