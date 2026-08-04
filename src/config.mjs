@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { validateProfile, PROFILE_DEFAULTS } from './profile.mjs';
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ADAPTER_ID_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
@@ -47,6 +48,22 @@ export function safeProjectId(value) {
 function resolveFrom(base, value) {
   const expanded = expandHome(value);
   return path.resolve(base, expanded);
+}
+
+// Project-shape profile (ADR-0009, spec 007-01, config-inline home only).
+// A malformed profile is rejected with one actionable error, mirroring the
+// existing configError style. A project with no `profile` normalizes to
+// exactly the same defaults a project could declare explicitly (AC2/AC3).
+function profileOf(value, projectName, projectRoot) {
+  const errors = validateProfile(value);
+  if (errors.length) configError(`project ${projectName} profile: ${errors.join('; ')}`);
+  const merged = { ...PROFILE_DEFAULTS, ...(value || {}) };
+  return {
+    artifactRoot: resolveFrom(projectRoot, merged.artifactRoot),
+    specsDir: merged.specsDir,
+    decisionsDir: merged.decisionsDir,
+    statusProperty: merged.statusProperty,
+  };
 }
 
 export function normalizeConfig(input, configPath) {
@@ -96,14 +113,16 @@ export function normalizeConfig(input, configPath) {
     if (adapters.some((adapter) => !ADAPTER_ID_PATTERN.test(adapter))) {
       configError(`project ${id} adapters must use lowercase slug ids`);
     }
+    const resolvedPath = resolveFrom(base, project.path);
     return {
       id,
       label: project.label || path.basename(project.path),
-      path: resolveFrom(base, project.path),
+      path: resolvedPath,
       adapters,
       signalPolicies: policiesOf(project.signalPolicies, id),
       pinnedWorkstreams: stringArray(project.pinnedWorkstreams, `project ${id} pinnedWorkstreams`),
       hiddenWorkstreams: stringArray(project.hiddenWorkstreams, `project ${id} hiddenWorkstreams`),
+      profile: profileOf(project.profile, id, resolvedPath),
     };
   });
 

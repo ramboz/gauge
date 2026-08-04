@@ -28,7 +28,7 @@
 | [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-01 — Local observation emitter | DRAFT |  |
 | [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-02 — Trigger and authenticated push | DRAFT |  |
 | [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-03 — Project-declared goal and deadline | DRAFT |  |
-| [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-01 — Explicit artifact-root profile (Pattern B) | DRAFT |  |
+| [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-01 — Explicit artifact-root profile (Pattern B) | **DONE** |  |
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-02 — Multi-entry decomposition (Pattern C) | DRAFT |  |
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-03 — Profile discovery and onboarding | DRAFT |  |
 

@@ -151,6 +151,15 @@ the global attention queue remain later MVP slices.
 
 - **Configuration:** `gauge.config.json` version 1; legacy
   `dashboard.config.json` normalizes with one actionable warning.
+- **Project profile:** `schemas/project-profile-v1.schema.json`
+  ([ADR-0009](decisions/adr-0009-project-shape-profile-contract.md)) — an
+  optional per-project shape declaration (`artifactRoot` and `specsDir` /
+  `decisionsDir` / `statusProperty` overrides) carried inline in
+  `gauge.config.json` for the pull path (config-inline wins), with a
+  source-owned `gauge.profile.json` reserved as the spec-006 push seam. Absent
+  profile ⇒ the flat `docs/{specs,decisions}` default, byte-identical to
+  pre-profile behavior. `entries[]` (one repo → N portfolio entries) is
+  reserved for spec 007-02.
 - **Normalized observations:**
   `schemas/observation-v1.schema.json`, with independently versioned typed
   capability records.

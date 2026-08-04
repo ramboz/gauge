@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ramboz/gauge/schemas/project-profile-v1.schema.json",
+  "title": "Gauge project-shape profile v1",
+  "description": "Declares where a source's jig-style artifacts live (ADR-0009). Config-inline home only in v1 (slice 007-01); a project with no profile normalizes to these same defaults.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "artifactRoot": {
+      "type": "string",
+      "minLength": 1,
+      "default": "docs",
+      "description": "Path, relative to the project root, under which specs/decisions live."
+    },
+    "specsDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": "specs",
+      "description": "Folder name, relative to artifactRoot, holding spec directories."
+    },
+    "decisionsDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": "decisions",
+      "description": "Folder name, relative to artifactRoot, holding ADR files."
+    },
+    "statusProperty": {
+      "type": "string",
+      "minLength": 1,
+      "default": "status",
+      "description": "Frontmatter property name carrying jig status (unexercised by the current corpus; ADR-0009 A3)."
+    }
+  }
+}

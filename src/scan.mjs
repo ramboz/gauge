@@ -17,6 +17,7 @@ import {
   ageDays,
   BUG_CLOSED,
 } from './lib.mjs';
+import { PROFILE_DEFAULTS } from './profile.mjs';
 
 function isDir(p) {
   try {
@@ -52,8 +53,27 @@ function* walkMd(dir, base) {
   }
 }
 
-function scanSpecs(root) {
-  const specsDir = path.join(root, 'docs', 'specs');
+// Project-shape profile defaults (ADR-0009, spec 007-01): a project with no
+// resolved profile scans exactly the conventional docs/{specs,decisions}
+// roots it always has — byte-identical to pre-007-01 behavior. When
+// src/config.mjs threads a resolved profile, `artifactRoot` is already an
+// absolute path (resolved relative to the project root); callers that bypass
+// config.mjs (e.g. direct scanProject() calls in tests) fall back here.
+// Defaults are sourced from src/profile.mjs (single source of truth — do not
+// re-hardcode 'docs'/'specs'/'decisions'/'status' here).
+function resolvedProfile(projectCfg) {
+  const root = projectCfg.path;
+  const profile = projectCfg.profile || {};
+  return {
+    artifactRoot: profile.artifactRoot || path.join(root, PROFILE_DEFAULTS.artifactRoot),
+    specsDir: profile.specsDir || PROFILE_DEFAULTS.specsDir,
+    decisionsDir: profile.decisionsDir || PROFILE_DEFAULTS.decisionsDir,
+    statusProperty: profile.statusProperty || PROFILE_DEFAULTS.statusProperty,
+  };
+}
+
+function scanSpecs(artifactRoot, specsDirName, statusProperty) {
+  const specsDir = path.join(artifactRoot, specsDirName);
   if (!isDir(specsDir)) return null;
   const specs = [];
   for (const entry of fs.readdirSync(specsDir, { withFileTypes: true })) {
@@ -72,19 +92,21 @@ function scanSpecs(root) {
       const fm = parseFrontmatter(readIf(path.join(dir, f)) || '').data;
       slices.push({
         file: f,
-        status: normStatus(fm.status),
+        status: normStatus(fm[statusProperty]),
         dependencies: Array.isArray(fm.dependencies) ? fm.dependencies : [],
         lastVerified: fm.last_verified || null,
       });
     }
-    specs.push({ id: entry.name, title, status: normStatus(data.status), slices });
+    specs.push({ id: entry.name, title, status: normStatus(data[statusProperty]), slices });
   }
   specs.sort((a, b) => a.id.localeCompare(b.id));
   return specs;
 }
 
-function scanBugs(root) {
-  const dir = path.join(root, 'docs', 'bugs');
+// bugs/ (like releases/) has no profile override in v1 — it is always the
+// sibling of specs/decisions under the resolved artifactRoot.
+function scanBugs(artifactRoot) {
+  const dir = path.join(artifactRoot, 'bugs');
   if (!isDir(dir)) return { open: 0, total: 0 };
   let open = 0;
   let total = 0;
@@ -114,18 +136,28 @@ export function gitInfo(root) {
   }
 }
 
-function scanWorkstreams(root, projectCfg) {
+// Scoped to the resolved artifactRoot (spec 007-01 blocker 1): a profiled
+// nested sub-project (artifactRoot = docs/opportunities/cwv) walks only its
+// own subtree, never the umbrella repo's sibling docs/{releases,bugs,...}.
+// Output `path` labels stay root-relative (matching pinnedWorkstreams /
+// hiddenWorkstreams, which the caller supplies as root-relative strings);
+// walkMd(artifactRoot, root) yields exactly that while only visiting files
+// under artifactRoot. With the default profile, artifactRoot === <root>/docs
+// and every label/exclusion below is byte-identical to pre-007-01 behavior.
+function scanWorkstreams(root, profile, projectCfg) {
   const workstreams = [];
   const discovered = [];
   const pinned = new Set(projectCfg.pinnedWorkstreams);
   const hidden = new Set(projectCfg.hiddenWorkstreams);
-  const docsDir = path.join(root, 'docs');
+  const { artifactRoot, specsDir } = profile;
+  const artifactRootLabel = path.relative(root, artifactRoot);
 
-  const releasesDir = path.join(docsDir, 'releases');
+  const releasesDir = path.join(artifactRoot, 'releases');
+  const releasesLabel = path.join(artifactRootLabel, 'releases');
   if (isDir(releasesDir)) {
     for (const f of fs.readdirSync(releasesDir).sort()) {
       if (!f.endsWith('.md') || f.toLowerCase() === 'readme.md') continue;
-      const rel = path.join('docs', 'releases', f);
+      const rel = path.join(releasesLabel, f);
       if (hidden.has(rel)) continue;
       const rb = parseRunbook(readIf(path.join(releasesDir, f)) || '');
       workstreams.push({ kind: 'release', path: rel, ...rb });
@@ -134,21 +166,24 @@ function scanWorkstreams(root, projectCfg) {
 
   for (const rel of projectCfg.pinnedWorkstreams) {
     // Release plans render unconditionally above — a pin there would duplicate the row.
-    if (rel.startsWith(path.join('docs', 'releases') + path.sep)) continue;
+    if (rel.startsWith(releasesLabel + path.sep)) continue;
     const abs = path.join(root, rel);
     const raw = readIf(abs);
     if (raw === null) continue; // missing pin → the worktree scan may explain why
     workstreams.push({ kind: 'runbook', path: rel, ...parseRunbook(raw) });
   }
 
-  if (isDir(docsDir)) {
-    for (const rel of walkMd(docsDir, root)) {
-      if (rel.startsWith(path.join('docs', 'specs') + path.sep)) continue;
-      if (rel.startsWith(path.join('docs', 'releases') + path.sep)) continue;
+  if (isDir(artifactRoot)) {
+    const specsLabel = path.join(artifactRootLabel, specsDir);
+    const bugsLabel = path.join(artifactRootLabel, 'bugs');
+    const adoptionReadinessLabel = path.join(artifactRootLabel, 'adoption-readiness.md');
+    for (const rel of walkMd(artifactRoot, root)) {
+      if (rel.startsWith(specsLabel + path.sep)) continue;
+      if (rel.startsWith(releasesLabel + path.sep)) continue;
       // Bugs have their own counter; their DoD checklists are not workstreams.
-      if (rel.startsWith(path.join('docs', 'bugs') + path.sep)) continue;
+      if (rel.startsWith(bugsLabel + path.sep)) continue;
       // Scaffold boilerplate, identical in every jig project — pin explicitly if wanted.
-      if (rel === path.join('docs', 'adoption-readiness.md')) continue;
+      if (rel === adoptionReadinessLabel) continue;
       if (pinned.has(rel) || hidden.has(rel)) continue;
       const raw = readIf(path.join(root, rel));
       if (raw === null) continue;
@@ -164,6 +199,11 @@ function scanWorkstreams(root, projectCfg) {
 
 const WORKTREE_DOC_CAP = 40;
 
+// Deliberately repo-root-scoped, not artifactRoot-scoped (spec 007-01 blocker
+// 1 exception): worktree hygiene tracks docs lost to abandoned `.claude/
+// worktrees/*` checkouts, a whole-git-repo concern, not a per-sub-project one.
+// A nested profile (e.g. artifactRoot = docs/opportunities/cwv) still sees
+// worktree-only docs from anywhere in the repo's worktree checkouts.
 function scanWorktreeOnlyDocs(root) {
   const wtRoot = path.join(root, '.claude', 'worktrees');
   if (!isDir(wtRoot)) return [];
@@ -187,8 +227,8 @@ function scanWorktreeOnlyDocs(root) {
   return out;
 }
 
-function scanCompass(root) {
-  const raw = readIf(path.join(root, 'docs', 'status', 'compass-history.jsonl'));
+function scanCompass(artifactRoot) {
+  const raw = readIf(path.join(artifactRoot, 'status', 'compass-history.jsonl'));
   if (raw === null) return { latest: null, malformed: 0, count: 0 };
   return parseCompassHistory(raw);
 }
@@ -197,15 +237,15 @@ function scanCompass(root) {
 // real spec (a docs/specs/*/spec.md), or at least one jig-convention ADR. A lone
 // empty docs/specs/ dir — or an incidental one in an otherwise generic repo — no
 // longer counts, so such projects degrade to generic instead of a false 0/0.
-function hasJigEvidence(root) {
+function hasJigEvidence(root, profile) {
   if (fs.existsSync(path.join(root, 'scaffold.json'))) return true;
-  const specsDir = path.join(root, 'docs', 'specs');
+  const specsDir = path.join(profile.artifactRoot, profile.specsDir);
   if (isDir(specsDir)) {
     for (const entry of fs.readdirSync(specsDir, { withFileTypes: true })) {
       if (entry.isDirectory() && fs.existsSync(path.join(specsDir, entry.name, 'spec.md'))) return true;
     }
   }
-  const decisionsDir = path.join(root, 'docs', 'decisions');
+  const decisionsDir = path.join(profile.artifactRoot, profile.decisionsDir);
   if (isDir(decisionsDir) && fs.readdirSync(decisionsDir).some((f) => /^adr-\d+.*\.md$/.test(f))) return true;
   return false;
 }
@@ -216,7 +256,8 @@ export function scanProject(projectCfg) {
   if (!isDir(root)) {
     return { name, path: root, error: 'path does not exist' };
   }
-  const jigManaged = hasJigEvidence(root);
+  const profile = resolvedProfile(projectCfg);
+  const jigManaged = hasJigEvidence(root, profile);
   const result = {
     name,
     path: root,
@@ -228,7 +269,7 @@ export function scanProject(projectCfg) {
   // A jig-managed project may still have no specs at the conventional root
   // (e.g. artifacts nested under a subpath). Keep specs an array and leave
   // progress null so the adapter can report insufficient evidence, not 0/0.
-  const specs = scanSpecs(root) || [];
+  const specs = scanSpecs(profile.artifactRoot, profile.specsDir, profile.statusProperty) || [];
   result.specs = specs;
   if (specs.length) {
     const allSlices = specs.flatMap((s) => s.slices);
@@ -238,17 +279,19 @@ export function scanProject(projectCfg) {
     result.progress = null;
     result.sliceProgress = null;
   }
+  const decisionsDir = path.join(profile.artifactRoot, profile.decisionsDir);
   result.counts = {
-    bugs: scanBugs(root),
-    refinement: countRefinement(readIf(path.join(root, 'docs', 'refinement-todo.md')) || ''),
-    inbox: countInboxItems(readIf(path.join(root, 'docs', 'inbox.md')) || ''),
-    adrs: isDir(path.join(root, 'docs', 'decisions'))
-      ? fs.readdirSync(path.join(root, 'docs', 'decisions')).filter((f) => /^adr-\d+.*\.md$/.test(f)).length
+    bugs: scanBugs(profile.artifactRoot),
+    refinement: countRefinement(readIf(path.join(profile.artifactRoot, 'refinement-todo.md')) || ''),
+    inbox: countInboxItems(readIf(path.join(profile.artifactRoot, 'inbox.md')) || ''),
+    adrs: isDir(decisionsDir)
+      ? fs.readdirSync(decisionsDir).filter((f) => /^adr-\d+.*\.md$/.test(f)).length
       : 0,
   };
-  Object.assign(result, scanWorkstreams(root, projectCfg));
+  Object.assign(result, scanWorkstreams(root, profile, projectCfg));
+  // Repo-root-scoped by design, not artifactRoot-scoped — see scanWorktreeOnlyDocs.
   result.worktreeOnlyDocs = scanWorktreeOnlyDocs(root);
-  const compass = scanCompass(root);
+  const compass = scanCompass(profile.artifactRoot);
   result.compass = compass.latest
     ? {
         ...compass.latest,

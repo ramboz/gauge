@@ -77,6 +77,78 @@ test('default config discovery prefers Gauge and falls back to the legacy filena
   }
 });
 
+test('project profile normalizes with no-profile identity (007-01 AC2)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-profile-'));
+  try {
+    const file = path.join(dir, 'gauge.config.json');
+    fs.writeFileSync(file, JSON.stringify({
+      version: 1,
+      projects: [
+        { id: 'no-profile', path: 'sources/no-profile', adapters: ['jig'] },
+        {
+          id: 'explicit-defaults', path: 'sources/explicit-defaults', adapters: ['jig'],
+          profile: { artifactRoot: 'docs', specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status' },
+        },
+        {
+          id: 'nested', path: 'sources/nested', adapters: ['jig'],
+          profile: { artifactRoot: 'docs/opportunities/cwv' },
+        },
+      ],
+    }));
+    const config = loadConfig(file);
+    const [noProfile, explicitDefaults, nested] = config.projects;
+
+    // A project with no `profile` normalizes exactly as today: default
+    // artifactRoot/specsDir/decisionsDir/statusProperty, resolved against
+    // the project's own root — identical to a project that spells the
+    // defaults out explicitly (AC2 no-profile identity).
+    assert.deepEqual(noProfile.profile, {
+      artifactRoot: path.join(dir, 'sources', 'no-profile', 'docs'),
+      specsDir: 'specs',
+      decisionsDir: 'decisions',
+      statusProperty: 'status',
+    });
+    assert.deepEqual(explicitDefaults.profile, {
+      artifactRoot: path.join(dir, 'sources', 'explicit-defaults', 'docs'),
+      specsDir: 'specs',
+      decisionsDir: 'decisions',
+      statusProperty: 'status',
+    });
+
+    // A non-default artifactRoot resolves relative to the project's own
+    // (already-resolved) path, not the config file's directory (AC2).
+    assert.equal(nested.profile.artifactRoot, path.join(dir, 'sources', 'nested', 'docs', 'opportunities', 'cwv'));
+    assert.equal(nested.profile.specsDir, 'specs');
+    assert.equal(nested.profile.decisionsDir, 'decisions');
+    assert.equal(nested.profile.statusProperty, 'status');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('malformed project profile is rejected with one actionable error (007-01 AC2)', () => {
+  const cases = [
+    ['profile not an object', { profile: 'docs' }],
+    ['profile is an array', { profile: ['docs'] }],
+    ['numeric artifactRoot', { profile: { artifactRoot: 42 } }],
+    ['empty artifactRoot', { profile: { artifactRoot: '' } }],
+    ['numeric specsDir', { profile: { specsDir: 0 } }],
+    ['whitespace decisionsDir', { profile: { decisionsDir: '   ' } }],
+    ['numeric statusProperty', { profile: { statusProperty: false } }],
+    ['unknown profile field', { profile: { entries: [] } }],
+  ];
+  for (const [name, override] of cases) {
+    assert.throws(
+      () => normalizeConfig({
+        version: 1,
+        projects: [{ id: 'alpha', path: '/tmp/alpha', adapters: ['jig'], ...override }],
+      }, '/tmp/gauge.config.json'),
+      /invalid configuration: project alpha profile:/,
+      name,
+    );
+  }
+});
+
 test('configuration rejects malformed public fields before observation', () => {
   const valid = {
     version: 1,

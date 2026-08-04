@@ -118,6 +118,80 @@ test('worktree-only docs flagged by path comparison (002-02 AC4)', () => {
   assert.equal(p.worktreeOnlyDocs[0].path, path.join('docs', 'notes', 'lost-doc.md'));
 });
 
+test('profile: no-profile default is byte-identical to an explicit default profile (007-01 AC3)', () => {
+  const explicit = scanProject({
+    path: path.join(FIXTURES, 'proj-jig'),
+    label: 'fixture project',
+    pinnedWorkstreams: ['docs/runbook-caption.md'],
+    hiddenWorkstreams: [],
+    profile: {
+      artifactRoot: path.join(FIXTURES, 'proj-jig', 'docs'),
+      specsDir: 'specs',
+      decisionsDir: 'decisions',
+    },
+  });
+  assert.deepEqual(explicit, jig());
+});
+
+test('profile: a non-docs artifactRoot is scanned only when a profile declares it (007-01 AC4)', () => {
+  // Real Pattern B shape: nested jig artifacts under docs/opportunities/cwv,
+  // with sibling umbrella content (docs/releases, docs/bugs, a root-level
+  // discovered doc) at the parent level that must never bleed into the
+  // profiled card (spec 007-01 reconciliation blocker 1+2).
+  const root = path.join(FIXTURES, 'proj-nested');
+  const cfg = (extra = {}) => ({ path: root, label: 'nested', pinnedWorkstreams: [], hiddenWorkstreams: [], ...extra });
+
+  // Without a profile, the nested-root artifacts are invisible: no jig
+  // evidence at the conventional docs/{specs,decisions} root, so the
+  // project degrades to generic — never a misleading 0/0.
+  const generic = scanProject(cfg());
+  assert.equal(generic.jigManaged, false);
+  assert.equal(generic.specs, undefined);
+
+  // With a profile pointing at the real (nested) root, the adapter finds
+  // only the specs/decisions that live there and reports real progress —
+  // and none of the parent-level releases/bugs/discovered docs bleed in.
+  const withProfile = scanProject(cfg({
+    profile: { artifactRoot: path.join(root, 'docs', 'opportunities', 'cwv'), specsDir: 'specs', decisionsDir: 'decisions' },
+  }));
+  assert.equal(withProfile.jigManaged, true);
+  assert.equal(withProfile.specs.length, 1);
+  assert.equal(withProfile.specs[0].id, '001-nested');
+  assert.equal(withProfile.specs[0].status, 'DONE');
+  assert.equal(withProfile.progress.pct, 100);
+  assert.equal(withProfile.counts.adrs, 1);
+
+  // The umbrella's own docs/releases/launch.md, docs/bugs/bug-x.md, and
+  // docs/roadmap.md (a >=3-checkbox discovered doc) all sit outside
+  // docs/opportunities/cwv and must not be counted.
+  assert.equal(withProfile.workstreams.length, 0);
+  assert.equal(withProfile.discovered.length, 0);
+  assert.deepEqual(withProfile.counts.bugs, { open: 0, total: 0 });
+});
+
+test('profile: statusProperty is wired into spec/slice status parsing (007-01 nit 3)', () => {
+  const p = scanProject({
+    path: path.join(FIXTURES, 'proj-status-property'),
+    label: 'status-property',
+    pinnedWorkstreams: [],
+    hiddenWorkstreams: [],
+    profile: { statusProperty: 'state' },
+  });
+  assert.equal(p.jigManaged, true);
+  assert.equal(p.specs.length, 1);
+  assert.equal(p.specs[0].status, 'DONE');
+
+  // The default statusProperty ("status") does not see the `state:` field —
+  // the spec is jig-managed (spec.md exists) but its status resolves to null.
+  const defaulted = scanProject({
+    path: path.join(FIXTURES, 'proj-status-property'),
+    label: 'status-property',
+    pinnedWorkstreams: [],
+    hiddenWorkstreams: [],
+  });
+  assert.equal(defaulted.specs[0].status, null);
+});
+
 test('compass: latest valid snapshot surfaces, malformed line warns (002-03 AC2)', () => {
   const p = jig();
   assert.equal(p.compass.headline, 'beta is close');

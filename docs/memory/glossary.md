@@ -73,3 +73,6 @@ single opaque percentage.
 
 A repository Gauge observes without modifying. It remains authoritative for
 its own goal, deadline, local priority, and engineering or release lifecycle.
+
+## Project profile
+A versioned, optional per-project shape declaration (schemas/project-profile-v1.schema.json, ADR-0009) telling the Jig adapter where a source's jig artifacts live and how to read them: artifactRoot (default 'docs') plus specsDir/decisionsDir/statusProperty overrides. Carried inline in gauge.config.json for the pull path (config-inline wins over a source-owned gauge.profile.json, which is the spec-006 push seam). Absent profile = the flat docs/{specs,decisions} default, byte-identical to pre-profile behavior. Landed by spec 007-01; entries[] (one repo to N portfolio entries) is reserved for 007-02.

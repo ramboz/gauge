@@ -79,6 +79,40 @@ test('optional Jig adapter maps POC value into canonical signals', () => {
   assert.ok(observation.errors.some((error) => error.code === 'malformed-legacy-compass'));
 });
 
+test('project-shape profile lets the jig adapter observe a non-docs artifact root (007-01 AC4)', () => {
+  const nestedRoot = path.join(FIXTURES, 'proj-nested');
+  const withoutProfile = observeProject(project('proj-nested', { adapters: ['jig'] }), {
+    now: '2026-07-13T20:00:00.000Z',
+  });
+  // No profile → no jig evidence at the conventional docs/{specs,decisions}
+  // root, so the adapter degrades to unsupported (never a misleading 0/0).
+  assert.equal(signal(withoutProfile, 'execution').status, 'unsupported');
+  assert.deepEqual(validateObservation(withoutProfile), []);
+
+  const withProfile = observeProject(project('proj-nested', {
+    adapters: ['jig'],
+    profile: {
+      artifactRoot: path.join(nestedRoot, 'docs', 'opportunities', 'cwv'),
+      specsDir: 'specs',
+      decisionsDir: 'decisions',
+      statusProperty: 'status',
+    },
+  }), { now: '2026-07-13T20:00:00.000Z' });
+  const execution = signal(withProfile, 'execution');
+  assert.equal(execution.status, 'supported');
+  assert.equal(execution.value.items.length, 1);
+  assert.equal(execution.value.progress.pct, 100);
+  assert.deepEqual(validateObservation(withProfile), []);
+
+  // The umbrella's sibling docs/releases + docs/roadmap.md (a discovered
+  // doc) must not bleed into the profiled workstreams signal, and its
+  // docs/bugs must not bleed into the profiled execution counts.
+  const workstreams = signal(withProfile, 'workstreams');
+  assert.equal(workstreams.value.items.length, 0);
+  assert.equal(workstreams.value.discovered.length, 0);
+  assert.deepEqual(execution.value.counts.bugs, { open: 0, total: 0 });
+});
+
 test('missing sources produce explicit error observations rather than zero health', () => {
   const observation = observeProject(project('does-not-exist', { adapters: ['jig'] }), {
     now: '2026-07-13T20:00:00.000Z',

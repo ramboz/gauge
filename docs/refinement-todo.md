@@ -129,6 +129,15 @@ signals in Gauge.
 
 ### Convention discovery and multi-entry decomposition for non-flat projects
 
+**PARTIALLY RESOLVED (spec 007):** shaped as
+[spec 007](specs/007-project-shape-profiles/spec.md) with the contract pinned by
+[ADR-0009](decisions/adr-0009-project-shape-profile-contract.md). Slice **007-01**
+lands the single-entry **artifact-root** half (`project-profile-v1`;
+`artifactRoot` + `specsDir`/`decisionsDir`/`statusProperty`), unblocking PATTERN B
+(mystique `docs/opportunities/cwv`). Still open: **007-02** multi-entry
+decomposition (PATTERN C / personalization-workspace) and **007-03**
+discovery/onboarding.
+
 **Decision needed:** how gauge observes projects whose jig artifacts are not at
 `<repoRoot>/docs/{specs,decisions}` and/or that host multiple sub-projects in one
 repo. The Jig adapter currently hardcodes that layout and assumes one repo = one
