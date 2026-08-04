@@ -32,7 +32,7 @@
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-02 — Multi-entry decomposition (Pattern C) | **DONE** |  |
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-03 — Profile discovery and onboarding | **DONE** |  |
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-01 — Flat layout + honest completion (jig preset unchanged) | **DONE** |  |
-| [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-02 — Auto-detect + discovery emits `specLayout` | DRAFT |  |
+| [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-02 — Auto-detect + discovery emits `specLayout` | **DONE** |  |
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-03 — Declarable completion vocabulary + foreign-status gate (DEFERRED) | DEFERRED |  |
 
 ## Deferred slices
