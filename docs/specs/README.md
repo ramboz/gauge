@@ -31,6 +31,17 @@
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-01 — Explicit artifact-root profile (Pattern B) | **DONE** |  |
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-02 — Multi-entry decomposition (Pattern C) | **DONE** |  |
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-03 — Profile discovery and onboarding | **DONE** |  |
+| [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-01 — Flat layout + honest completion (jig preset unchanged) | DRAFT |  |
+| [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-02 — Auto-detect + discovery emits `specLayout` | DRAFT |  |
+| [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-03 — Declarable completion vocabulary + foreign-status gate (DEFERRED) | DEFERRED |  |
+
+## Deferred slices
+
+> Slices parked with a stated resolution trigger. Re-open by transitioning to DRAFT.
+
+| Spec | Slice | Resolution trigger |
+|------|-------|--------------------|
+| [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-03 — Declarable completion vocabulary + foreign-status gate (DEFERRED) | a real project encodes a **delivery** status (work |
 
 ## Abandoned slices
 
