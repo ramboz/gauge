@@ -132,11 +132,18 @@ signals in Gauge.
 **PARTIALLY RESOLVED (spec 007):** shaped as
 [spec 007](specs/007-project-shape-profiles/spec.md) with the contract pinned by
 [ADR-0009](decisions/adr-0009-project-shape-profile-contract.md). Slice **007-01**
-lands the single-entry **artifact-root** half (`project-profile-v1`;
+landed the single-entry **artifact-root** half (`project-profile-v1`;
 `artifactRoot` + `specsDir`/`decisionsDir`/`statusProperty`), unblocking PATTERN B
-(mystique `docs/opportunities/cwv`). Still open: **007-02** multi-entry
-decomposition (PATTERN C / personalization-workspace) and **007-03**
-discovery/onboarding.
+(mystique `docs/opportunities/cwv`); slice **007-02** landed **multi-entry**
+decomposition (`entries[]` → one repo yields N composite-id cards sharing the
+umbrella git signal), unblocking PATTERN C (personalization-workspace's three
+tracks). Only **007-03** discovery/onboarding remains open.
+
+**Known limitation (from 007-02, follow-up):** an umbrella project's
+`pinnedWorkstreams` propagate to *every* expanded entry, and pins resolve
+repo-root-relative (not per-`artifactRoot`), so a pinned umbrella doc surfaces on
+all N track cards. No corpus project pins today; per-entry pin scoping (or
+suppressing umbrella pins on multi-entry expansion) is a small follow-up.
 
 **Decision needed:** how gauge observes projects whose jig artifacts are not at
 `<repoRoot>/docs/{specs,decisions}` and/or that host multiple sub-projects in one

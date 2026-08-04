@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { observeAll, observeProject, validateObservation } from '../src/observation.mjs';
+import { normalizeConfig } from '../src/config.mjs';
 
 // Build a throwaway git repo with a controlled commit date, so freshness
 // derivation (git recency) is exercised deterministically and in isolation
@@ -581,4 +582,71 @@ test('Jig adapter and every Jig signal carry the scanned Git HEAD revision', () 
     .filter((candidate) => candidate.adapterId === 'jig');
   assert.ok(jigCandidates.length > 0);
   assert.ok(jigCandidates.every((candidate) => candidate.provenance.sourceRevision === revision));
+});
+
+// --- 007-02: multi-entry decomposition (ADR-0009 D2, Pattern C) ---
+
+test('multi-entry: composite ids, shared umbrella git signal, per-entry execution (AC2/AC4)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-multi-entry-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'tracks', 'a', 'specs', '001-a'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'tracks', 'a', 'specs', '001-a', 'spec.md'), '---\nstatus: DONE\n---\n# A\n');
+    fs.mkdirSync(path.join(dir, 'tracks', 'b', 'specs', '001-b'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'tracks', 'b', 'specs', '001-b', 'spec.md'), '---\nstatus: IN_PROGRESS\n---\n# B\n');
+    // Track c is decisions-only: jig-managed via ADR evidence, no specs/ dir.
+    fs.mkdirSync(path.join(dir, 'tracks', 'c', 'decisions'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'tracks', 'c', 'decisions', 'adr-0001-c.md'), '# ADR 1\n');
+    initGitRepo(dir, '2026-08-01T00:00:00');
+
+    const config = normalizeConfig({
+      version: 1,
+      projects: [{
+        id: 'umbrella', label: 'Umbrella', path: dir, adapters: ['jig'],
+        profile: {
+          entries: [
+            { id: 'a', label: 'Track A', artifactRoot: 'tracks/a' },
+            { id: 'b', label: 'Track B', artifactRoot: 'tracks/b' },
+            { id: 'c', label: 'Track C', artifactRoot: 'tracks/c' },
+          ],
+        },
+      }],
+    }, path.join(dir, 'gauge.config.json'));
+
+    const result = observeAll(config, { now: '2026-08-03T12:00:00.000Z' });
+    assert.equal(result.projects.length, 3);
+    for (const observation of result.projects) assert.deepEqual(validateObservation(observation), []);
+
+    const [a, b, c] = result.projects;
+    // Composite ids (AC2), in declared entry order (AC5 determinism).
+    assert.equal(a.project.id, 'umbrella-a');
+    assert.equal(b.project.id, 'umbrella-b');
+    assert.equal(c.project.id, 'umbrella-c');
+    assert.equal(a.project.label, 'Track A');
+    assert.equal(b.project.label, 'Track B');
+    assert.equal(c.project.label, 'Track C');
+
+    // Entries share the umbrella repository/git signal (D3): identical
+    // sourceRevision across every entry observation.
+    assert.ok(a.provenance.sourceRevision);
+    assert.equal(a.provenance.sourceRevision, b.provenance.sourceRevision);
+    assert.equal(a.provenance.sourceRevision, c.provenance.sourceRevision);
+    assert.equal(
+      signal(a, 'repository').value.git.revision,
+      signal(c, 'repository').value.git.revision,
+    );
+
+    // Each entry carries its own artifactRoot-scoped execution — no cross-entry bleed.
+    assert.equal(signal(a, 'execution').status, 'supported');
+    assert.equal(signal(a, 'execution').value.items.length, 1);
+    assert.equal(signal(a, 'execution').value.progress.pct, 100);
+    assert.equal(signal(b, 'execution').status, 'supported');
+    assert.equal(signal(b, 'execution').value.items.length, 1);
+    assert.equal(signal(b, 'execution').value.progress.pct, 0);
+
+    // Track c is jig-managed but decisions-only: execution reports `unknown`,
+    // never a coerced 0/0 (AC4).
+    assert.equal(signal(c, 'execution').status, 'unknown');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

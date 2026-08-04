@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { collectObservation, descriptorContains, descriptorsOverlap, identityDescriptor, readObservationHistory } from '../src/state.mjs';
-import { observeProject } from '../src/observation.mjs';
+import { observeAll, observeProject } from '../src/observation.mjs';
+import { normalizeConfig } from '../src/config.mjs';
 
 function tree(root) {
   const out = [];
@@ -191,6 +192,57 @@ test('collector rejects a symlink below stateDir before it can redirect a write'
     const before = tree(source);
     assert.throws(() => collectObservation({ stateDir, projects: [project] }, observeProject(project)), /unsafe-state-component/);
     assert.deepEqual(tree(source), before);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- 007-02: multi-entry decomposition (ADR-0009 D2, Pattern C) ---
+
+test('multi-entry: each composite-id entry lands under its own state subdirectory, no collision (AC3)', { skip: process.platform !== 'darwin' }, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-state-entries-'));
+  const source = path.join(dir, 'source');
+  const stateDir = path.join(dir, 'state');
+  fs.mkdirSync(path.join(source, 'tracks', 'a'), { recursive: true });
+  fs.mkdirSync(path.join(source, 'tracks', 'b'), { recursive: true });
+  try {
+    const config = normalizeConfig({
+      version: 1,
+      stateDir: 'state',
+      projects: [{
+        id: 'umbrella', path: source, adapters: [],
+        profile: {
+          entries: [
+            { id: 'a', label: 'Track A', artifactRoot: 'tracks/a' },
+            { id: 'b', label: 'Track B', artifactRoot: 'tracks/b' },
+          ],
+        },
+      }],
+    }, path.join(dir, 'gauge.config.json'));
+    assert.equal(config.stateDir, stateDir);
+    assert.deepEqual(config.projects.map((p) => p.id), ['umbrella-a', 'umbrella-b']);
+
+    const { projects: observations } = observeAll(config, { now: '2026-07-13T20:00:00.000Z' });
+    const before = tree(source);
+    const recordPaths = observations.map((observation) => collectObservation(config, observation));
+
+    // ADR-0005 disjointness/containment still hold — no writes to source.
+    assert.deepEqual(tree(source), before);
+
+    // Each entry's immutable record lands under its own composite-id
+    // subdirectory of stateDir/observations — no cross-entry collision.
+    assert.ok(recordPaths[0].startsWith(path.join(stateDir, 'observations', 'umbrella-a') + path.sep));
+    assert.ok(recordPaths[1].startsWith(path.join(stateDir, 'observations', 'umbrella-b') + path.sep));
+    assert.notEqual(recordPaths[0], recordPaths[1]);
+
+    const historyA = readObservationHistory(stateDir, 'umbrella-a');
+    const historyB = readObservationHistory(stateDir, 'umbrella-b');
+    assert.equal(historyA.observations.length, 1);
+    assert.equal(historyB.observations.length, 1);
+    assert.equal(historyA.observations[0].project.id, 'umbrella-a');
+    assert.equal(historyB.observations[0].project.id, 'umbrella-b');
+    assert.equal(historyA.errors.length, 0);
+    assert.equal(historyB.errors.length, 0);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

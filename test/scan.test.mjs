@@ -192,6 +192,44 @@ test('profile: statusProperty is wired into spec/slice status parsing (007-01 ni
   assert.equal(defaulted.specs[0].status, null);
 });
 
+test('multi-entry (007-02): each track root scans in isolation, decisions-only track has no false 0/0', () => {
+  // Real Pattern C shape: tracks/<name>/{specs,decisions} directly (no docs/
+  // wrapper), one entry per track, no config.mjs involved here — this proves
+  // scanProject() itself is unchanged by 007-02 (config.mjs is the only seam
+  // that expands entries; each entry is an ordinary single-entry profile by
+  // the time it reaches scanProject).
+  const root = path.join(FIXTURES, 'proj-umbrella');
+  const track = (name, extra = {}) => scanProject({
+    path: root, label: name, pinnedWorkstreams: [], hiddenWorkstreams: [],
+    profile: { artifactRoot: path.join(root, 'tracks', name), specsDir: 'specs', decisionsDir: 'decisions' },
+    ...extra,
+  });
+
+  const a = track('a');
+  assert.equal(a.jigManaged, true);
+  assert.equal(a.specs.length, 1);
+  assert.equal(a.progress.pct, 100);
+  assert.equal(a.counts.adrs, 1);
+
+  const b = track('b');
+  assert.equal(b.jigManaged, true);
+  assert.equal(b.specs.length, 2);
+  assert.equal(b.progress.done, 1);
+  assert.equal(b.counts.adrs, 1);
+
+  // Track c is decisions-only (no specs/ dir at all): jig-managed via ADR
+  // evidence, but specs stays an empty array — never a coerced 0/0.
+  const c = track('c');
+  assert.equal(c.jigManaged, true);
+  assert.deepEqual(c.specs, []);
+  assert.equal(c.progress, null);
+  assert.equal(c.counts.adrs, 1);
+
+  // Each track sees only its own tree — no cross-track bleed.
+  assert.equal(a.specs[0].id, '001-a');
+  assert.equal(b.specs.map((s) => s.id).sort().join(','), '001-b,002-b');
+});
+
 test('compass: latest valid snapshot surfaces, malformed line warns (002-03 AC2)', () => {
   const p = jig();
   assert.equal(p.compass.headline, 'beta is close');

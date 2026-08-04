@@ -158,8 +158,11 @@ the global attention queue remain later MVP slices.
   `gauge.config.json` for the pull path (config-inline wins), with a
   source-owned `gauge.profile.json` reserved as the spec-006 push seam. Absent
   profile ⇒ the flat `docs/{specs,decisions}` default, byte-identical to
-  pre-profile behavior. `entries[]` (one repo → N portfolio entries) is
-  reserved for spec 007-02.
+  pre-profile behavior. An optional `entries[]` (spec 007-02) makes one repo
+  yield **N portfolio entries**: each entry (`id`, `label`, `artifactRoot` +
+  overrides) expands at config normalization into a composite-id
+  (`<baseId>-<entryId>`) card scoped to its own artifact root, sharing the
+  umbrella repo's git signal.
 - **Normalized observations:**
   `schemas/observation-v1.schema.json`, with independently versioned typed
   capability records.
