@@ -76,3 +76,9 @@ its own goal, deadline, local priority, and engineering or release lifecycle.
 
 ## Project profile
 A versioned, optional per-project shape declaration (schemas/project-profile-v1.schema.json, ADR-0009) telling the Jig adapter where a source's jig artifacts live and how to read them: artifactRoot (default 'docs') plus specsDir/decisionsDir/statusProperty overrides. Carried inline in gauge.config.json for the pull path (config-inline wins over a source-owned gauge.profile.json, which is the spec-006 push seam). Absent profile = the flat docs/{specs,decisions} default, byte-identical to pre-profile behavior. Landed by spec 007-01; entries[] (one repo to N portfolio entries) is reserved for 007-02.
+
+## specLayout
+project-profile-v1 capability (spec 008 / ADR-0010) declaring how a source's spec artifacts are laid out under specsDir: 'nested' = <dir>/spec.md (the jig preset default), 'flat' = <name>.md (one file per spec), or 'auto' = detect by inspection at read time (nested-first; mixed/indeterminate resolves toward nested). Additive to profile-v1; absent = nested = 007 identity. Discovery emits it only when flat, keeping nested proposals byte-identical.
+
+## delivery-completion vocabulary
+The recognized jig lifecycle status allowlist (DRAFT, READY_FOR_REVIEW, READY_FOR_IMPLEMENTATION, IN_PROGRESS, REVIEWED, RECONCILED, DONE, DEFERRED, ABANDONED) that gates honest completion (spec 008 / ADR-0010, DELIVERY_VOCABULARY in src/lib.mjs). A root whose spec artifacts resolve NO status in this set reports execution completion 'unknown' rather than a fabricated 0% — applied at root granularity, layered on top of progressOf (which is unchanged). This is why a status-absent flat corpus like mystique/docs/superpowers observes as 'unknown', not 100%/0%, while existing jig cards (always ≥1 recognized status) stay byte-identical.
