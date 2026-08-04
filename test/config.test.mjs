@@ -107,12 +107,14 @@ test('project profile normalizes with no-profile identity (007-01 AC2)', () => {
       specsDir: 'specs',
       decisionsDir: 'decisions',
       statusProperty: 'status',
+      specLayout: 'nested',
     });
     assert.deepEqual(explicitDefaults.profile, {
       artifactRoot: path.join(dir, 'sources', 'explicit-defaults', 'docs'),
       specsDir: 'specs',
       decisionsDir: 'decisions',
       statusProperty: 'status',
+      specLayout: 'nested',
     });
 
     // A non-default artifactRoot resolves relative to the project's own
@@ -202,16 +204,16 @@ test('a profile with entries expands one project into N normalized projects (AC1
     // projects downstream).
     assert.deepEqual(rtb.profile, {
       artifactRoot: path.join(umbrellaPath, 'tracks', 'rtb'),
-      specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status',
+      specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status', specLayout: 'nested',
     });
     assert.deepEqual(offerManagement.profile, {
       artifactRoot: path.join(umbrellaPath, 'tracks', 'offer-management'),
-      specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status',
+      specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status', specLayout: 'nested',
     });
     // Per-entry statusProperty override wins over the (absent) profile-level default.
     assert.deepEqual(contextualExperimentation.profile, {
       artifactRoot: path.join(umbrellaPath, 'tracks', 'contextual-experimentation'),
-      specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'state',
+      specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'state', specLayout: 'nested',
     });
     assert.equal(rtb.profile.entries, undefined);
 
@@ -253,6 +255,40 @@ test('entries: per-entry specsDir/decisionsDir override the profile-level and de
   // Per-entry override wins over the profile-level override.
   assert.equal(b.profile.specsDir, 'entry-specs');
   assert.equal(b.profile.decisionsDir, 'entry-decisions');
+});
+
+test('entries: specLayout threads with entry→profile→default fallback (008-01 AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: {
+        specLayout: 'flat',
+        entries: [
+          { id: 'a', label: 'A', artifactRoot: 'tracks/a' },
+          { id: 'b', label: 'B', artifactRoot: 'tracks/b', specLayout: 'nested' },
+        ],
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  const [a, b] = config.projects;
+  // No per-entry override: falls back to the profile-level specLayout.
+  assert.equal(a.profile.specLayout, 'flat');
+  // Per-entry override wins over the profile-level value.
+  assert.equal(b.profile.specLayout, 'nested');
+});
+
+test('single-entry profile threads specLayout with default fallback (008-01 AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [
+      { id: 'flat', path: '/tmp/flat', adapters: ['jig'], profile: { specLayout: 'flat' } },
+      { id: 'plain', path: '/tmp/plain', adapters: ['jig'] },
+    ],
+  }, '/tmp/gauge.config.json');
+  assert.equal(config.projects[0].profile.specLayout, 'flat');
+  // Absent specLayout defaults to nested (007 identity).
+  assert.equal(config.projects[1].profile.specLayout, 'nested');
 });
 
 test('entries: duplicate entry id is rejected with an actionable error', () => {

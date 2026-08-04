@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { gitInfo, scanProject as scanJigProject } from './scan.mjs';
-import { gitFreshness } from './lib.mjs';
+import { gitFreshness, hasDeliveryStatus } from './lib.mjs';
 
 const OBSERVATION_SCHEMA = JSON.parse(
   fs.readFileSync(new URL('../schemas/observation-v1.schema.json', import.meta.url), 'utf8'),
@@ -132,21 +132,38 @@ function runJigAdapter(project, { collectedAt }) {
   // assertion: a repository quiet past the threshold reads stale, absent git
   // metadata reads unknown. Derived once from the scanned repository head.
   const jigFreshness = gitFreshness(scanned.git?.lastCommit, collectedAt);
-  const executionSignal = scanned.specs.length
+  // Completion is vocabulary-gated at ROOT granularity (ADR-0010 sub-decision 3):
+  //  - no specs at the conventional root → unknown (insufficient evidence);
+  //  - specs exist AND ≥1 resolves a recognized delivery status → supported,
+  //    rolled up by progressOf exactly as today (byte-identical jig cards);
+  //  - specs exist but NONE resolve a recognized delivery status → unknown, never
+  //    a fabricated 0/N (the real driver: superpowers' flat, prose-status docs).
+  // In the last case the document count must reach the card ("N documents ·
+  // completion unknown"). A `value` cannot carry it: normalizeContribution drops
+  // the value of any non-supported signal. The minimal channel that survives
+  // without expanding the observation contract is the freshness/resolution
+  // reason string, which already embeds numbers elsewhere (gitFreshness'
+  // `source-last-committed-63d-ago`). So the count travels in the reason.
+  const executionSignal = !scanned.specs.length
     ? {
-        type: 'execution', status: 'supported', strategy: 'jig-specs',
-        value: {
-          strategy: 'jig-specs', progress: scanned.progress, sliceProgress: scanned.sliceProgress,
-          items: scanned.specs, counts: scanned.counts,
-        },
-        freshness: jigFreshness,
-      }
-    : {
         // Jig-managed but no specs at the conventional docs/specs root — insufficient
         // evidence, never a coerced supported 0/0 (product-vision: unknown, not zero).
         type: 'execution', status: 'unknown',
         freshness: freshness('unknown', 'no-specs-at-conventional-root'),
-      };
+      }
+    : hasDeliveryStatus(scanned.specs)
+      ? {
+          type: 'execution', status: 'supported', strategy: 'jig-specs',
+          value: {
+            strategy: 'jig-specs', progress: scanned.progress, sliceProgress: scanned.sliceProgress,
+            items: scanned.specs, counts: scanned.counts,
+          },
+          freshness: jigFreshness,
+        }
+      : {
+          type: 'execution', status: 'unknown',
+          freshness: freshness('unknown', `no-recognized-delivery-status-${scanned.specs.length}-documents`),
+        };
   const signals = [
     executionSignal,
     {

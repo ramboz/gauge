@@ -27,6 +27,13 @@ const ENTRY_SCHEMA = PROFILE_SCHEMA.properties.entries.items;
 const ENTRY_FIELDS = Object.keys(ENTRY_SCHEMA.properties);
 const ENTRY_REQUIRED = ENTRY_SCHEMA.required || [];
 
+// specLayout (ADR-0010, slice 008-01) is an enum field, not a free string:
+// the generic "non-empty string" check below would wrongly accept "weekly".
+// Enum membership is validated explicitly, at both the profile and entry
+// level, sourced from the schema so the two stay in lockstep.
+const SPEC_LAYOUTS = PROFILE_SCHEMA.properties.specLayout.enum;
+const SPEC_LAYOUT_ERROR = `must be one of: ${SPEC_LAYOUTS.join(', ')}`;
+
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -47,6 +54,10 @@ function validateEntry(entry, index, errors) {
   for (const [key, value] of Object.entries(entry)) {
     if (!ENTRY_FIELDS.includes(key)) {
       errors.push(`profile.entries[${index}].${key} is not a recognized field`);
+      continue;
+    }
+    if (key === 'specLayout') {
+      if (!SPEC_LAYOUTS.includes(value)) errors.push(`profile.entries[${index}].specLayout ${SPEC_LAYOUT_ERROR}`);
       continue;
     }
     if (typeof value !== 'string' || !value.trim()) {
@@ -75,6 +86,10 @@ export function validateProfile(value) {
         continue;
       }
       entry.forEach((item, index) => validateEntry(item, index, errors));
+      continue;
+    }
+    if (key === 'specLayout') {
+      if (!SPEC_LAYOUTS.includes(entry)) errors.push(`profile.specLayout ${SPEC_LAYOUT_ERROR}`);
       continue;
     }
     if (typeof entry !== 'string' || !entry.trim()) {

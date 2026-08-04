@@ -60,6 +60,7 @@ function resolvedSingleProfile(merged, projectRoot) {
     specsDir: merged.specsDir,
     decisionsDir: merged.decisionsDir,
     statusProperty: merged.statusProperty,
+    specLayout: merged.specLayout,
   };
 }
 
@@ -99,6 +100,7 @@ function expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinn
       specsDir: entry.specsDir || profileValue.specsDir || PROFILE_DEFAULTS.specsDir,
       decisionsDir: entry.decisionsDir || profileValue.decisionsDir || PROFILE_DEFAULTS.decisionsDir,
       statusProperty: entry.statusProperty || profileValue.statusProperty || PROFILE_DEFAULTS.statusProperty,
+      specLayout: entry.specLayout || profileValue.specLayout || PROFILE_DEFAULTS.specLayout,
     };
     return {
       id: composite,

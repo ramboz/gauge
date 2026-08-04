@@ -19,9 +19,51 @@ test('project-profile v1 schema declares the ADR-0009 field set with defaults', 
   assert.equal(schema.properties.specsDir.default, 'specs');
   assert.equal(schema.properties.decisionsDir.default, 'decisions');
   assert.equal(schema.properties.statusProperty.default, 'status');
+  // specLayout (ADR-0010, slice 008-01) is additive: default 'nested', so it
+  // flows into PROFILE_DEFAULTS with the 007 identity value.
+  assert.equal(schema.properties.specLayout.default, 'nested');
   assert.deepEqual(PROFILE_DEFAULTS, {
     artifactRoot: 'docs', specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status',
+    specLayout: 'nested',
   });
+});
+
+// --- 008-01: specLayout capability (ADR-0010) ---
+
+test('specLayout is an additive enum {nested,flat,auto} defaulting to nested (008-01 AC1)', () => {
+  const schema = loadSchema();
+  assert.deepEqual(schema.properties.specLayout.enum, ['nested', 'flat', 'auto']);
+  assert.equal(schema.properties.specLayout.default, 'nested');
+  assert.deepEqual(schema.properties.entries.items.properties.specLayout.enum, ['nested', 'flat', 'auto']);
+});
+
+test('a profile with no specLayout validates (007 identity, 008-01 AC1)', () => {
+  assert.deepEqual(validateProfile({ artifactRoot: 'docs', specsDir: 'specs' }), []);
+});
+
+test('valid specLayout values are accepted at the profile and entry level (008-01 AC1)', () => {
+  for (const layout of ['nested', 'flat', 'auto']) {
+    assert.deepEqual(validateProfile({ specLayout: layout }), [], layout);
+  }
+  assert.deepEqual(validateProfile({
+    entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', specLayout: 'flat' }],
+  }), []);
+});
+
+test('a bad specLayout value is rejected with one actionable error (008-01 AC1)', () => {
+  const schema = loadSchema();
+  assert.deepEqual(schema.properties.specLayout.enum, ['nested', 'flat', 'auto']);
+  const topErrors = validateProfile({ specLayout: 'weekly' });
+  assert.equal(topErrors.length, 1);
+  assert.match(topErrors[0], /profile\.specLayout must be one of: nested, flat, auto/);
+  // A numeric specLayout is rejected the same way (not "non-empty string").
+  assert.notDeepEqual(validateProfile({ specLayout: 42 }), []);
+  // Per-entry override is enum-gated with an equally actionable error.
+  const entryErrors = validateProfile({
+    entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', specLayout: 'weekly' }],
+  });
+  assert.equal(entryErrors.length, 1);
+  assert.match(entryErrors[0], /profile\.entries\[0\]\.specLayout must be one of: nested, flat, auto/);
 });
 
 test('an absent profile is valid (no-profile identity, AC2)', () => {
@@ -112,6 +154,7 @@ test('entries[] is additive to v1: PROFILE_DEFAULTS stays the 007-01 scalar four
   assert.ok(schema.properties.entries, 'entries must be declared additively, not as a v2 schema');
   assert.deepEqual(PROFILE_DEFAULTS, {
     artifactRoot: 'docs', specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status',
+    specLayout: 'nested',
   });
   assert.equal(PROFILE_DEFAULTS.entries, undefined);
 });

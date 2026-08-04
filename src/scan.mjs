@@ -69,12 +69,41 @@ function resolvedProfile(projectCfg) {
     specsDir: profile.specsDir || PROFILE_DEFAULTS.specsDir,
     decisionsDir: profile.decisionsDir || PROFILE_DEFAULTS.decisionsDir,
     statusProperty: profile.statusProperty || PROFILE_DEFAULTS.statusProperty,
+    specLayout: profile.specLayout || PROFILE_DEFAULTS.specLayout,
   };
 }
 
-function scanSpecs(artifactRoot, specsDirName, statusProperty) {
+// A spec artifact's title: its first `#` heading (stripping a leading
+// `Spec N:` / `Spec N —` prefix), else a supplied fallback (the dir/file name).
+// Shared by both layouts so flat and nested titles are derived identically.
+function titleOf(body, fallback) {
+  const titleMatch = body.match(/^#\s+(.+)$/m);
+  return titleMatch ? titleMatch[1].replace(/^Spec\s+\d+\s*[:—-]\s*/i, '').trim() : fallback;
+}
+
+// Flat layout (ADR-0010, slice 008-01): each `<specsDir>/<name>.md` is one spec
+// artifact (README skipped). No sub-slices exist in a flat layout, so `slices`
+// is always []. Status resolution is unchanged (frontmatter statusProperty);
+// a flat doc with only a prose status resolves null, which the completion gate
+// (observation.mjs) turns into honest `unknown`.
+function scanSpecsFlat(specsDir, statusProperty) {
+  const specs = [];
+  for (const f of fs.readdirSync(specsDir).sort()) {
+    if (!f.endsWith('.md') || f.toLowerCase() === 'readme.md') continue;
+    const raw = readIf(path.join(specsDir, f));
+    if (raw === null) continue;
+    const { data, body } = parseFrontmatter(raw);
+    const id = f.replace(/\.md$/, '');
+    specs.push({ id, title: titleOf(body, id), status: normStatus(data[statusProperty]), slices: [] });
+  }
+  specs.sort((a, b) => a.id.localeCompare(b.id));
+  return specs;
+}
+
+function scanSpecs(artifactRoot, specsDirName, statusProperty, specLayout) {
   const specsDir = path.join(artifactRoot, specsDirName);
   if (!isDir(specsDir)) return null;
+  if (specLayout === 'flat') return scanSpecsFlat(specsDir, statusProperty);
   const specs = [];
   for (const entry of fs.readdirSync(specsDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -82,10 +111,7 @@ function scanSpecs(artifactRoot, specsDirName, statusProperty) {
     const raw = readIf(path.join(dir, 'spec.md'));
     if (raw === null) continue;
     const { data, body } = parseFrontmatter(raw);
-    const titleMatch = body.match(/^#\s+(.+)$/m);
-    const title = titleMatch
-      ? titleMatch[1].replace(/^Spec\s+\d+\s*[:—-]\s*/i, '').trim()
-      : entry.name;
+    const title = titleOf(body, entry.name);
     const slices = [];
     for (const f of fs.readdirSync(dir).sort()) {
       if (!/^slice-.*\.md$/.test(f)) continue;
@@ -237,12 +263,20 @@ function scanCompass(artifactRoot) {
 // real spec (a docs/specs/*/spec.md), or at least one jig-convention ADR. A lone
 // empty docs/specs/ dir — or an incidental one in an otherwise generic repo — no
 // longer counts, so such projects degrade to generic instead of a false 0/0.
+// The spec-evidence check is layout-aware (ADR-0010 sub-decision 4, tier 2): a
+// declared root is trackable only when it holds ≥1 artifact matching the
+// declared specLayout — a nested `<dir>/spec.md`, or (flat) a non-README
+// `<name>.md`. An empty/irrelevant declared root fabricates no card.
 function hasJigEvidence(root, profile) {
   if (fs.existsSync(path.join(root, 'scaffold.json'))) return true;
   const specsDir = path.join(profile.artifactRoot, profile.specsDir);
   if (isDir(specsDir)) {
-    for (const entry of fs.readdirSync(specsDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && fs.existsSync(path.join(specsDir, entry.name, 'spec.md'))) return true;
+    if (profile.specLayout === 'flat') {
+      if (fs.readdirSync(specsDir).some((f) => f.endsWith('.md') && f.toLowerCase() !== 'readme.md')) return true;
+    } else {
+      for (const entry of fs.readdirSync(specsDir, { withFileTypes: true })) {
+        if (entry.isDirectory() && fs.existsSync(path.join(specsDir, entry.name, 'spec.md'))) return true;
+      }
     }
   }
   const decisionsDir = path.join(profile.artifactRoot, profile.decisionsDir);
@@ -269,7 +303,7 @@ export function scanProject(projectCfg) {
   // A jig-managed project may still have no specs at the conventional root
   // (e.g. artifacts nested under a subpath). Keep specs an array and leave
   // progress null so the adapter can report insufficient evidence, not 0/0.
-  const specs = scanSpecs(profile.artifactRoot, profile.specsDir, profile.statusProperty) || [];
+  const specs = scanSpecs(profile.artifactRoot, profile.specsDir, profile.statusProperty, profile.specLayout) || [];
   result.specs = specs;
   if (specs.length) {
     const allSlices = specs.flatMap((s) => s.slices);

@@ -30,6 +30,12 @@
       "default": "status",
       "description": "Frontmatter property name carrying jig status (unexercised by the current corpus; ADR-0009 A3)."
     },
+    "specLayout": {
+      "type": "string",
+      "enum": ["nested", "flat", "auto"],
+      "default": "nested",
+      "description": "Spec-artifact layout under specsDir (ADR-0010, slice 008-01): 'nested' = <dir>/spec.md (the jig preset), 'flat' = <name>.md (one file per spec). 'auto' is reserved for detection (slice 008-02). Additive; a profile with no specLayout is the 007 identity."
+    },
     "entries": {
       "type": "array",
       "minItems": 1,
@@ -68,6 +74,11 @@
             "type": "string",
             "minLength": 1,
             "description": "Frontmatter property name carrying jig status for this entry. Defaults to the profile's statusProperty, then 'status'."
+          },
+          "specLayout": {
+            "type": "string",
+            "enum": ["nested", "flat", "auto"],
+            "description": "Spec-artifact layout for this entry (ADR-0010, slice 008-01). Defaults to the profile's specLayout, then 'nested'."
           }
         }
       }

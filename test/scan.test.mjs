@@ -230,6 +230,86 @@ test('multi-entry (007-02): each track root scans in isolation, decisions-only t
   assert.equal(b.specs.map((s) => s.id).sort().join(','), '001-b,002-b');
 });
 
+// --- 008-01: flat specLayout + honest completion (ADR-0010) ---
+
+const flatCfg = (extra = {}) => ({
+  path: path.join(FIXTURES, 'proj-flat'), label: 'flat',
+  pinnedWorkstreams: [], hiddenWorkstreams: [],
+  profile: { artifactRoot: path.join(FIXTURES, 'proj-flat', 'docs'), specLayout: 'flat' },
+  ...extra,
+});
+
+test('flat specLayout reads specs/<name>.md, skips README, titles from heading (008-01 AC2)', () => {
+  const p = scanProject(flatCfg());
+  assert.equal(p.jigManaged, true);
+  assert.equal(p.specs.length, 2);
+  // README.md is not a spec artifact.
+  assert.ok(!p.specs.some((s) => s.id.toLowerCase() === 'readme'));
+  const alpha = p.specs.find((s) => s.id === '2026-01-01-alpha-design');
+  assert.equal(alpha.title, 'Alpha design');
+  assert.deepEqual(alpha.slices, []);
+  // A `Spec N:` heading prefix is stripped exactly as the nested reader does.
+  const beta = p.specs.find((s) => s.id === '2026-02-02-beta-design');
+  assert.equal(beta.title, 'Beta design');
+  // Prose status (no frontmatter) resolves no status under the frontmatter reader.
+  assert.equal(alpha.status, null);
+  assert.equal(beta.status, null);
+});
+
+test('flat specLayout: default (nested) does not see the flat files (008-01 AC2/AC4)', () => {
+  // Same root, no specLayout override → default nested → the flat <name>.md
+  // files are not <dir>/spec.md, so no jig evidence (byte-identical to today).
+  const p = scanProject({
+    path: path.join(FIXTURES, 'proj-flat'), label: 'flat',
+    pinnedWorkstreams: [], hiddenWorkstreams: [],
+    profile: { artifactRoot: path.join(FIXTURES, 'proj-flat', 'docs') },
+  });
+  assert.equal(p.jigManaged, false);
+  assert.equal(p.specs, undefined);
+});
+
+test('flat specLayout with a recognized delivery status rolls up as today (008-01 AC3)', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'flat-delivery-'));
+  try {
+    const specs = path.join(base, 'docs', 'specs');
+    fs.mkdirSync(specs, { recursive: true });
+    fs.writeFileSync(path.join(specs, 'a-design.md'), '---\nstatus: DONE\n---\n# A\n');
+    fs.writeFileSync(path.join(specs, 'b-design.md'), '# B\n\n**Status:** Approved\n');
+    const p = scanProject({
+      path: base, label: 'flat-delivery', pinnedWorkstreams: [], hiddenWorkstreams: [],
+      profile: { artifactRoot: path.join(base, 'docs'), specLayout: 'flat' },
+    });
+    assert.equal(p.specs.length, 2);
+    // ≥1 recognized status → progressOf runs exactly as today (status-absent
+    // artifact stays in the denominator): 1 DONE / 2 = 50%.
+    assert.equal(p.progress.done, 1);
+    assert.equal(p.progress.total, 2);
+    assert.equal(p.progress.pct, 50);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('card gate: an empty/irrelevant declared flat root does not fabricate a card (008-01 AC5)', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'flat-empty-'));
+  try {
+    // A declared flat root whose specs/ holds only a README (no matching
+    // artifact) and no scaffold/ADR → not trackable, no card.
+    const specs = path.join(base, 'docs', 'specs');
+    fs.mkdirSync(specs, { recursive: true });
+    fs.writeFileSync(path.join(specs, 'README.md'), '# index\n');
+    const cfg = { path: base, label: 'empty', pinnedWorkstreams: [], hiddenWorkstreams: [],
+      profile: { artifactRoot: path.join(base, 'docs'), specLayout: 'flat' } };
+    assert.equal(scanProject(cfg).jigManaged, false);
+
+    // Add one matching flat artifact → the root becomes trackable (tier 2).
+    fs.writeFileSync(path.join(specs, 'real-design.md'), '# Real\n');
+    assert.equal(scanProject(cfg).jigManaged, true);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test('compass: latest valid snapshot surfaces, malformed line warns (002-03 AC2)', () => {
   const p = jig();
   assert.equal(p.compass.headline, 'beta is close');

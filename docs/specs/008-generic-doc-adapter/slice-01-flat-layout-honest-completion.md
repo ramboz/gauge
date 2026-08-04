@@ -1,7 +1,7 @@
 ---
-status: DRAFT
+status: DONE
 dependencies: [007-01, 007-02, adr-0010]
-last_verified:
+last_verified: 2026-08-04
 arch_review: true
 ---
 
@@ -57,16 +57,16 @@ byte-identical.
    regardless of who authored the declaration.
 
 **DoD:**
-- [ ] All ACs pass; full test suite green (no regressions); existing fixtures
+- [x] All ACs pass; full test suite green (no regressions); existing fixtures
       byte-identical.
-- [ ] Coverage: flat-layout reading, `specLayout` schema/validator validity,
+- [x] Coverage: flat-layout reading, `specLayout` schema/validator validity,
       status-absent → `unknown` (not 0%), jig-preset byte-identical regression,
       empty-declared-root → no card, and a read-only real-corpus smoke against
       `mystique/docs/superpowers` (flips blank → "N documents · unknown", source
       untouched).
-- [ ] Reviewed (compliance + craft + arch).
-- [ ] Deviation log + Reconciliation sweep produced.
-- [ ] `docs/refinement-todo.md` updated for any decisions deferred during
+- [x] Reviewed (compliance + craft + arch).
+- [x] Deviation log + Reconciliation sweep produced.
+- [x] `docs/refinement-todo.md` updated for any decisions deferred during
       implementation.
 
 **Anti-horizontal-phasing check:** After this slice, onboarding a flat-spec repo
@@ -76,8 +76,58 @@ previously blind — end-to-end, observable on the dashboard.
 
 ### Deviation log (after reconciliation)
 
-_Filled during reconciliation._
+- **Document count carried in the freshness/resolution reason string, not a
+  structured field.** AC3 requires the status-absent artifacts to be "surfaced
+  as a count." `normalizeContribution` (`src/observation.mjs:76`) strips `value`
+  from every non-`supported` signal, so an `unknown` execution signal cannot
+  carry the count in a typed field without expanding the observation contract
+  (ADR-0005 territory). The count therefore rides in the reason string as
+  `no-recognized-delivery-status-<N>-documents`. All three review passes flagged
+  this as the weakest seam and recommended deferring a structured carrier — filed
+  in `docs/refinement-todo.md` ("Structured carrier for status-absent document
+  count"). The observation contract and its validators are unchanged.
+- **The dashboard card renders "Execution signal unknown.", not the literal
+  "N documents · completion unknown".** The tier-1 invariant AC3 pins is
+  delivered end-to-end: `superpowers` flips from a blank "unsupported" card to a
+  truthful `unknown` card (a visible dashboard change), and no false `0%` is
+  ever shown. But the card renderer (`public/index.html:49`) does not yet consume
+  the count, because doing so today means parsing the diagnostic reason string —
+  the exact brittleness the reviews flagged. The literal "N documents" render is
+  therefore deferred to land together with the structured carrier as one coherent
+  follow-up (same refinement-todo entry), rather than building on the reason-string
+  seam. AC3 (adapter-level completion + count surfaced in the observation) is met.
+- **`specLayout: auto` validates and is accepted but behaves as `nested`.** Not a
+  deviation — auto-detection is slice 008-02 per the spec's own decomposition.
+  The schema/validator accept `auto` now so 008-02 needs no schema change; the
+  adapter's flat-vs-nested branch treats a non-`flat` value as nested.
+- **Additive test-assertion updates.** `test/profile.test.mjs` (2) and
+  `test/config.test.mjs` (3) deep-equal assertions were updated to include the
+  additive `specLayout: 'nested'` now present in `PROFILE_DEFAULTS` / the resolved
+  profile object. Expected consequence of the schema default flowing into the
+  schema-derived defaults map; observation output is byte-identical, no behavioral
+  regression.
 
 ### Reconciliation sweep
 
-_Filled during reconciliation._
+- **Schema ↔ runtime validator (`schemas/project-profile-v1.schema.json` ↔
+  `src/profile.mjs`):** `updated` — `specLayout` enum added to both; the validator
+  sources the enum from `PROFILE_SCHEMA.properties.specLayout.enum` so they stay
+  in lockstep. Verified `PROFILE_DEFAULTS` picks up the schema default.
+- **Config plumbing (`src/config.mjs`):** `updated` — `specLayout` threaded through
+  `resolvedSingleProfile`, `profileOf` (via `PROFILE_DEFAULTS`), and `expandEntries`
+  with the same entry→profile→default fallback as the other override fields.
+- **Observation contract (`schemas/observation-v1.schema.json`, validators):**
+  `no-op` — deliberately untouched; the unknown-completion signal reuses the
+  existing `unknown`-status shape. Confirmed no validator changes were needed.
+- **`progressOf` / existing derivation (`src/lib.mjs`, ADR-0006):** `no-op` —
+  `progressOf` signature and math unchanged; the vocabulary gate is a separate
+  additive predicate (`hasDeliveryStatus`) layered on top. Byte-identical jig
+  cards proven by regression tests over existing fixtures.
+- **Dashboard renderer (`public/index.html`):** `deferred` — count render deferred
+  with the structured carrier (see deviation log + refinement-todo). The
+  unsupported→unknown card flip is delivered by the existing renderer path.
+- **`docs/architecture.md`:** `no-op` — no module boundary or public contract
+  changed; `specLayout` is an additive profile-v1 capability within the existing
+  adapter boundary. The arch review confirmed boundaries are preserved.
+- **`docs/refinement-todo.md`:** `updated` — added the structured-count-carrier
+  deferred decision with a resolution trigger.

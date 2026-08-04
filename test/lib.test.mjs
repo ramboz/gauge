@@ -14,7 +14,29 @@ import {
   ageDays,
   gitFreshness,
   STALE_AFTER_DAYS,
+  DELIVERY_VOCABULARY,
+  hasDeliveryStatus,
 } from '../src/lib.mjs';
+
+// --- 008-01: recognized jig delivery-completion vocabulary (ADR-0010) ---
+
+test('DELIVERY_VOCABULARY is the jig lifecycle statuses, upper-cased (008-01)', () => {
+  for (const status of ['DRAFT', 'READY_FOR_REVIEW', 'READY_FOR_IMPLEMENTATION',
+    'IN_PROGRESS', 'REVIEWED', 'RECONCILED', 'DONE', 'DEFERRED', 'ABANDONED']) {
+    assert.ok(DELIVERY_VOCABULARY.has(status), status);
+  }
+  // A design-review label (superpowers' prose "Approved") is NOT delivery status.
+  assert.ok(!DELIVERY_VOCABULARY.has('APPROVED'));
+  assert.ok(!DELIVERY_VOCABULARY.has(null));
+});
+
+test('hasDeliveryStatus gates the rollup at root granularity (008-01 AC3)', () => {
+  // No recognized status anywhere → the floor (completion unknown).
+  assert.equal(hasDeliveryStatus([{ status: null }, { status: 'APPROVED' }]), false);
+  // A single recognized status flips the root to "roll up as today".
+  assert.equal(hasDeliveryStatus([{ status: null }, { status: 'DONE' }]), true);
+  assert.equal(hasDeliveryStatus([]), false);
+});
 
 test('parseFrontmatter: flat keys, arrays, quotes, comments', () => {
   const { data, body } = parseFrontmatter(

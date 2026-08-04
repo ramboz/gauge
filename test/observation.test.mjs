@@ -391,6 +391,82 @@ test('jig-managed with no specs at the root reports execution unknown, not a fal
   }
 });
 
+// --- 008-01: flat layout + vocabulary-gated completion (ADR-0010) ---
+
+test('flat status-absent root reports execution unknown with document count, never 0% (008-01 AC3)', () => {
+  const flatRoot = path.join(FIXTURES, 'proj-flat');
+  const observation = observeProject(project('proj-flat', {
+    label: 'flat', adapters: ['jig'],
+    profile: { artifactRoot: path.join(flatRoot, 'docs'), specLayout: 'flat' },
+  }), { now: '2026-07-13T20:00:00.000Z' });
+  assert.deepEqual(validateObservation(observation), []);
+  const execution = signal(observation, 'execution');
+  // No recognized delivery status anywhere → honest unknown, not a false 0/2.
+  assert.equal(execution.status, 'unknown');
+  assert.equal(execution.value, undefined);
+  // The document count is surfaced so the card can render "N documents · unknown".
+  assert.match(execution.resolution.reason, /no-recognized-delivery-status/);
+  assert.match(execution.resolution.reason, /2-documents/);
+});
+
+test('flat root with a recognized delivery status resolves supported completion (008-01 AC3)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flat-supported-'));
+  try {
+    const specs = path.join(dir, 'docs', 'specs');
+    fs.mkdirSync(specs, { recursive: true });
+    fs.writeFileSync(path.join(specs, 'a-design.md'), '---\nstatus: DONE\n---\n# A\n');
+    fs.writeFileSync(path.join(specs, 'b-design.md'), '# B\n\n**Status:** Approved\n');
+    initGitRepo(dir, '2026-08-01T00:00:00');
+    const observation = observeProject({
+      id: 'flat-supported', label: 'Flat', path: dir, adapters: ['jig'],
+      pinnedWorkstreams: [], hiddenWorkstreams: [], signalPolicies: {},
+      profile: { artifactRoot: path.join(dir, 'docs'), specLayout: 'flat' },
+    }, { now: '2026-08-03T12:00:00.000Z' });
+    const execution = signal(observation, 'execution');
+    assert.equal(execution.status, 'supported');
+    assert.equal(execution.value.progress.pct, 50);
+    assert.deepEqual(validateObservation(observation), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('jig preset is byte-identical: explicit nested specLayout equals the default (008-01 AC4)', () => {
+  const withDefault = observeProject(project('proj-jig', {
+    label: 'fixture project', adapters: ['jig'], pinnedWorkstreams: ['docs/runbook-caption.md'],
+  }), { now: '2026-07-13T20:00:00.000Z', recordId: '11111111-1111-4111-8111-111111111111' });
+  const withExplicit = observeProject(project('proj-jig', {
+    label: 'fixture project', adapters: ['jig'], pinnedWorkstreams: ['docs/runbook-caption.md'],
+    profile: { specLayout: 'nested' },
+  }), { now: '2026-07-13T20:00:00.000Z', recordId: '11111111-1111-4111-8111-111111111111' });
+  assert.deepEqual(withExplicit, withDefault);
+});
+
+test('read-only smoke: mystique/docs/superpowers flips blank → N documents · unknown (008-01 DoD)', (t) => {
+  // Guarded: this real corpus is only present on the maintainer's machine, not
+  // CI. Skip cleanly elsewhere. The committed proj-flat fixture gives the
+  // deterministic coverage; this proves the real driver end-to-end, read-only.
+  const superpowers = '/Users/ramboz/Projects/spacecat/mystique/docs/superpowers';
+  if (!fs.existsSync(superpowers)) {
+    t.skip('mystique/docs/superpowers corpus absent on this machine');
+    return;
+  }
+  const before = fs.readdirSync(path.join(superpowers, 'specs')).sort();
+  const observation = observeProject({
+    id: 'superpowers', label: 'Superpowers', path: superpowers, adapters: ['jig'],
+    pinnedWorkstreams: [], hiddenWorkstreams: [], signalPolicies: {},
+    profile: { artifactRoot: superpowers, specLayout: 'flat' },
+  }, { now: '2026-08-03T12:00:00.000Z' });
+  assert.deepEqual(validateObservation(observation), []);
+  const execution = signal(observation, 'execution');
+  // Flipped from blank "unsupported" to a truthful unknown-with-count card.
+  assert.equal(execution.status, 'unknown');
+  assert.match(execution.resolution.reason, /no-recognized-delivery-status/);
+  assert.match(execution.resolution.reason, /\d+-documents/);
+  // Read-only: the source directory listing is unchanged after observation.
+  assert.deepEqual(fs.readdirSync(path.join(superpowers, 'specs')).sort(), before);
+});
+
 test('a source quiet past the threshold reads stale on repository and jig signals (#5)', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stale-git-'));
   try {

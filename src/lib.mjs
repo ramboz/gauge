@@ -166,6 +166,28 @@ export function countRefinement(text) {
 
 export const BUG_CLOSED = new Set(['DONE', 'RESOLVED_ON_MAIN', 'CLOSED', 'WONT_FIX']);
 
+// Recognized jig delivery-completion vocabulary (ADR-0010 sub-decision 3): the
+// jig lifecycle statuses, upper-cased to match normStatus. `normStatus` itself
+// defines no vocabulary (it only upper-cases), so this allowlist is the new
+// rollup gate. A root whose spec artifacts resolve NO status in this set reports
+// completion `unknown` rather than a fabricated 0% — honest over eager. This is
+// a rollup decision layered ON TOP of progressOf, which is deliberately left
+// unchanged (status-absent artifacts still sit in its denominator once ≥1
+// recognized status exists, preserving byte-identical jig cards).
+export const DELIVERY_VOCABULARY = new Set([
+  'DRAFT', 'READY_FOR_REVIEW', 'READY_FOR_IMPLEMENTATION', 'IN_PROGRESS',
+  'REVIEWED', 'RECONCILED', 'DONE', 'DEFERRED', 'ABANDONED',
+]);
+
+// True iff at least one item carries a status in the recognized delivery
+// vocabulary. Applied at ROOT granularity (ADR-0010): with ≥1 recognized status
+// the adapter runs progressOf exactly as today; with none, completion is
+// reported `unknown`. Existing jig fixtures always have ≥1 recognized status,
+// so this never changes their cards.
+export function hasDeliveryStatus(items) {
+  return items.some((it) => DELIVERY_VOCABULARY.has(it.status));
+}
+
 // Last valid snapshot line wins; malformed lines are counted, never fatal.
 export function parseCompassHistory(text) {
   let latest = null;

@@ -190,3 +190,28 @@ personalization-workspace (see the reference-project corpus in `docs/inbox.md`).
 
 **Interaction:** a sub-project's git recency may span multiple external code repos,
 which interacts with the freshness-from-git-recency work.
+
+### Structured carrier for the status-absent document count (from spec 008-01)
+
+**Decision needed:** how the status-absent document count reaches the delivery
+layer as data. Slice 008-01 reports honest `unknown` completion for a root with no
+recognized delivery status and surfaces the count, but `normalizeContribution`
+(`src/observation.mjs`) strips `value` from every non-`supported` signal, so the
+count currently rides in the freshness/resolution reason string
+(`no-recognized-delivery-status-<N>-documents`). All three 008-01 review passes
+(compliance/craft/arch) flagged this stringly-typed carrier as the weakest seam.
+The dashboard card (`public/index.html`) consequently does **not** yet render the
+literal "N documents · completion unknown" — it renders "Execution signal
+unknown." — because consuming the count today means regex-parsing a diagnostic
+string.
+
+**Options:** (a) permit a typed field (e.g. `documentCount`) on an `unknown`
+execution signal that survives `normalizeContribution` — an additive change to the
+observation contract (ADR-0005 territory, likely an ADR); (b) a dedicated
+`unknownStatus`/insufficient-evidence signal shape. Whichever lands, wire
+`public/index.html` to render the count **from the structured field** in the same
+change, so the render layer never parses a reason string.
+
+**Resolution trigger:** before the dashboard is changed to render the "N
+documents" count, or when any second consumer needs the count structurally —
+whichever comes first.
