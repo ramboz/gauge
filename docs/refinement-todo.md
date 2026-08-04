@@ -127,9 +127,9 @@ completion.
 signals in Gauge.
 ## Project onboarding and multi-entry sources
 
-### Convention discovery and multi-entry decomposition for non-flat projects
+### ~~Convention discovery and multi-entry decomposition for non-flat projects~~ — RESOLVED 2026-08-03 (spec 007 complete)
 
-**PARTIALLY RESOLVED (spec 007):** shaped as
+**RESOLVED (spec 007, all slices DONE):** shaped as
 [spec 007](specs/007-project-shape-profiles/spec.md) with the contract pinned by
 [ADR-0009](decisions/adr-0009-project-shape-profile-contract.md). Slice **007-01**
 landed the single-entry **artifact-root** half (`project-profile-v1`;
@@ -137,13 +137,34 @@ landed the single-entry **artifact-root** half (`project-profile-v1`;
 (mystique `docs/opportunities/cwv`); slice **007-02** landed **multi-entry**
 decomposition (`entries[]` → one repo yields N composite-id cards sharing the
 umbrella git signal), unblocking PATTERN C (personalization-workspace's three
-tracks). Only **007-03** discovery/onboarding remains open.
+tracks); slice **007-03** landed **discovery/onboarding** (`src/discover.mjs` +
+`npm run onboard`) — a read-only introspection that authors a drop-in profile,
+preferring a source's self-declaration (`tracks/*` layout, `repos.yaml` `scope:`
+tags) over heuristic nested-root detection, so PATTERN B/C projects are configured
+without hand-writing artifact roots. Verified read-only against the real corpus:
+mystique → `[docs/opportunities/cwv, docs/superpowers]`; personalization-workspace
+→ the three tracks in repos.yaml scope order.
 
-**Known limitation (from 007-02, follow-up):** an umbrella project's
-`pinnedWorkstreams` propagate to *every* expanded entry, and pins resolve
-repo-root-relative (not per-`artifactRoot`), so a pinned umbrella doc surfaces on
-all N track cards. No corpus project pins today; per-entry pin scoping (or
-suppressing umbrella pins on multi-entry expansion) is a small follow-up.
+**Follow-ups (carried, non-blocking):**
+
+- **Per-entry pin scoping (from 007-02).** An umbrella project's
+  `pinnedWorkstreams` propagate to *every* expanded entry, and pins resolve
+  repo-root-relative (not per-`artifactRoot`), so a pinned umbrella doc surfaces
+  on all N track cards. No corpus project pins today; per-entry pin scoping (or
+  suppressing umbrella pins on multi-entry expansion) is a small follow-up.
+- **Extract `safeProjectId` → `src/ids.mjs` before spec 006 edge reuse (from
+  007-03 arch pass).** `src/discover.mjs` is pure/edge-reusable and imports no
+  central-only module, but pulls `safeProjectId` from `config.mjs`, transitively
+  loading config normalization + `profile.mjs`'s schema read. Extracting the pure
+  id util into a tiny `src/ids.mjs` (re-exported from `config.mjs` for
+  back-compat) makes the edge footprint minimal. **Resolution trigger:** before
+  [spec 006](specs/006-edge-collection-client/spec.md)'s edge skill imports
+  `discover.mjs`.
+- **repos.yaml block-list `scope:` form (from 007-03).** The zero-dependency
+  (ADR-0001) line scanner in `discover.mjs` recognizes scalar and inline-list
+  `scope:` forms but not the YAML block-list form (`scope:` then `- tag` lines);
+  such tracks fall back to directory-sort order. **Resolution trigger:** when a
+  real corpus project declares scopes in block-list form.
 
 **Decision needed:** how gauge observes projects whose jig artifacts are not at
 `<repoRoot>/docs/{specs,decisions}` and/or that host multiple sub-projects in one

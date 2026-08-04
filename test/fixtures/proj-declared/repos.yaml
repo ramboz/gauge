@@ -1,0 +1,7 @@
+repos:
+  - name: beta-repo
+    scope: beta
+  - name: alpha-repo
+    scope: alpha
+  - name: multi-repo
+    scope: [beta, alpha]

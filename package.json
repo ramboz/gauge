@@ -8,6 +8,7 @@
     "start": "node src/server.mjs",
     "scan": "node src/cli.mjs",
     "collect": "node scripts/snapshot.mjs",
+    "onboard": "node scripts/onboard.mjs",
     "test": "node --test"
   },
   "engines": {

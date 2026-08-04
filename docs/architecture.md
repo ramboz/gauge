@@ -162,14 +162,20 @@ the global attention queue remain later MVP slices.
   yield **N portfolio entries**: each entry (`id`, `label`, `artifactRoot` +
   overrides) expands at config normalization into a composite-id
   (`<baseId>-<entryId>`) card scoped to its own artifact root, sharing the
-  umbrella repo's git signal.
+  umbrella repo's git signal. Profile *production* is automated by the
+  read-only discovery module `src/discover.mjs` (spec 007-03): it introspects a
+  source and authors a drop-in profile, preferring the source's own
+  self-declaration (a `tracks/*` layout, `repos.yaml` `scope:` tags) over
+  heuristic nested-root detection. The module is pure and edge-reusable
+  (no central-only imports) so spec 006's edge skill can self-profile a project.
 - **Normalized observations:**
   `schemas/observation-v1.schema.json`, with independently versioned typed
   capability records.
 - **Local HTTP:** `/` serves the Gauge page; `/api/data` returns the canonical
   portfolio observation envelope.
-- **CLI:** `npm run scan` is read-only; `npm run collect` owns durable central
-  writes.
+- **CLI:** `npm run scan` and `npm run onboard` are read-only (`onboard`
+  prints a proposed profile-v1 document to stdout, detection source/notes to
+  stderr); `npm run collect` owns durable central writes.
 - **Adapter inputs:** source-owned files/APIs, always read-only and explicitly
   versioned where Gauge defines an export seam.
 
