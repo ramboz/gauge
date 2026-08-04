@@ -39,6 +39,33 @@ function isArtifactRoot(absDir) {
   return isDir(path.join(absDir, 'specs')) || isDir(path.join(absDir, 'decisions'));
 }
 
+// Layout detection (ADR-0010 A3, slice 008-02): pure, deterministic
+// nested-vs-flat inspection, reused by both the adapter's `specLayout: auto`
+// resolution (src/scan.mjs, at read time) and this module's discovery
+// emission (below) — one implementation so the two paths cannot diverge.
+// Prefers `nested` when any `<specsDirName>/<dir>/spec.md` exists (checked
+// first, so a mixed folder resolves toward nested per A3); else `flat` when
+// any non-README `<specsDirName>/<name>.md` exists; else `nested` (the safe,
+// indeterminate default — an empty/missing specs dir is not evidence of a
+// flat layout).
+export function detectLayout(absArtifactRoot, specsDirName = 'specs') {
+  const specsDir = path.join(absArtifactRoot, specsDirName);
+  let entries;
+  try {
+    entries = fs.readdirSync(specsDir, { withFileTypes: true });
+  } catch {
+    return 'nested';
+  }
+  const hasNested = entries.some(
+    (e) => e.isDirectory() && fs.existsSync(path.join(specsDir, e.name, 'spec.md')),
+  );
+  if (hasNested) return 'nested';
+  const hasFlat = entries.some(
+    (e) => e.isFile() && e.name.endsWith('.md') && e.name.toLowerCase() !== 'readme.md',
+  );
+  return hasFlat ? 'flat' : 'nested';
+}
+
 // Deterministic id dedup: on collision append the lowest free numeric suffix,
 // keeping every id within the project-id pattern (safeProjectId already does).
 function uniqueId(base, used) {
@@ -49,14 +76,21 @@ function uniqueId(base, used) {
   return id;
 }
 
-function entriesFrom(pairs) {
+// specLayout (008-02 AC2): attached only when the detected layout is `flat`
+// — `nested` is the default, so a nested entry stays exactly the 007-03
+// shape (byte-identical proposal, drop-in with no hand-editing needed).
+function entriesFrom(root, pairs) {
   // pairs: [{ name, artifactRoot }] in the desired order.
   const used = new Set();
-  return pairs.map(({ name, artifactRoot }) => ({
-    id: uniqueId(safeProjectId(name), used),
-    label: name,
-    artifactRoot,
-  }));
+  return pairs.map(({ name, artifactRoot }) => {
+    const entry = {
+      id: uniqueId(safeProjectId(name), used),
+      label: name,
+      artifactRoot,
+    };
+    if (detectLayout(path.join(root, artifactRoot)) === 'flat') entry.specLayout = 'flat';
+    return entry;
+  });
 }
 
 // --- Declaration path (AC2): tracks/*/{specs,decisions}, ordered by repos.yaml ---
@@ -123,7 +157,7 @@ function discoverDeclaration(root) {
     }
   }
 
-  const entries = entriesFrom(ordered.map((name) => ({ name, artifactRoot: `tracks/${name}` })));
+  const entries = entriesFrom(root, ordered.map((name) => ({ name, artifactRoot: `tracks/${name}` })));
   const note = hasRepos && scopeTags.length
     ? 'derived from repos.yaml scope tags'
     : 'derived from tracks/* layout';
@@ -174,14 +208,17 @@ function discoverHeuristic(root) {
   if (nested.length > 0) roots = nested;
 
   if (roots.length === 1) {
+    // specLayout (008-02 AC2): attached only when detected `flat`, so a
+    // nested single-entry proposal stays byte-identical to 007-03.
+    const layout = detectLayout(path.join(root, roots[0])) === 'flat' ? { specLayout: 'flat' } : {};
     if (roots[0] === 'docs') {
-      return { source: 'default', profile: { artifactRoot: 'docs' }, notes: ['flat docs/ layout'] };
+      return { source: 'default', profile: { artifactRoot: 'docs', ...layout }, notes: ['flat docs/ layout'] };
     }
-    return { source: 'heuristic', profile: { artifactRoot: roots[0] }, notes: [] };
+    return { source: 'heuristic', profile: { artifactRoot: roots[0], ...layout }, notes: [] };
   }
 
   const sorted = [...roots].sort();
-  const entries = entriesFrom(sorted.map((r) => ({ name: r.split('/').pop(), artifactRoot: r })));
+  const entries = entriesFrom(root, sorted.map((r) => ({ name: r.split('/').pop(), artifactRoot: r })));
   return { source: 'heuristic', profile: { entries }, notes: [] };
 }
 

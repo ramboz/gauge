@@ -18,6 +18,13 @@ import {
   BUG_CLOSED,
 } from './lib.mjs';
 import { PROFILE_DEFAULTS } from './profile.mjs';
+// detectLayout (ADR-0010 A3, slice 008-02) is the shared nested-vs-flat
+// heuristic, defined once in the pure discover.mjs module and reused here
+// for `specLayout: auto` so the adapter's read-time resolution and
+// discovery's proposed-profile emission can never diverge. This is a
+// one-directional import (scan.mjs → discover.mjs, a pure/edge-reusable
+// module) — it does not touch discover.mjs's own purity contract.
+import { detectLayout } from './discover.mjs';
 
 function isDir(p) {
   try {
@@ -100,10 +107,19 @@ function scanSpecsFlat(specsDir, statusProperty) {
   return specs;
 }
 
+// `auto` (ADR-0010 A3, slice 008-02) resolves to a concrete nested/flat
+// decision here, at read time, via the shared detectLayout heuristic — a
+// profile explicitly declaring `flat` or `nested` bypasses detection
+// entirely (honors the author).
+function resolveLayout(artifactRoot, specsDirName, specLayout) {
+  return specLayout === 'auto' ? detectLayout(artifactRoot, specsDirName) : specLayout;
+}
+
 function scanSpecs(artifactRoot, specsDirName, statusProperty, specLayout) {
   const specsDir = path.join(artifactRoot, specsDirName);
   if (!isDir(specsDir)) return null;
-  if (specLayout === 'flat') return scanSpecsFlat(specsDir, statusProperty);
+  const layout = resolveLayout(artifactRoot, specsDirName, specLayout);
+  if (layout === 'flat') return scanSpecsFlat(specsDir, statusProperty);
   const specs = [];
   for (const entry of fs.readdirSync(specsDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -267,11 +283,15 @@ function scanCompass(artifactRoot) {
 // declared root is trackable only when it holds ≥1 artifact matching the
 // declared specLayout — a nested `<dir>/spec.md`, or (flat) a non-README
 // `<name>.md`. An empty/irrelevant declared root fabricates no card.
+// `specLayout: auto` (slice 008-02) resolves via the same detectLayout
+// heuristic scanSpecs uses, so the evidence gate and the reader can never
+// disagree about which check applies.
 function hasJigEvidence(root, profile) {
   if (fs.existsSync(path.join(root, 'scaffold.json'))) return true;
   const specsDir = path.join(profile.artifactRoot, profile.specsDir);
   if (isDir(specsDir)) {
-    if (profile.specLayout === 'flat') {
+    const layout = resolveLayout(profile.artifactRoot, profile.specsDir, profile.specLayout);
+    if (layout === 'flat') {
       if (fs.readdirSync(specsDir).some((f) => f.endsWith('.md') && f.toLowerCase() !== 'readme.md')) return true;
     } else {
       for (const entry of fs.readdirSync(specsDir, { withFileTypes: true })) {

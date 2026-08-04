@@ -310,6 +310,71 @@ test('card gate: an empty/irrelevant declared flat root does not fabricate a car
   }
 });
 
+// --- 008-02: specLayout: auto resolves nested-vs-flat at read time (ADR-0010 A3) ---
+
+test('auto specLayout on a nested-only root reads identically to explicit nested (008-02 AC1)', () => {
+  const explicitNested = scanProject({
+    path: path.join(FIXTURES, 'proj-mixed'), label: 'cwv', pinnedWorkstreams: [], hiddenWorkstreams: [],
+    profile: { artifactRoot: path.join(FIXTURES, 'proj-mixed', 'docs', 'opportunities', 'cwv'), specLayout: 'nested' },
+  });
+  const auto = scanProject({
+    path: path.join(FIXTURES, 'proj-mixed'), label: 'cwv', pinnedWorkstreams: [], hiddenWorkstreams: [],
+    profile: { artifactRoot: path.join(FIXTURES, 'proj-mixed', 'docs', 'opportunities', 'cwv'), specLayout: 'auto' },
+  });
+  assert.equal(auto.jigManaged, true);
+  assert.deepEqual(auto, explicitNested);
+});
+
+test('auto specLayout on a flat-only root reads identically to explicit flat (008-02 AC1)', () => {
+  const explicitFlat = scanProject({
+    path: path.join(FIXTURES, 'proj-mixed'), label: 'superpowers', pinnedWorkstreams: [], hiddenWorkstreams: [],
+    profile: { artifactRoot: path.join(FIXTURES, 'proj-mixed', 'docs', 'superpowers'), specLayout: 'flat' },
+  });
+  const auto = scanProject({
+    path: path.join(FIXTURES, 'proj-mixed'), label: 'superpowers', pinnedWorkstreams: [], hiddenWorkstreams: [],
+    profile: { artifactRoot: path.join(FIXTURES, 'proj-mixed', 'docs', 'superpowers'), specLayout: 'auto' },
+  });
+  assert.equal(auto.jigManaged, true);
+  assert.equal(auto.specs.length, 2);
+  assert.deepEqual(auto, explicitFlat);
+});
+
+test('auto specLayout on a mixed root resolves nested, per ADR-0010 A3 (008-02 AC1)', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-mixed-'));
+  try {
+    const specs = path.join(base, 'docs', 'specs');
+    fs.mkdirSync(path.join(specs, '001-x'), { recursive: true });
+    fs.writeFileSync(path.join(specs, '001-x', 'spec.md'), '---\nstatus: DONE\n---\n# X\n');
+    fs.writeFileSync(path.join(specs, 'stray-design.md'), '# Stray\n');
+    const p = scanProject({
+      path: base, label: 'mixed', pinnedWorkstreams: [], hiddenWorkstreams: [],
+      profile: { artifactRoot: path.join(base, 'docs'), specLayout: 'auto' },
+    });
+    assert.equal(p.jigManaged, true);
+    // Nested reader used: exactly the one nested spec, the stray flat file ignored.
+    assert.equal(p.specs.length, 1);
+    assert.equal(p.specs[0].id, '001-x');
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('auto specLayout on an empty declared root does not fabricate a card (008-02 AC1)', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-empty-'));
+  try {
+    fs.mkdirSync(path.join(base, 'docs', 'specs'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'docs', 'specs', 'README.md'), '# index\n');
+    const p = scanProject({
+      path: base, label: 'empty', pinnedWorkstreams: [], hiddenWorkstreams: [],
+      profile: { artifactRoot: path.join(base, 'docs'), specLayout: 'auto' },
+    });
+    assert.equal(p.jigManaged, false);
+    assert.equal(p.specs, undefined);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test('compass: latest valid snapshot surfaces, malformed line warns (002-03 AC2)', () => {
   const p = jig();
   assert.equal(p.compass.headline, 'beta is close');

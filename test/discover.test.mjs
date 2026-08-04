@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { discoverProfile } from '../src/discover.mjs';
+import { discoverProfile, detectLayout } from '../src/discover.mjs';
 import { validateProfile } from '../src/profile.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -120,4 +121,120 @@ test('onboard CLI fails on a source with no jig artifacts (AC1)', () => {
   assert.notEqual(run.status, 0);
   assert.match(run.stderr, /no jig artifacts detected/);
   assert.equal(run.stdout, '');
+});
+
+// --- 008-02: auto-detect + discovery emission (ADR-0010 A3) ---
+
+function tmpDir(prefix) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+test('detectLayout: nested-only specs/ resolves nested (008-02 AC1)', () => {
+  const dir = tmpDir('layout-nested-');
+  try {
+    fs.mkdirSync(path.join(dir, 'specs', '001-x'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'specs', '001-x', 'spec.md'), '# X\n');
+    assert.equal(detectLayout(dir), 'nested');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('detectLayout: flat-only specs/ resolves flat (008-02 AC1)', () => {
+  const dir = tmpDir('layout-flat-');
+  try {
+    fs.mkdirSync(path.join(dir, 'specs'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'specs', 'a-design.md'), '# A\n');
+    fs.writeFileSync(path.join(dir, 'specs', 'README.md'), '# index\n');
+    assert.equal(detectLayout(dir), 'flat');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('detectLayout: a mixed specs/ folder resolves toward nested (008-02 AC1, ADR-0010 A3)', () => {
+  const dir = tmpDir('layout-mixed-');
+  try {
+    fs.mkdirSync(path.join(dir, 'specs', '001-x'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'specs', '001-x', 'spec.md'), '# X\n');
+    fs.writeFileSync(path.join(dir, 'specs', 'stray-design.md'), '# Stray\n');
+    assert.equal(detectLayout(dir), 'nested');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('detectLayout: an empty or missing specs/ defaults to nested (008-02 AC1)', () => {
+  const dir = tmpDir('layout-empty-');
+  try {
+    fs.mkdirSync(path.join(dir, 'specs'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'specs', 'README.md'), '# index\n');
+    assert.equal(detectLayout(dir), 'nested');
+    // No specs/ dir at all is indeterminate, not a crash.
+    const noSpecs = tmpDir('layout-nospecs-');
+    try {
+      assert.equal(detectLayout(noSpecs), 'nested');
+    } finally {
+      fs.rmSync(noSpecs, { recursive: true, force: true });
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('discovery emits specLayout: flat only for the flat root; the nested root gets none, exact shape (008-02 AC2)', () => {
+  const result = discoverProfile(fixture('proj-mixed'));
+  assert.equal(result.source, 'heuristic');
+  assert.ok(Array.isArray(result.profile.entries));
+  const cwv = result.profile.entries.find((e) => e.artifactRoot === 'docs/opportunities/cwv');
+  const superpowers = result.profile.entries.find((e) => e.artifactRoot === 'docs/superpowers');
+  assert.deepEqual(cwv, { id: 'cwv', label: 'cwv', artifactRoot: 'docs/opportunities/cwv' });
+  assert.deepEqual(superpowers, {
+    id: 'superpowers', label: 'superpowers', artifactRoot: 'docs/superpowers', specLayout: 'flat',
+  });
+  assert.deepEqual(validateProfile(result.profile), []);
+});
+
+test('discovery emits no specLayout for nested-only corpora — 007 identity preserved (008-02 AC2)', () => {
+  // proj-nested (single-entry heuristic) and proj-multiroot (multi-entry
+  // heuristic) are both entirely nested; neither should carry specLayout.
+  const nested = discoverProfile(fixture('proj-nested'));
+  assert.ok(!('specLayout' in nested.profile));
+
+  const multiroot = discoverProfile(fixture('proj-multiroot'));
+  for (const entry of multiroot.profile.entries) {
+    assert.ok(!('specLayout' in entry), `${entry.id} must not carry specLayout (nested default)`);
+  }
+
+  const declared = discoverProfile(fixture('proj-umbrella'));
+  for (const entry of declared.profile.entries) {
+    assert.ok(!('specLayout' in entry), `${entry.id} must not carry specLayout (nested default)`);
+  }
+});
+
+test('read-only smoke: onboard on mystique proposes cwv nested + superpowers flat, drop-in (008-02 AC3)', (t) => {
+  const mystique = '/Users/ramboz/Projects/spacecat/mystique';
+  if (!fs.existsSync(mystique)) {
+    t.skip('mystique corpus absent on this machine');
+    return;
+  }
+  // Targeted read-only check, not a full-tree snapshot: mystique/docs is a
+  // large real repo (unbounded subtree size, well beyond the tiny committed
+  // fixtures), so only the two directories this discovery run actually
+  // touches are compared before/after.
+  const listing = (dir) => fs.readdirSync(dir).sort();
+  const cwvSpecs = path.join(mystique, 'docs', 'opportunities', 'cwv', 'specs');
+  const superpowersSpecs = path.join(mystique, 'docs', 'superpowers', 'specs');
+  const before = { cwv: listing(cwvSpecs), superpowers: listing(superpowersSpecs) };
+  const result = discoverProfile(mystique);
+  assert.deepEqual(listing(cwvSpecs), before.cwv, 'discoverProfile must not touch cwv/specs');
+  assert.deepEqual(listing(superpowersSpecs), before.superpowers, 'discoverProfile must not touch superpowers/specs');
+  assert.equal(result.source, 'heuristic');
+  const cwv = result.profile.entries.find((e) => e.artifactRoot === 'docs/opportunities/cwv');
+  const superpowers = result.profile.entries.find((e) => e.artifactRoot === 'docs/superpowers');
+  assert.ok(cwv, 'expected a docs/opportunities/cwv entry');
+  assert.ok(!('specLayout' in cwv), 'cwv is nested; must carry no specLayout');
+  assert.ok(superpowers, 'expected a docs/superpowers entry');
+  assert.equal(superpowers.specLayout, 'flat');
+  assert.deepEqual(validateProfile(result.profile), []);
 });

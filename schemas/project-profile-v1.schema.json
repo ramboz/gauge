@@ -34,7 +34,7 @@
       "type": "string",
       "enum": ["nested", "flat", "auto"],
       "default": "nested",
-      "description": "Spec-artifact layout under specsDir (ADR-0010, slice 008-01): 'nested' = <dir>/spec.md (the jig preset), 'flat' = <name>.md (one file per spec). 'auto' is reserved for detection (slice 008-02). Additive; a profile with no specLayout is the 007 identity."
+      "description": "Spec-artifact layout under specsDir (ADR-0010, slice 008-01): 'nested' = <dir>/spec.md (the jig preset), 'flat' = <name>.md (one file per spec). 'auto' detects nested-vs-flat by inspection at read time (slice 008-02; mixed/indeterminate resolves toward nested). Additive; a profile with no specLayout is the 007 identity."
     },
     "entries": {
       "type": "array",
