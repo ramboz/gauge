@@ -1,9 +1,8 @@
 ---
-status: RECONCILED
+status: DONE
 dependencies: [adr-0011, adr-0009, 007-03]
 last_verified: 2026-08-05
 frame_review: true
-claimed_by: claude/jig-orient-6dc7a1
 ---
 
 <!-- jig self-defining vocabulary (soft, forward-only): expand each acronym on

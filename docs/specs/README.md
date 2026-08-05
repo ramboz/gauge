@@ -34,7 +34,7 @@
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-01 — Flat layout + honest completion (jig preset unchanged) | **DONE** |  |
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-02 — Auto-detect + discovery emits `specLayout` | **DONE** |  |
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-03 — Declarable completion vocabulary + foreign-status gate (DEFERRED) | DEFERRED |  |
-| [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-01 — Goal/deadline onboarding authoring | DRAFT |  |
+| [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-01 — Goal/deadline onboarding authoring | **DONE** |  |
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-02 — Forecast/risk derivation | DRAFT |  |
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-03 — Global attention queue | DRAFT |  |
 
