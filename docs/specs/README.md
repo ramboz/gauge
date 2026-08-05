@@ -36,7 +36,7 @@
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-03 — Declarable completion vocabulary + foreign-status gate (DEFERRED) | DEFERRED |  |
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-01 — Goal/deadline onboarding authoring | **DONE** |  |
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-02 — Forecast/risk derivation | **DONE** |  |
-| [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-03 — Global attention queue | DRAFT |  |
+| [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-03 — Global attention queue | **DONE** |  |
 
 ## Deferred slices
 
