@@ -1,10 +1,9 @@
 ---
-status: RECONCILED
+status: DONE
 dependencies: [009-01, adr-0006, adr-0012]
 last_verified: 2026-08-05
 frame_review: true
 arch_review: true
-claimed_by: claude/jig-orient-6dc7a1
 ---
 
 <!-- jig self-defining vocabulary (soft, forward-only). -->
