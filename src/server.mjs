@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig, resolveConfigPath } from './config.mjs';
 import { observeAll, joinProjectProfileFields } from './observation.mjs';
 import { readObservationHistory } from './state.mjs';
-import { attachForecasts } from './derive.mjs';
+import { attachForecasts, attentionQueue } from './derive.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -39,7 +39,11 @@ const server = http.createServer((req, res) => {
           readObservationHistory(freshConfig.stateDir, project.id).observations,
         ]),
       );
-      const data = attachForecasts(joined, historiesByProjectId);
+      const withForecasts = attachForecasts(joined, historiesByProjectId);
+      // Global attention queue (spec 009-03, ADR-0013): a pure ranking over
+      // the forecast/risk read this loop just attached — no additional I/O,
+      // no adapter/registry reach from derive.mjs itself (AC4).
+      const data = { ...withForecasts, attention: attentionQueue(withForecasts) };
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

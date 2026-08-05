@@ -171,3 +171,119 @@ export function attachForecasts(data, historiesByProjectId) {
     })),
   };
 }
+
+// ADR-0013: the global attention queue. A pure, deterministic tiered
+// lexicographic ordering over each project's already-derived forecast/risk
+// read (ADR-0006) — never a rewrite of any project's own local priority, and
+// never a re-derivation from raw progress/freshness. Takes the full
+// attachForecasts() output (so it can use `generatedAt` as the "now"
+// reference for the deadline-proximity phrase); performs no I/O, imports
+// nothing (this file has zero imports, per AC1/AC4), and never mutates its
+// input — every entry below is a freshly built object/array.
+//
+// `narrative.value.blockers` (present only for legacy-Compass sources —
+// src/observation.mjs) is the one raw field ADR-0013 admits as a tier-2
+// trigger, used when present, never fabricated.
+function narrativeBlockerPresent(entry) {
+  const narrative = (entry.signals || []).find((signal) => signal.type === 'narrative');
+  const blockers = narrative?.value?.blockers;
+  return Array.isArray(blockers) && blockers.length > 0;
+}
+
+// The five-tier partition (ADR-0013), most-urgent-tier-wins via first-match
+// top-down: every ADR-0012 reason maps to exactly one tier, and the optional
+// blocker only ever raises a project into tier 2 — it never leaves one
+// unplaced. Order of checks IS the precedence rule.
+function tierOf(entry) {
+  const forecast = entry.forecast || {};
+  if (forecast.state === 'at_risk') return 1;
+  if (forecast.reason === 'stale-evidence' || narrativeBlockerPresent(entry)) return 2;
+  if (forecast.reason === 'deadline-unknown' || forecast.reason === 'scope-changed') return 3;
+  if (forecast.reason === 'insufficient-history' || forecast.reason === 'execution-unknown') return 4;
+  if (forecast.state === 'on_track') return 5;
+  // Defensive: a malformed/unrecognized forecast must NOT be coerced to the
+  // healthiest tier (product-vision: never sink an unknown into "healthy"). In
+  // the composed pipeline attachForecasts always yields a well-formed ADR-0012
+  // forecast, so this is unreachable there; as a standalone export it surfaces
+  // the anomaly for attention (tier 2, "verify") rather than hiding it in tier 5.
+  return 2;
+}
+
+// Within-tier key: soonest concrete deadline first. Reuses Gate 1's
+// deadlineMs, which already returns null for an absent field, the literal
+// "unknown", or a calendar-invalid date — exactly the "sorts last" set AC1
+// requires, whether the field was authored-unknown or never authored at all.
+function deadlinePhrase(deadlineAt, nowMs) {
+  if (deadlineAt === null) return 'deadline unknown';
+  if (!Number.isFinite(nowMs)) return 'deadline set';
+  const days = Math.round((deadlineAt - nowMs) / DAY_MS);
+  if (days > 0) return `deadline in ${days} day${days === 1 ? '' : 's'}`;
+  if (days === 0) return 'deadline today';
+  const overdue = Math.abs(days);
+  return `deadline overdue by ${overdue} day${overdue === 1 ? '' : 's'}`;
+}
+
+// Short, explained reason: tier label + within-tier key (ADR-0013 / AC1).
+// For tiers 1 and 5 the within-tier key IS deadline proximity, so it is
+// spelled out in the reason. For tiers 2-4 (all `unknown`) the legible detail
+// is the specific ADR-0012 trigger; deadline proximity still governs the
+// sort position but is not repeated in the text for these tiers.
+function tierReason(entry, tier, deadlineAt, nowMs) {
+  const forecast = entry.forecast || {};
+  switch (tier) {
+    case 1:
+      return `at risk · ${deadlinePhrase(deadlineAt, nowMs)}`;
+    case 2:
+      return narrativeBlockerPresent(entry) ? 'blocked — verify' : 'stale — verify';
+    case 3:
+      return forecast.reason === 'deadline-unknown' ? 'needs a goal set' : 'scope changed — needs review';
+    case 4:
+      return forecast.reason === 'insufficient-history' ? 'awaiting more history' : 'no delivery status yet';
+    default:
+      return `on track · ${deadlinePhrase(deadlineAt, nowMs)}`;
+  }
+}
+
+function compareIds(a, b) {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+// Total ordering (AC1/AC2): tier ascending, then deadline proximity
+// (soonest first, absent/unknown last within its tier), then `project.id`
+// as a stable tie-break. Returns a brand-new array of brand-new entries —
+// `data` and everything under `data.projects` is read, never written to
+// (AC3), and the project-id set is exactly whatever the caller's
+// attachForecasts()-shaped `data` already carries (AC4: no registry/adapter
+// reach from this module).
+export function attentionQueue(data) {
+  const projects = data?.projects || [];
+  const nowMs = Date.parse(data?.generatedAt);
+  const ranked = projects.map((entry) => {
+    const tier = tierOf(entry);
+    const deadlineValue = entry.project?.deadline?.value;
+    const deadlineAt = deadlineMs(deadlineValue);
+    return {
+      id: entry.project?.id,
+      label: entry.project?.label,
+      tier,
+      reason: tierReason(entry, tier, deadlineAt, nowMs),
+      deadline: deadlineValue ?? null,
+      // Shallow-copy the forecast so a consumer mutating a queue entry cannot
+      // write back through a shared reference into the caller's source data
+      // (forecast is a flat {state, reason}, so a spread fully isolates it).
+      forecast: { ...entry.forecast },
+      deadlineAt,
+    };
+  });
+  ranked.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier;
+    if (a.deadlineAt === null && b.deadlineAt !== null) return 1;
+    if (a.deadlineAt !== null && b.deadlineAt === null) return -1;
+    if (a.deadlineAt !== null && b.deadlineAt !== null && a.deadlineAt !== b.deadlineAt) {
+      return a.deadlineAt - b.deadlineAt;
+    }
+    return compareIds(a.id, b.id);
+  });
+  return ranked.map(({ deadlineAt, ...rest }) => rest);
+}

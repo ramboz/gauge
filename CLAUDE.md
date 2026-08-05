@@ -11,11 +11,14 @@ project-owned goals, deadline confidence, blockers, and recommended attention
 without mutating source repositories. The committed MVP is local, single-user,
 single-repository-per-project, and limited to one active goal per project.
 
-The shipped runtime now implements the Gauge adapter, normalized-observation,
-and central-state boundary from
-[spec 004](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md).
-The remaining MVP work is goal/deadline collection, daily scheduling,
-forecast/risk derivation, and the global attention queue.
+The shipped runtime implements the Gauge adapter, normalized-observation, and
+central-state boundary from
+[spec 004](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md),
+plus the complete **local pull portfolio loop** from
+[spec 009](docs/specs/009-complete-local-portfolio-loop/spec.md): curated
+goal/deadline onboarding (ADR-0011), history-derived forecast/risk (ADR-0012),
+and the cross-project attention queue (ADR-0013), all on the manual-pull model.
+Deferred: automated daily scheduling and the edge-push topology (specs 005/006).
 
 ## Hot Cache
 
@@ -30,10 +33,14 @@ This is an index. Durable detail lives in `docs/`; update it through
   state; Gauge reads them without writing.
 - **Committed MVP** — maximum two weeks; see
   [local-portfolio-loop](docs/releases/local-portfolio-loop.md).
-- **Landed runtime foundation** —
+- **Landed runtime** —
   [spec 004](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md)
-  defines Gauge identity, adapters, normalized observations, and central state;
-  later MVP slices add goals, forecasts, scheduling, and attention policy.
+  (identity, adapters, normalized observations, central state), spec 007
+  (project-shape profiles), spec 008 (generic-doc adapter), and
+  [spec 009](docs/specs/009-complete-local-portfolio-loop/spec.md) (the complete
+  local pull loop: goal/deadline, forecast/risk, attention queue). `src/derive.mjs`
+  is the history-derived layer (ADR-0006); goal/deadline + forecast + attention are
+  read-layer joins on `/api/data`, not observation-v1 fields.
 - **Retired work** — spec 003's local session panel was abandoned by ADR-0003.
 
 ### Key terms

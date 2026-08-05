@@ -124,7 +124,11 @@ adapter → observation → history substrate, separated by time
   portfolio. The **deadline is passed in by the caller** (like the registry set),
   so the module imports only observation helpers — never adapters, `src/scan.mjs`,
   `config.mjs`, or `profile.mjs` — and never writes. The cross-project attention
-  ordering (spec 009-03) will extend this same module downstream of forecast/risk.
+  ordering (spec 009-03, ADR-0013) extends this same module downstream of
+  forecast/risk: `attentionQueue(data)` folds the per-project forecast reads into a
+  deterministic five-tier lexicographic ranking (at_risk → stale/blocked →
+  needs-owner-input → awaiting-evidence → on_track; within-tier by deadline
+  proximity), keyed on the derived read — never owner-assigned importance.
 
 Policies are deterministic, independently testable, and explain their evidence.
 Missing dates or insufficient history cannot yield `on_track` or `at_risk`, and
@@ -155,9 +159,11 @@ Goal/deadline are authored into the project profile via the curated onboarding
 step (spec 009-01, ADR-0011) and joined onto the current-state read path at the
 read/render layer (`joinProjectProfileFields`), leaving the observation-v1
 contract untouched. Forecast/risk derivation landed as `src/derive.mjs`
-(spec 009-02, ADR-0012); `/api/data` now carries a per-project
-`forecast: {state, reason}`. The global attention queue (spec 009-03, ADR-0013)
-and scheduled daily runs remain later work; collection stays manual pull.
+(spec 009-02, ADR-0012); the global attention queue landed in the same module
+(spec 009-03, ADR-0013). `/api/data` now carries a per-project
+`forecast: {state, reason}` plus a top-level `attention` ranking. **Spec 009
+completes the committed local pull loop.** Scheduled daily runs and the
+edge-push topology (specs 005/006) remain deferred; collection stays manual pull.
 
 ## Contract surfaces
 
@@ -189,7 +195,8 @@ and scheduled daily runs remain later work; collection stays manual pull.
   portfolio observation envelope, each project additionally carrying read-layer
   joins — the profile `goal`/`deadline` (009-01) and a derived
   `forecast: {state, reason}` (009-02) — that are not part of the observation-v1
-  record.
+  record, plus a top-level `attention` array (009-03): the deterministic
+  cross-project attention ranking.
 - **CLI:** `npm run scan` and `npm run onboard` are read-only (`onboard`
   prints a proposed profile-v1 document to stdout, detection source/notes to
   stderr); `npm run collect` owns durable central writes.
