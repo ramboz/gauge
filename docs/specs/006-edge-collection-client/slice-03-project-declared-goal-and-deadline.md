@@ -1,5 +1,5 @@
 ---
-status: DRAFT
+status: DEFERRED
 dependencies: [adr-0003, 006-02]
 last_verified: 2026-08-03
 frame_review: true
@@ -51,3 +51,8 @@ sidestepping central goal-guessing for the push path.
 **Anti-horizontal-phasing check:** after this slice a project sets its own goal and
 deadline and sees them on its Gauge card, sourced from the project — the authority
 model is visible end to end for the push path.
+
+**Resolution trigger:** when hosted auth / GitHub-push collection is tackled. The
+committed MVP collects goal/deadline via the pull-model onboarding-authoring path
+decided in [ADR-0011](../../decisions/adr-0011-goal-deadline-source-strategy.md) and
+built in spec 009-01; this push-path variant re-opens with the GitHub-push follow-up.

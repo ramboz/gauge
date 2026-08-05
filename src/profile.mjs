@@ -12,12 +12,14 @@ export const PROFILE_SCHEMA = JSON.parse(
 );
 
 // `entries` (spec 007-02, ADR-0009 D2) is array-typed, not a scalar override
-// field, so it is excluded from the scalar defaults map. A profile with no
-// `entries` normalizes to exactly the same four scalar defaults as before
-// (007-01 identity); PROFILE_DEFAULTS.entries is intentionally absent (a
-// profile's entries default to "not present", not `[]`, since only the
-// single-entry case reads these scalar defaults).
-const SCALAR_FIELDS = Object.keys(PROFILE_SCHEMA.properties).filter((field) => field !== 'entries');
+// field, so it is excluded from the scalar defaults map. `goal`/`deadline`
+// (spec 009-01, ADR-0011) are object-typed with no schema default (they are
+// either authored or absent, never defaulted), so they are excluded too. A
+// profile with none of these normalizes to exactly the same five scalar
+// defaults as before (007-01/008-01 identity); PROFILE_DEFAULTS.entries/
+// .goal/.deadline are intentionally absent.
+const SCALAR_FIELDS = Object.keys(PROFILE_SCHEMA.properties)
+  .filter((field) => field !== 'entries' && field !== 'goal' && field !== 'deadline');
 
 export const PROFILE_DEFAULTS = Object.fromEntries(
   SCALAR_FIELDS.map((field) => [field, PROFILE_SCHEMA.properties[field].default]),
@@ -33,6 +35,14 @@ const ENTRY_REQUIRED = ENTRY_SCHEMA.required || [];
 // level, sourced from the schema so the two stay in lockstep.
 const SPEC_LAYOUTS = PROFILE_SCHEMA.properties.specLayout.enum;
 const SPEC_LAYOUT_ERROR = `must be one of: ${SPEC_LAYOUTS.join(', ')}`;
+
+// goal/deadline (ADR-0011, slice 009-01): each is a small object
+// {value, provenance}, not a scalar string — validated against the same
+// provenance enum and deadline value pattern the schema declares, so schema
+// and runtime cannot drift (mirrors the specLayout enum pattern above).
+const GOAL_PROVENANCE = PROFILE_SCHEMA.properties.goal.properties.provenance.enum;
+const DEADLINE_PROVENANCE = PROFILE_SCHEMA.properties.deadline.properties.provenance.enum;
+const DEADLINE_VALUE_PATTERN = new RegExp(PROFILE_SCHEMA.properties.deadline.properties.value.pattern);
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -66,6 +76,31 @@ function validateEntry(entry, index, errors) {
   }
 }
 
+// Validates a single goal/deadline object: {value, provenance}, no other
+// fields (additionalProperties: false), value non-empty (and, for deadline,
+// shaped as an ISO date or the literal "unknown" — AC1/AC3), provenance one
+// of the declared enum values. Never validates or rejects based on prose
+// content — only the shape the author committed.
+function validateGoalOrDeadline(field, entry, provenanceEnum, valuePattern, errors) {
+  if (!isObject(entry)) {
+    errors.push(`profile.${field} must be an object`);
+    return;
+  }
+  for (const key of Object.keys(entry)) {
+    if (key !== 'value' && key !== 'provenance') {
+      errors.push(`profile.${field}.${key} is not a recognized field`);
+    }
+  }
+  if (typeof entry.value !== 'string' || !entry.value.trim()) {
+    errors.push(`profile.${field}.value must be a non-empty string`);
+  } else if (valuePattern && !valuePattern.test(entry.value)) {
+    errors.push(`profile.${field}.value must be an ISO date (YYYY-MM-DD) or "unknown"`);
+  }
+  if (!provenanceEnum.includes(entry.provenance)) {
+    errors.push(`profile.${field}.provenance must be one of: ${provenanceEnum.join(', ')}`);
+  }
+}
+
 // Pure: returns a list of violations, never throws. Callers (src/config.mjs)
 // decide how to surface them as a single actionable error.
 export function validateProfile(value) {
@@ -90,6 +125,14 @@ export function validateProfile(value) {
     }
     if (key === 'specLayout') {
       if (!SPEC_LAYOUTS.includes(entry)) errors.push(`profile.specLayout ${SPEC_LAYOUT_ERROR}`);
+      continue;
+    }
+    if (key === 'goal') {
+      validateGoalOrDeadline('goal', entry, GOAL_PROVENANCE, null, errors);
+      continue;
+    }
+    if (key === 'deadline') {
+      validateGoalOrDeadline('deadline', entry, DEADLINE_PROVENANCE, DEADLINE_VALUE_PATTERN, errors);
       continue;
     }
     if (typeof entry !== 'string' || !entry.trim()) {

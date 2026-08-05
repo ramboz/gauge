@@ -54,14 +54,22 @@ function resolveFrom(base, value) {
 // A malformed profile is rejected with one actionable error, mirroring the
 // existing configError style. A project with no `profile` normalizes to
 // exactly the same defaults a project could declare explicitly (AC2/AC3).
+// goal/deadline (ADR-0011, slice 009-01) have no schema default (PROFILE_
+// DEFAULTS carries neither key — see src/profile.mjs), so they thread through
+// only when the author actually set them; a profile with neither preserves
+// the exact pre-009-01 shape (no extra keys) rather than adding `goal:
+// undefined` / `deadline: undefined` own-properties.
 function resolvedSingleProfile(merged, projectRoot) {
-  return {
+  const resolved = {
     artifactRoot: resolveFrom(projectRoot, merged.artifactRoot),
     specsDir: merged.specsDir,
     decisionsDir: merged.decisionsDir,
     statusProperty: merged.statusProperty,
     specLayout: merged.specLayout,
   };
+  if (merged.goal !== undefined) resolved.goal = merged.goal;
+  if (merged.deadline !== undefined) resolved.deadline = merged.deadline;
+  return resolved;
 }
 
 // No-entries case: a profile behaves exactly as 007-01 (single entry).

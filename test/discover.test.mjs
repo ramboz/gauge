@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { discoverProfile, detectLayout } from '../src/discover.mjs';
+import { discoverProfile, detectLayout, surfaceCandidateArtifacts } from '../src/discover.mjs';
 import { validateProfile } from '../src/profile.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -210,6 +210,90 @@ test('discovery emits no specLayout for nested-only corpora — 007 identity pre
   for (const entry of declared.profile.entries) {
     assert.ok(!('specLayout' in entry), `${entry.id} must not carry specLayout (nested default)`);
   }
+});
+
+// --- 009-01: candidate-artifact surfacing (ADR-0011, existence-based, no prose parsing) ---
+
+test('surfaceCandidateArtifacts prefers product-vision.md over README for goal, and a release doc over README for deadline (AC2)', () => {
+  const result = surfaceCandidateArtifacts(fixture('proj-vision-release'));
+  assert.deepEqual(result.goal, {
+    provenance: 'product-vision',
+    path: path.join(fixture('proj-vision-release'), 'docs', 'product-vision.md'),
+  });
+  // README.md under docs/releases must be excluded as a release-doc candidate
+  // (same README-exclusion convention as the rest of the corpus); of the two
+  // remaining files, the alphabetically-first one is chosen deterministically.
+  assert.deepEqual(result.deadline, {
+    provenance: 'release',
+    path: path.join(fixture('proj-vision-release'), 'docs', 'releases', 'a-plan.md'),
+  });
+});
+
+test('surfaceCandidateArtifacts falls back to README when no higher-precedence artifact exists (AC2)', () => {
+  const result = surfaceCandidateArtifacts(fixture('proj-plain'));
+  const readmePath = path.join(fixture('proj-plain'), 'README.md');
+  assert.deepEqual(result.goal, { provenance: 'readme', path: readmePath });
+  assert.deepEqual(result.deadline, { provenance: 'readme', path: readmePath });
+});
+
+test('surfaceCandidateArtifacts reports none per field when nothing exists (AC2)', () => {
+  const result = surfaceCandidateArtifacts(fixture('proj-no-artifacts'));
+  assert.equal(result.goal, null);
+  assert.equal(result.deadline, null);
+});
+
+test('surfaceCandidateArtifacts never emits a goal/deadline value, only a provenance+path pointer (AC2/AC3)', () => {
+  const result = surfaceCandidateArtifacts(fixture('proj-vision-release'));
+  assert.deepEqual(Object.keys(result.goal).sort(), ['path', 'provenance']);
+  assert.deepEqual(Object.keys(result.deadline).sort(), ['path', 'provenance']);
+  // No "value"/"date"/"goal"/"deadline" key ever appears on a candidate.
+  for (const candidate of [result.goal, result.deadline]) {
+    assert.ok(!('value' in candidate));
+    assert.ok(!('date' in candidate));
+  }
+});
+
+test('surfaceCandidateArtifacts is read-only: no writes to the source (AC2/AC4)', () => {
+  const dir = fixture('proj-vision-release');
+  const before = snapshot(dir);
+  surfaceCandidateArtifacts(dir);
+  const after = snapshot(dir);
+  assert.deepEqual(after, before, 'surfaceCandidateArtifacts must not create or touch any file');
+});
+
+test('discover module stays edge-reusable with surfaceCandidateArtifacts added (AC2, no central/config/state/server reach)', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'src', 'discover.mjs'), 'utf8');
+  for (const forbidden of ['observation.mjs', 'state.mjs', 'server.mjs']) {
+    assert.ok(!src.includes(forbidden), `discover.mjs must not import ${forbidden} (pure, edge-reusable)`);
+  }
+});
+
+test('onboard CLI surfaces goal/deadline candidate pointers on stderr, stdout stays clean profile JSON (AC2/AC4)', () => {
+  const run = onboard('--path', fixture('proj-umbrella'));
+  assert.equal(run.status, 0);
+  const profile = JSON.parse(run.stdout); // stdout must remain clean JSON for piping
+  assert.deepEqual(validateProfile(profile), []);
+  assert.match(run.stderr, /goal candidate:/);
+  assert.match(run.stderr, /deadline candidate:/);
+});
+
+test('onboard CLI still surfaces goal/deadline candidates for a plain (non-jig) source, even though shape discovery fails (AC2)', () => {
+  const run = onboard('--path', fixture('proj-plain'));
+  assert.notEqual(run.status, 0);
+  assert.equal(run.stdout, '');
+  assert.match(run.stderr, /goal candidate:.*README\.md.*readme/);
+  assert.match(run.stderr, /deadline candidate:.*README\.md.*readme/);
+});
+
+test('onboard CLI never writes anything to the source, even when goal/deadline candidates exist (AC4/AC5 no-source-write)', () => {
+  // proj-vision-release has no specs/decisions dirs (jig-shape discovery
+  // fails), so it takes the same "no jig artifacts" exit path as the plain
+  // fixture — the invariant under test is the snapshot, not the exit code.
+  const dir = fixture('proj-vision-release');
+  const before = snapshot(dir);
+  onboard('--path', dir);
+  const after = snapshot(dir);
+  assert.deepEqual(after, before, 'onboard must not create or touch any file under the source');
 });
 
 test('read-only smoke: onboard on mystique proposes cwv nested + superpowers flat, drop-in (008-02 AC3)', (t) => {

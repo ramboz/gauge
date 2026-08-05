@@ -5,8 +5,18 @@
 // writes to the source and never collects observations (AC4).
 import fs from 'node:fs';
 import path from 'node:path';
-import { discoverProfile } from '../src/discover.mjs';
+import { discoverProfile, surfaceCandidateArtifacts } from '../src/discover.mjs';
 import { validateProfile } from '../src/profile.mjs';
+
+// Candidate-artifact pointer note (spec 009-01, ADR-0011): informational
+// only — the path to draw a goal/deadline value from, never the value
+// itself. Printed regardless of whether shape discovery below succeeds, so
+// even a plain (non-jig) source still gets a useful onboarding pointer.
+function candidateNote(field, candidate) {
+  return candidate
+    ? `  ${field} candidate: ${candidate.path} (${candidate.provenance})`
+    : `  ${field} candidate: none`;
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -42,9 +52,17 @@ try {
   fail(`onboard: discovery failed: ${error.message}`);
 }
 
+// Goal/deadline candidate surfacing (spec 009-01, ADR-0011) is independent of
+// jig-shape discovery above: a plain README-only source still gets a useful
+// onboarding pointer even when it has no jig artifacts to propose a shape
+// profile from.
+const candidates = surfaceCandidateArtifacts(root);
+
 if (result.profile === null) {
   console.error(`onboard: no jig artifacts detected under ${root}; nothing to propose.`);
   for (const note of result.notes) console.error(`  note: ${note}`);
+  console.error(candidateNote('goal', candidates.goal));
+  console.error(candidateNote('deadline', candidates.deadline));
   process.exit(1);
 }
 
@@ -55,5 +73,7 @@ if (errors.length) fail(`onboard: proposed profile is invalid: ${errors.join('; 
 
 console.error(`onboard: source=${result.source}`);
 for (const note of result.notes) console.error(`  note: ${note}`);
+console.error(candidateNote('goal', candidates.goal));
+console.error(candidateNote('deadline', candidates.deadline));
 console.log(JSON.stringify(result.profile, null, 2));
 process.exit(0);

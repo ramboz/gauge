@@ -80,7 +80,10 @@ the explicit `stateDir`; it never derives a write path from a source root.
 
 Translate source evidence into normalized observations. Planned adapters are:
 
-- generic GitHub milestone/metadata for goals and due dates;
+- goals and due dates are authored into the project profile by a curated
+  onboarding step ([ADR-0011](decisions/adr-0011-goal-deadline-source-strategy.md),
+  spec 009-01), not extracted at runtime; the generic GitHub milestone adapter is
+  deferred with hosted/GitHub-push collection;
 - Jig for specs, bugs, decisions, blockers, and eligible work;
 - Shaper for release scope, cutline, risks, and readiness;
 - Servo for evaluation suitability, gate/regression state, and freshness.
@@ -144,8 +147,11 @@ Spec 004 retained the useful POC behavior behind the Gauge boundary:
   accepts or performs source-project writes;
 - progress, workstreams, pins, worktree warnings, and tolerant ingestion remain.
 
-Goal/deadline collection, scheduled daily runs, forecast/risk derivation, and
-the global attention queue remain later MVP slices.
+Goal/deadline are authored into the project profile via the curated onboarding
+step (spec 009-01, ADR-0011) and joined onto the current-state read path at the
+read/render layer (`joinProjectProfileFields`), leaving the observation-v1
+contract untouched. Scheduled daily runs, forecast/risk derivation, and the
+global attention queue remain later spec-009 slices; collection stays manual pull.
 
 ## Contract surfaces
 
@@ -162,7 +168,9 @@ the global attention queue remain later MVP slices.
   yield **N portfolio entries**: each entry (`id`, `label`, `artifactRoot` +
   overrides) expands at config normalization into a composite-id
   (`<baseId>-<entryId>`) card scoped to its own artifact root, sharing the
-  umbrella repo's git signal. Profile *production* is automated by the
+  umbrella repo's git signal. The profile also carries optional authored
+  `goal`/`deadline` (each `{value, provenance}`; spec 009-01, ADR-0011) that the
+  runtime reads as literals. Profile *production* is automated by the
   read-only discovery module `src/discover.mjs` (spec 007-03): it introspects a
   source and authors a drop-in profile, preferring the source's own
   self-declaration (a `tracks/*` layout, `repos.yaml` `scope:` tags) over

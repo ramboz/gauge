@@ -128,6 +128,65 @@ test('project profile normalizes with no-profile identity (007-01 AC2)', () => {
   }
 });
 
+// --- 009-01: goal/deadline (ADR-0011) additive profile fields ---
+
+test('a profile with no goal/deadline normalizes with the 007 identity (no extra keys) (AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{ id: 'alpha', path: '/tmp/alpha', adapters: ['jig'] }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile, {
+    artifactRoot: path.join('/tmp/alpha', 'docs'),
+    specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status', specLayout: 'nested',
+  });
+  assert.ok(!('goal' in config.projects[0].profile));
+  assert.ok(!('deadline' in config.projects[0].profile));
+});
+
+test('an authored goal/deadline threads verbatim onto the normalized project profile (AC5)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'alpha', path: '/tmp/alpha', adapters: ['jig'],
+      profile: {
+        goal: { value: 'Ship the MVP', provenance: 'product-vision' },
+        deadline: { value: '2026-09-01', provenance: 'release' },
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile.goal, { value: 'Ship the MVP', provenance: 'product-vision' });
+  assert.deepEqual(config.projects[0].profile.deadline, { value: '2026-09-01', provenance: 'release' });
+});
+
+test('deadline: "unknown" threads verbatim, never coerced (AC3)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'alpha', path: '/tmp/alpha', adapters: ['jig'],
+      profile: { deadline: { value: 'unknown', provenance: 'user' } },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile.deadline, { value: 'unknown', provenance: 'user' });
+});
+
+test('a malformed goal/deadline is rejected with one actionable error (AC1)', () => {
+  const cases = [
+    ['goal missing provenance', { profile: { goal: { value: 'Ship it' } } }],
+    ['deadline bad value', { profile: { deadline: { value: 'soonish', provenance: 'release' } } }],
+    ['goal bad provenance', { profile: { goal: { value: 'Ship it', provenance: 'github-milestone' } } }],
+  ];
+  for (const [name, override] of cases) {
+    assert.throws(
+      () => normalizeConfig({
+        version: 1,
+        projects: [{ id: 'alpha', path: '/tmp/alpha', adapters: ['jig'], ...override }],
+      }, '/tmp/gauge.config.json'),
+      /invalid configuration: project alpha profile:/,
+      name,
+    );
+  }
+});
+
 test('malformed project profile is rejected with one actionable error (007-01 AC2)', () => {
   const cases = [
     ['profile not an object', { profile: 'docs' }],

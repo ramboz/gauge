@@ -717,6 +717,32 @@ export function observeAll(config, options = {}) {
   };
 }
 
+// Goal/deadline read/render-layer join (spec 009-01, ADR-0011 AC6): attaches
+// each project's authored profile goal/deadline onto its current-state read,
+// at the server/dashboard read layer only — a pure structural passthrough of
+// whatever literal value the profile already carries, with no file I/O and
+// no prose parsing (AC3/AC5). Deliberately NOT folded into observeProject/
+// observeAll: the observation-v1 contract (and anything npm run collect
+// persists) stays exactly as it was before this slice.
+export function joinProjectProfileFields(data, config) {
+  const profileById = new Map(config.projects.map((project) => [project.id, project.profile || {}]));
+  return {
+    ...data,
+    projects: data.projects.map((observation) => {
+      const profile = profileById.get(observation.project.id) || {};
+      if (profile.goal === undefined && profile.deadline === undefined) return observation;
+      return {
+        ...observation,
+        project: {
+          ...observation.project,
+          ...(profile.goal !== undefined ? { goal: profile.goal } : {}),
+          ...(profile.deadline !== undefined ? { deadline: profile.deadline } : {}),
+        },
+      };
+    }),
+  };
+}
+
 function validateFreshness(value, name, errors) {
   if (!isObject(value) || !FRESHNESS.has(value.state)) {
     errors.push(`${name} freshness is invalid`);

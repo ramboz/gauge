@@ -222,6 +222,72 @@ function discoverHeuristic(root) {
   return { source: 'heuristic', profile: { entries }, notes: [] };
 }
 
+// --- Candidate-artifact surfacing (spec 009-01, ADR-0011) ---
+//
+// Existence-based only: reports which source artifact an author should draw
+// a goal/deadline value from, per ADR-0011's precedence order. This NEVER
+// reads or parses the artifact's prose and NEVER computes a goal/deadline
+// value — it returns a pointer (the artifact's path) or `null` when nothing
+// qualifies, so the human-curated (optionally Claude-assisted) authoring step
+// is the only place prose becomes a value (AC2/AC3). Stays edge-pure: only
+// node builtins + fs existence checks, no central/config/state/server import.
+
+// Case-insensitive filename lookup (README.md / Readme.md / readme.md), one
+// directory level, read-only (a directory listing, never file content).
+function findFileCI(dir, name) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return null;
+  }
+  const lower = name.toLowerCase();
+  const match = entries.find((entry) => entry.toLowerCase() === lower);
+  return match ? path.join(dir, match) : null;
+}
+
+// First non-README `docs/releases/*.md` file, in sorted (deterministic) order
+// — a pointer to the release doc a deadline should be drawn from, never its
+// content.
+function firstReleaseDoc(root) {
+  const releasesDir = path.join(root, 'docs', 'releases');
+  let entries;
+  try {
+    entries = fs.readdirSync(releasesDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const candidates = entries
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md') && entry.name.toLowerCase() !== 'readme.md')
+    .map((entry) => entry.name)
+    .sort();
+  return candidates.length ? path.join(releasesDir, candidates[0]) : null;
+}
+
+// ADR-0011 precedence: goal ← jig product-vision.md → README; deadline ←
+// shaper docs/releases/*.md → README. Each field independently reports the
+// first EXISTING candidate, skipping absent layers, and `null` when none
+// exist for that field.
+export function surfaceCandidateArtifacts(root) {
+  const productVision = path.join(root, 'docs', 'product-vision.md');
+  const readme = findFileCI(root, 'README.md');
+  const releaseDoc = firstReleaseDoc(root);
+
+  const goal = fs.existsSync(productVision)
+    ? { provenance: 'product-vision', path: productVision }
+    : readme
+      ? { provenance: 'readme', path: readme }
+      : null;
+
+  const deadline = releaseDoc
+    ? { provenance: 'release', path: releaseDoc }
+    : readme
+      ? { provenance: 'readme', path: readme }
+      : null;
+
+  return { goal, deadline };
+}
+
 // Precedence: declaration → heuristic → default → none.
 export function discoverProfile(root) {
   const declaration = discoverDeclaration(root);

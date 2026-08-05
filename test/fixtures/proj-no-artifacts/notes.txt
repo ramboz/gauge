@@ -1,0 +1,3 @@
+Fixture placeholder: this repo has no README, no product-vision.md, and no
+docs/releases — so candidate-artifact surfacing must report none for both
+goal and deadline.

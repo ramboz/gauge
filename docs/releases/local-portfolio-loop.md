@@ -19,7 +19,7 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 
 ## Solution Outline
 
-- A private local Gauge instance for one person, one repository and one active goal per project: central registry/history, generic GitHub milestone plus Jig adapters, daily collection, project cards with progress/freshness/risk, and an explainable global next-action queue.
+- A private local Gauge instance for one person, one repository and one active goal per project: central registry/history, curated goal/deadline profile authoring (ADR-0011) plus Jig execution adapter, manual pull collection, project cards with progress/freshness/risk, and an explainable global next-action queue. (The generic GitHub milestone adapter is deferred with hosted/GitHub-push collection.)
 
 ## Risks / Rabbit Holes
 
@@ -42,9 +42,9 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 | Gauge identity and adapter-driven core | ADR-0003 + spec 004 | Reframes the working POC without discarding proven behavior. |
 | Private central registry and observation history | Owner decision + ADR-0003 | Enables daily trends without writing to source repositories. |
 | One repository and one active goal per project | Owner-approved MVP cut | Keeps identity and goal selection deterministic. |
-| Generic GitHub milestone goal adapter | No-hard-dependency principle | Supplies a project-owned goal/due date without requiring Jig or Shaper. |
+| Curated goal/deadline authoring into the project profile | ADR-0011 + spec 009-01 | A human-curated onboarding step authors goal/deadline (from vision/release/README hints) into the per-project profile; the zero-dep runtime reads literals. Supplies a project-owned goal/due date without a GitHub dependency. |
 | Jig execution adapter | Working POC + issue #91 | Preserves high-fidelity spec, bug, decision, and workstream signals. |
-| Daily collection into the Gauge repository | Owner-approved central commit model | Produces durable velocity/history data in one private place. |
+| Manual pull collection into the Gauge repository | Owner-approved central commit model + owner decision (2026-08-05) | Produces durable velocity/history observations in one private place; runs are manually triggered (`npm run collect`). Automated daily scheduling is deferred (below). |
 | Project cards: progress, freshness, blockers, risk, next action | Gauge vision | Completes the per-project daily decision loop. |
 | Explainable global attention queue | Owner decision + ADR-0003 frame-critique resolution | Provides both status and recommended priority without pretending work units are comparable. |
 | Local loopback-only UI and secret-safe snapshots | MVP security boundary | Keeps the first usable release private without hosted-auth scope. |
@@ -54,6 +54,8 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 | Item | Evidence | Rationale |
 |---|---|---|
 | Authenticated hosting | Follow-up 1 | Requires a new trust boundary and dedicated security review. |
+| Generic GitHub milestone goal adapter | ADR-0011 + owner decision | Deferred with hosted/GitHub-push collection: reading GitHub for goals should arrive together with reading it for progress, not before. The MVP uses curated profile authoring instead (Include row above). |
+| Automated daily scheduling (unattended runs) | Owner decision (2026-08-05) — spec 009 overview | The MVP collects on a manual trigger (`npm run collect`); a local scheduler / cron is a thin follow-up (the "Daily collection" refinement-todo item). |
 | Shaper and Servo adapters, evolution graphs, custom metrics | Follow-up 2 | Valuable after the normalized core and history are proven. |
 | GitHub teams/org authorization | Long-term vision | Multi-user policy is unnecessary for the first user. |
 | Multi-repository projects and concurrent goals | Long-term vision | Explicitly excluded by the owner-approved MVP topology. |
@@ -85,7 +87,7 @@ Do not move a plan from `candidate` to `committed` without an explicit user deci
 
 - [ADR-0003](../decisions/adr-0003-reframe-onto-gauge-portfolio-product.md): accepted after frame critique; its runtime reframe dispositions landed through spec 004.
 - [Spec 004](../specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md): reviewed runtime retrofit, optional Jig adapter, normalized observations, and central-state seam.
-- New JIG work to draft after the retrofit: generic GitHub goal adapter, daily scheduling, and the risk/attention policy and UI.
+- New JIG work to draft after the retrofit: curated goal/deadline profile authoring (spec 009-01, ADR-0011), forecast/risk and attention policy and UI (spec 009-02/03). Daily scheduling and the generic GitHub milestone adapter are deferred (manual pull collection for the MVP; milestone lands with hosted/GitHub-push collection).
 - No Servo signals were found or required; release-check criteria remain deterministic and advisory.
 
 ## Release-Check Criteria

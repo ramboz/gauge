@@ -29,10 +29,10 @@ blocker.
 
 ## Context
 
-ADR-0007 fixes the topology — edge clients push observation-v1 to an authenticated
-central ingest, pull remains the fallback, derivation stays central — but leaves
-three decisions open that any ingest slice must have settled before it can be
-built:
+ADR-0007 fixes the push topology — edge clients push observation-v1 to an
+authenticated central ingest, pull remains the fallback, and derivation stays
+central — but leaves three decisions open that any ingest slice must settle before
+it can be built. The three open decisions are:
 
 1. **Identity/authentication.** How a pushed record is bound to an authorized
    project.

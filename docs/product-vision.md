@@ -61,7 +61,10 @@ portfolio loop:
 
 1. Configure at least three single-repository projects.
 2. Select one active source-owned goal for each project.
-3. Collect generic GitHub milestone and optional Jig execution evidence.
+3. Author each project's goal and deadline into its profile via a curated
+   onboarding step (ADR-0011), and collect optional Jig execution evidence. (The
+   generic GitHub milestone adapter is deferred with hosted/GitHub-push
+   collection.)
 4. Store dated observations in the private central Gauge instance.
 5. Show progress, freshness, blockers, deadline confidence, and next action per
    project.

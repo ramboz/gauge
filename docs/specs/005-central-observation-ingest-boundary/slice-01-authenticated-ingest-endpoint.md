@@ -1,5 +1,5 @@
 ---
-status: DRAFT
+status: DEFERRED
 dependencies: [adr-0007, adr-0008]
 last_verified: 2026-08-03
 frame_review: true
@@ -75,3 +75,8 @@ reflects the pushed data — with no source-repository access by central.
 fixture standing in for one) pushes an observation and the user sees that project's
 card update on the dashboard — the ingress is visible end to end, not an unused
 endpoint.
+
+**Resolution trigger:** when hosted auth / GitHub-push collection is tackled (the
+trust boundary ADR-0007/0008 describe). The committed MVP stays on central pull;
+this slice re-opens with that follow-up. See [ADR-0011](../../decisions/adr-0011-goal-deadline-source-strategy.md)
+for the pull-model goal/deadline decision that supersedes the near-term need.

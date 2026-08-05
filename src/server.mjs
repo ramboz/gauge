@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, resolveConfigPath } from './config.mjs';
-import { observeAll } from './observation.mjs';
+import { observeAll, joinProjectProfileFields } from './observation.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -21,7 +21,11 @@ const server = http.createServer((req, res) => {
     res.end(fs.readFileSync(INDEX));
   } else if (url === '/api/data') {
     try {
-      const data = observeAll(loadConfig(CONFIG_PATH));
+      // Goal/deadline (spec 009-01, ADR-0011): joined at this read layer,
+      // never inside observeAll/observation-v1 itself — a literal echo of
+      // whatever the profile already carries (see joinProjectProfileFields).
+      const freshConfig = loadConfig(CONFIG_PATH);
+      const data = joinProjectProfileFields(observeAll(freshConfig), freshConfig);
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

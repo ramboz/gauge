@@ -32,12 +32,13 @@ schema evolution, retention, and central instance-state location.
 **Resolved by:** [ADR-0005: Symmetric source and state isolation](decisions/adr-0005-symmetric-source-state-isolation.md),
 which supersedes ADR-0004 while retaining its observation/history contract.
 
-### Generic goal and deadline source
+### ~~Generic goal and deadline source~~ — RESOLVED 2026-08-05
 
 **Decision needed:** whether the first generic adapter uses one active GitHub
 milestone, repository configuration, or both with explicit precedence.
 
 **Resolution trigger:** before drafting the generic goal-adapter slice.
+**Resolved by:** [ADR-0011: Goal and deadline source strategy for the local pull loop](decisions/adr-0011-goal-deadline-source-strategy.md).
 
 ## MVP derivation policy
 
@@ -165,6 +166,14 @@ mystique → `[docs/opportunities/cwv, docs/superpowers]`; personalization-works
   `scope:` forms but not the YAML block-list form (`scope:` then `- tag` lines);
   such tracks fall back to directory-sort order. **Resolution trigger:** when a
   real corpus project declares scopes in block-list form.
+- **Multi-entry goal/deadline placement (from 009-01 craft review).** A profile
+  declaring both `entries[]` and top-level `goal`/`deadline` validates, but
+  `expandEntries` (`src/config.mjs`) builds each entry from only the five scalar
+  fields, so an umbrella-level `goal`/`deadline` is silently dropped. Single-entry
+  is spec 009's scope; decide reject-vs-thread (reject goal/deadline alongside
+  `entries`, or thread them per entry) before onboarding a multi-entry PATTERN C
+  project with a goal. **Resolution trigger:** before a multi-entry project sets a
+  goal/deadline.
 
 **Decision needed:** how gauge observes projects whose jig artifacts are not at
 `<repoRoot>/docs/{specs,decisions}` and/or that host multiple sub-projects in one

@@ -1,5 +1,5 @@
 ---
-status: DRAFT
+status: DEFERRED
 dependencies: [adr-0008, 006-01, 005-01]
 last_verified: 2026-08-03
 frame_review: true
@@ -57,3 +57,7 @@ project's card appear centrally, with central holding no source access.
 **Anti-horizontal-phasing check:** after this slice a developer commits in an
 onboarded repo and, without any central scan, sees that project's card refresh on
 the dashboard — the full push loop is visible end to end.
+
+**Resolution trigger:** when hosted auth / GitHub-push collection is tackled (the
+ADR-0007/0008 trust boundary). The committed MVP stays on central pull; the push
+trigger re-opens with that follow-up.

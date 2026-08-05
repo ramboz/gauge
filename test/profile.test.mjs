@@ -134,6 +134,100 @@ test('schema and runtime enforce the same malformed-value matrix', () => {
   }
 });
 
+// --- 009-01: goal/deadline (ADR-0011) additive profile fields ---
+
+test('goal/deadline are additive: a profile with neither validates exactly as the 007 identity (AC1)', () => {
+  const schema = loadSchema();
+  assert.ok(schema.properties.goal, 'schema must declare goal');
+  assert.ok(schema.properties.deadline, 'schema must declare deadline');
+  assert.deepEqual(validateProfile({ artifactRoot: 'docs', specsDir: 'specs' }), []);
+  assert.deepEqual(validateProfile(undefined), []);
+  // goal/deadline carry no default, so PROFILE_DEFAULTS stays the 007-01 five.
+  assert.deepEqual(PROFILE_DEFAULTS, {
+    artifactRoot: 'docs', specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status',
+    specLayout: 'nested',
+  });
+  assert.equal(PROFILE_DEFAULTS.goal, undefined);
+  assert.equal(PROFILE_DEFAULTS.deadline, undefined);
+});
+
+test('additionalProperties: false still holds with goal/deadline declared (AC1)', () => {
+  const schema = loadSchema();
+  assert.equal(schema.additionalProperties, false);
+  assert.equal(schema.properties.goal.additionalProperties, false);
+  assert.equal(schema.properties.deadline.additionalProperties, false);
+});
+
+test('a valid goal/deadline pair validates (AC1)', () => {
+  assert.deepEqual(validateProfile({
+    goal: { value: 'Ship the MVP', provenance: 'product-vision' },
+    deadline: { value: '2026-09-01', provenance: 'release' },
+  }), []);
+  assert.deepEqual(validateProfile({
+    goal: { value: 'Ship the MVP', provenance: 'user' },
+    deadline: { value: 'unknown', provenance: 'user' },
+  }), []);
+});
+
+test('every declared provenance value is accepted for both fields (AC1)', () => {
+  const schema = loadSchema();
+  for (const provenance of schema.properties.goal.properties.provenance.enum) {
+    assert.deepEqual(validateProfile({ goal: { value: 'x', provenance } }), [], `goal provenance ${provenance}`);
+  }
+  for (const provenance of schema.properties.deadline.properties.provenance.enum) {
+    assert.deepEqual(validateProfile({ deadline: { value: 'unknown', provenance } }), [], `deadline provenance ${provenance}`);
+  }
+});
+
+test('goal/deadline provenance enum is exactly product-vision|release|readme|user (AC1)', () => {
+  const schema = loadSchema();
+  assert.deepEqual(schema.properties.goal.properties.provenance.enum, ['product-vision', 'release', 'readme', 'user']);
+  assert.deepEqual(schema.properties.deadline.properties.provenance.enum, ['product-vision', 'release', 'readme', 'user']);
+});
+
+test('a bad provenance value is rejected with one actionable error (AC1)', () => {
+  const goalErrors = validateProfile({ goal: { value: 'Ship it', provenance: 'github-milestone' } });
+  assert.equal(goalErrors.length, 1);
+  assert.match(goalErrors[0], /profile\.goal\.provenance must be one of: product-vision, release, readme, user/);
+
+  const deadlineErrors = validateProfile({ deadline: { value: '2026-09-01', provenance: 'github-milestone' } });
+  assert.equal(deadlineErrors.length, 1);
+  assert.match(deadlineErrors[0], /profile\.deadline\.provenance must be one of: product-vision, release, readme, user/);
+});
+
+test('a bad deadline value (not a date, not "unknown") is rejected (AC1)', () => {
+  const errors = validateProfile({ deadline: { value: 'maximum two weeks', provenance: 'release' } });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /profile\.deadline\.value must be an ISO date/);
+  // A well-formed but nonsense date-shaped string is still schema-valid — the
+  // schema checks shape, not calendar validity (matching the git-date fields
+  // elsewhere in the corpus, e.g. schemas/observation-v1.schema.json).
+  assert.deepEqual(validateProfile({ deadline: { value: '2026-13-40', provenance: 'user' } }), []);
+});
+
+test('the literal deadline value "unknown" is always valid (AC1, ADR-0011)', () => {
+  assert.deepEqual(validateProfile({ deadline: { value: 'unknown', provenance: 'user' } }), []);
+});
+
+test('goal/deadline require both value and provenance (AC1)', () => {
+  assert.notDeepEqual(validateProfile({ goal: { value: 'Ship it' } }), []);
+  assert.notDeepEqual(validateProfile({ goal: { provenance: 'user' } }), []);
+  assert.notDeepEqual(validateProfile({ deadline: { value: '2026-09-01' } }), []);
+  assert.notDeepEqual(validateProfile({ deadline: { provenance: 'user' } }), []);
+});
+
+test('goal/deadline reject unrecognized nested fields and non-object values (AC1)', () => {
+  assert.notDeepEqual(validateProfile({ goal: { value: 'Ship it', provenance: 'user', extra: true } }), []);
+  assert.notDeepEqual(validateProfile({ goal: 'Ship it' }), []);
+  assert.notDeepEqual(validateProfile({ deadline: '2026-09-01' }), []);
+  assert.notDeepEqual(validateProfile({ goal: ['Ship it'] }), []);
+});
+
+test('an empty goal value is rejected (AC1)', () => {
+  assert.notDeepEqual(validateProfile({ goal: { value: '', provenance: 'user' } }), []);
+  assert.notDeepEqual(validateProfile({ goal: { value: '   ', provenance: 'user' } }), []);
+});
+
 // A whitespace-only string satisfies the schema's `minLength: 1` (length 3,
 // no content constraint) but the runtime validator additionally trims —
 // runtime is intentionally stricter here, not a schema/runtime disagreement

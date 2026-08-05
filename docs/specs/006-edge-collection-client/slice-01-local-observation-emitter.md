@@ -1,5 +1,5 @@
 ---
-status: DRAFT
+status: DEFERRED
 dependencies: [adr-0007]
 last_verified: 2026-08-03
 frame_review: true
@@ -56,3 +56,7 @@ contract, before any network is involved.
 **Anti-horizontal-phasing check:** after this slice a user runs the client in a
 real repo and sees a complete, valid Gauge observation printed — the edge producer
 is real and inspectable, even before it is wired to central.
+
+**Resolution trigger:** when hosted auth / GitHub-push collection is tackled. The
+committed MVP stays on central pull (`npm run collect`); the edge emitter re-opens
+with that follow-up.

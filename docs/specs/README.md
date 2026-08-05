@@ -23,17 +23,20 @@
 | [003-sessions-panel](003-sessions-panel/spec.md) | 003-02 — recency-expand-toggle | ABANDONED | retired with spec 003 by ADR-0003 |
 | [003-sessions-panel](003-sessions-panel/spec.md) | 003-03 — pr-badges | ABANDONED | retired with spec 003 by ADR-0003 |
 | [004-retrofit-dashboard-runtime-onto-gauge-portfolio-product](004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md) | 004-01 — Gauge core and central state | **DONE** | 64 tests green; all implementation and reconciliation reviews pass; ADR-0005 is the corrected contract |
-| [005-central-observation-ingest-boundary](005-central-observation-ingest-boundary/spec.md) | 005-01 — Authenticated observation ingest endpoint | DRAFT |  |
-| [005-central-observation-ingest-boundary](005-central-observation-ingest-boundary/spec.md) | 005-02 — Freshness aging for silent projects | DRAFT |  |
-| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-01 — Local observation emitter | DRAFT |  |
-| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-02 — Trigger and authenticated push | DRAFT |  |
-| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-03 — Project-declared goal and deadline | DRAFT |  |
+| [005-central-observation-ingest-boundary](005-central-observation-ingest-boundary/spec.md) | 005-01 — Authenticated observation ingest endpoint | DEFERRED |  |
+| [005-central-observation-ingest-boundary](005-central-observation-ingest-boundary/spec.md) | 005-02 — Freshness aging for silent projects | DEFERRED |  |
+| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-01 — Local observation emitter | DEFERRED |  |
+| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-02 — Trigger and authenticated push | DEFERRED |  |
+| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-03 — Project-declared goal and deadline | DEFERRED |  |
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-01 — Explicit artifact-root profile (Pattern B) | **DONE** |  |
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-02 — Multi-entry decomposition (Pattern C) | **DONE** |  |
 | [007-project-shape-profiles](007-project-shape-profiles/spec.md) | 007-03 — Profile discovery and onboarding | **DONE** |  |
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-01 — Flat layout + honest completion (jig preset unchanged) | **DONE** |  |
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-02 — Auto-detect + discovery emits `specLayout` | **DONE** |  |
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-03 — Declarable completion vocabulary + foreign-status gate (DEFERRED) | DEFERRED |  |
+| [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-01 — Goal/deadline onboarding authoring | DRAFT |  |
+| [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-02 — Forecast/risk derivation | DRAFT |  |
+| [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-03 — Global attention queue | DRAFT |  |
 
 ## Deferred slices
 
@@ -41,6 +44,11 @@
 
 | Spec | Slice | Resolution trigger |
 |------|-------|--------------------|
+| [005-central-observation-ingest-boundary](005-central-observation-ingest-boundary/spec.md) | 005-01 — Authenticated observation ingest endpoint | when hosted auth / GitHub-push collection is tackled (the |
+| [005-central-observation-ingest-boundary](005-central-observation-ingest-boundary/spec.md) | 005-02 — Freshness aging for silent projects | when hosted auth / GitHub-push collection is tackled. The |
+| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-01 — Local observation emitter | when hosted auth / GitHub-push collection is tackled. The |
+| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-02 — Trigger and authenticated push | when hosted auth / GitHub-push collection is tackled (the |
+| [006-edge-collection-client](006-edge-collection-client/spec.md) | 006-03 — Project-declared goal and deadline | when hosted auth / GitHub-push collection is tackled. The |
 | [008-generic-doc-adapter](008-generic-doc-adapter/spec.md) | 008-03 — Declarable completion vocabulary + foreign-status gate (DEFERRED) | a real project encodes a **delivery** status (work |
 
 ## Abandoned slices

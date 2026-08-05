@@ -1,5 +1,5 @@
 ---
-status: DRAFT
+status: DEFERRED
 dependencies: [adr-0006, adr-0008, 005-01]
 last_verified: 2026-08-03
 frame_review: true
@@ -58,3 +58,7 @@ closing the freshness gap the push model introduces relative to pull.
 **Anti-horizontal-phasing check:** after this slice the user watches a project's
 card visibly decay to stale then unknown when its client stops reporting — the
 honesty guarantee is user-visible, not an internal timestamp.
+
+**Resolution trigger:** when hosted auth / GitHub-push collection is tackled. The
+committed MVP stays on central pull; freshness aging for the push path re-opens with
+that follow-up. (Pull-model freshness is handled independently in spec 009.)

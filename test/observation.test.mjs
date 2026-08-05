@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { observeAll, observeProject, validateObservation } from '../src/observation.mjs';
+import { observeAll, observeProject, validateObservation, joinProjectProfileFields } from '../src/observation.mjs';
 import { normalizeConfig } from '../src/config.mjs';
 
 // Build a throwaway git repo with a controlled commit date, so freshness
@@ -725,4 +725,64 @@ test('multi-entry: composite ids, shared umbrella git signal, per-entry executio
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- 009-01: goal/deadline read/render-layer join (ADR-0011 AC6) ---
+// The join is a pure passthrough of the profile's literal goal/deadline onto
+// each project's current-state read, at the server read layer — never inside
+// observeProject/observeAll or the observation-v1 contract itself.
+
+test('joinProjectProfileFields is a no-op passthrough when no project carries goal/deadline (AC6)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{ id: 'alpha', path: '/tmp/alpha', adapters: [] }],
+  }, '/tmp/gauge.config.json');
+  const data = observeAll(config, { now: '2026-08-05T00:00:00.000Z' });
+  const joined = joinProjectProfileFields(data, config);
+  assert.deepEqual(joined, data);
+});
+
+test('joinProjectProfileFields attaches the profile\'s literal goal/deadline onto the matching project (AC6)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'alpha', path: '/tmp/alpha', adapters: [],
+      profile: {
+        goal: { value: 'Ship the MVP', provenance: 'product-vision' },
+        deadline: { value: '2026-09-01', provenance: 'release' },
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  const data = observeAll(config, { now: '2026-08-05T00:00:00.000Z' });
+  const joined = joinProjectProfileFields(data, config);
+  assert.deepEqual(joined.projects[0].project.goal, { value: 'Ship the MVP', provenance: 'product-vision' });
+  assert.deepEqual(joined.projects[0].project.deadline, { value: '2026-09-01', provenance: 'release' });
+  // The observation record itself (the one npm run collect would persist) is
+  // untouched by the join — the observation-v1 contract stays exactly as-is.
+  assert.deepEqual(validateObservation(data.projects[0]), []);
+  assert.equal(data.projects[0].project.goal, undefined);
+  assert.equal(data.projects[0].project.deadline, undefined);
+});
+
+test('joinProjectProfileFields echoes deadline "unknown" verbatim — never fabricates a date (AC3/AC6)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'alpha', path: '/tmp/alpha', adapters: [],
+      profile: { deadline: { value: 'unknown', provenance: 'user' } },
+    }],
+  }, '/tmp/gauge.config.json');
+  const data = observeAll(config, { now: '2026-08-05T00:00:00.000Z' });
+  const joined = joinProjectProfileFields(data, config);
+  assert.deepEqual(joined.projects[0].project.deadline, { value: 'unknown', provenance: 'user' });
+  assert.equal(joined.projects[0].project.goal, undefined);
+});
+
+test('joinProjectProfileFields performs no file I/O — a pure structural merge (AC3/AC5)', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'src', 'observation.mjs'), 'utf8');
+  const fnStart = src.indexOf('export function joinProjectProfileFields');
+  assert.ok(fnStart >= 0, 'joinProjectProfileFields must be exported from src/observation.mjs');
+  const fnEnd = src.indexOf('\n}', fnStart);
+  const body = src.slice(fnStart, fnEnd);
+  assert.ok(!/readFileSync|readdirSync|existsSync|statSync/.test(body), 'the join must not perform file I/O');
 });
