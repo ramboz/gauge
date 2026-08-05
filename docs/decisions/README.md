@@ -18,6 +18,8 @@
 - [ADR-0009: Project-shape profile contract — location, precedence, and one-repo→N-entries](adr-0009-project-shape-profile-contract.md) — Gauge's Jig adapter hardcodes the artifact layout to `<repoRoot>/docs/{specs,bugs,decisions,releases}` and assumes **one repository is one portfolio entry**. (2026-08-03, Accepted)
 - [ADR-0010: Convention-generic doc adapter — jig layout becomes a preset](adr-0010-generic-doc-adapter.md) — Gauge's one adapter hardcodes jig's folder-per-spec convention as if it were the generic notion of a spec, so projects with a valid non-jig spec layout observe as blank. (2026-08-03, Accepted)
 - [ADR-0011: Goal and deadline source strategy for the local pull loop](adr-0011-goal-deadline-source-strategy.md) — The local pull MVP still lacks the input every downstream layer depends on: a per-project **goal** and **deadline**. (2026-08-05, Accepted)
+- [ADR-0012: Forecast confidence: minimum-evidence rule for on_track/at_risk vs unknown](adr-0012-forecast-confidence-minimum-evidence.md) — Spec 009-02 derives a per-project forecast/risk read — `on_track` / `at_risk` / `unknown` — in the history-derived layer ([ADR-0006](adr-0006-two-layer-derivation.md)). (2026-08-05, Accepted)
+- [ADR-0013: Cross-project attention-overlay policy for the global queue](adr-0013-attention-overlay-policy.md) — Spec 009-03 builds the **global attention queue** — a single cross-project ordering that answers "which project deserves attention next, and why" — in the history-derived layer, downstream of forecast/risk ([ADR-0006](adr-0006-two-layer-derivation.md)). (2026-08-05, Accepted)
 
 ## Format
 

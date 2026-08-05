@@ -117,10 +117,14 @@ adapter → observation → history substrate, separated by time
 - **History-derived layer** — reads the observation series through
   `readObservationHistory()` (`src/state.mjs`) and folds it into observed pace,
   deadline confidence, categorical risk, forecast, and the cross-project
-  attention ordering that ranks them. It is not built yet; it lands in a
-  dedicated module (`src/derive.mjs`, or `src/derive/` if it grows) that imports
-  only the history reader and observation-contract helpers, never adapters or
-  `src/scan.mjs`, and never writes to a source or to instance state.
+  attention ordering that ranks them. Landed as `src/derive.mjs` (spec 009-02):
+  a zero-import pure fold — `deriveForecast(observations, deadline)` implements the
+  ADR-0012 four-gate forecast/risk rule (`on_track`/`at_risk`/`unknown` + reason),
+  and `attachForecasts(data, historiesByProjectId)` composes it across the
+  portfolio. The **deadline is passed in by the caller** (like the registry set),
+  so the module imports only observation helpers — never adapters, `src/scan.mjs`,
+  `config.mjs`, or `profile.mjs` — and never writes. The cross-project attention
+  ordering (spec 009-03) will extend this same module downstream of forecast/risk.
 
 Policies are deterministic, independently testable, and explain their evidence.
 Missing dates or insufficient history cannot yield `on_track` or `at_risk`, and
@@ -150,8 +154,10 @@ Spec 004 retained the useful POC behavior behind the Gauge boundary:
 Goal/deadline are authored into the project profile via the curated onboarding
 step (spec 009-01, ADR-0011) and joined onto the current-state read path at the
 read/render layer (`joinProjectProfileFields`), leaving the observation-v1
-contract untouched. Scheduled daily runs, forecast/risk derivation, and the
-global attention queue remain later spec-009 slices; collection stays manual pull.
+contract untouched. Forecast/risk derivation landed as `src/derive.mjs`
+(spec 009-02, ADR-0012); `/api/data` now carries a per-project
+`forecast: {state, reason}`. The global attention queue (spec 009-03, ADR-0013)
+and scheduled daily runs remain later work; collection stays manual pull.
 
 ## Contract surfaces
 
@@ -180,7 +186,10 @@ global attention queue remain later spec-009 slices; collection stays manual pul
   `schemas/observation-v1.schema.json`, with independently versioned typed
   capability records.
 - **Local HTTP:** `/` serves the Gauge page; `/api/data` returns the canonical
-  portfolio observation envelope.
+  portfolio observation envelope, each project additionally carrying read-layer
+  joins — the profile `goal`/`deadline` (009-01) and a derived
+  `forecast: {state, reason}` (009-02) — that are not part of the observation-v1
+  record.
 - **CLI:** `npm run scan` and `npm run onboard` are read-only (`onboard`
   prints a proposed profile-v1 document to stdout, detection source/notes to
   stderr); `npm run collect` owns durable central writes.

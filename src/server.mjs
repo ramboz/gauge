@@ -6,6 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, resolveConfigPath } from './config.mjs';
 import { observeAll, joinProjectProfileFields } from './observation.mjs';
+import { readObservationHistory } from './state.mjs';
+import { attachForecasts } from './derive.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -25,7 +27,19 @@ const server = http.createServer((req, res) => {
       // never inside observeAll/observation-v1 itself — a literal echo of
       // whatever the profile already carries (see joinProjectProfileFields).
       const freshConfig = loadConfig(CONFIG_PATH);
-      const data = joinProjectProfileFields(observeAll(freshConfig), freshConfig);
+      const joined = joinProjectProfileFields(observeAll(freshConfig), freshConfig);
+      // Forecast/risk (spec 009-02, ADR-0006/ADR-0012): the history-derived
+      // layer's only I/O — reading each project's history — happens here at
+      // the read layer, never inside derive.mjs itself. deriveForecast (via
+      // attachForecasts) stays a pure fold over the already-read history and
+      // the deadline this loop just joined onto each project.
+      const historiesByProjectId = Object.fromEntries(
+        freshConfig.projects.map((project) => [
+          project.id,
+          readObservationHistory(freshConfig.stateDir, project.id).observations,
+        ]),
+      );
+      const data = attachForecasts(joined, historiesByProjectId);
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

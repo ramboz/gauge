@@ -1,6 +1,6 @@
 ---
 status: DRAFT
-dependencies: [009-02, adr-0006]
+dependencies: [009-02, adr-0006, adr-0013]
 last_verified:
 frame_review: true
 arch_review: true
@@ -23,23 +23,29 @@ portfolio intent without ever rewriting any project's own local priorities
 - ✅ ADR-0006 accepted (the attention queue belongs in the history-derived layer,
   downstream of forecast/risk; it takes the project-id set from the registry via
   its caller, not by reading the registry directly).
-- ⛔ **Blocking decision — cross-project attention-overlay policy.** The
-  "Cross-project attention overlay" item in `docs/refinement-todo.md` (the
-  smallest central policy that expresses portfolio intent — ordered projects,
-  coarse tiers, or deadline-plus-attention rules) must be resolved before this
-  slice goes `READY_FOR_IMPLEMENTATION`. This is a load-bearing choice with
-  rejected alternatives → resolve it via **`jig:adr-workflow`** (a small ADR),
-  not an ad-hoc rule. This DoR item is the gate.
+- ✅ **Attention-overlay policy resolved by
+  [ADR-0013](../../decisions/adr-0013-attention-overlay-policy.md).** The queue is a
+  deterministic **tiered lexicographic ordering** keyed on the derived forecast
+  state + ADR-0012 reason (never owner-assigned importance), within-tier by deadline
+  proximity, ties by `project.id`. Five tiers that partition every ADR-0012 output:
+  (1) at_risk; (2) stale-evidence or explicit blocker — "verify"; (3) needs owner
+  input (`deadline-unknown`/`scope-changed`); (4) awaiting evidence
+  (`insufficient-history`/`execution-unknown`); (5) on_track. Most-urgent-tier-wins
+  (first-match top-down). This is the contract this slice implements verbatim.
 
 **Acceptance Criteria:**
 
-1. **Deterministic, explained ordering.** Given the per-project forecast/risk
-   reads (009-02) plus deadlines and freshness, `src/derive.mjs` produces a total
-   ordering of projects; the same inputs always yield the same order, and each
-   ranked entry carries a short reason for its position.
-2. **The decided overlay policy is applied verbatim.** The ranking implements the
-   policy resolved in the DoR ADR exactly (e.g. tier, then deadline proximity,
-   then risk) and cites it; ties break by a stated deterministic key.
+1. **Deterministic, explained ordering.** Given each project's **derived
+   forecast/risk read (state + ADR-0012 reason)** from 009-02, its deadline, and
+   (when present) its blocker text — never raw signals — `src/derive.mjs` produces
+   a total ordering; the same inputs always yield the same order, and each ranked
+   entry carries a short reason for its position (tier label + within-tier key).
+2. **ADR-0013 tiers applied verbatim.** The ranking implements the five-tier
+   partition exactly (at_risk → stale/blocked → needs-owner-input → awaiting-
+   evidence → on_track), each ADR-0012 reason mapped to its tier per ADR-0013;
+   most-urgent-tier-wins (first-match top-down); within-tier by deadline proximity
+   (soonest concrete date first; `unknown` deadline last in its tier); ties by
+   `project.id`. The slice cites ADR-0013.
 3. **Never a rewrite of project-local priority.** The queue expresses only
    cross-project attention order; it does not reorder, mutate, or write any
    project's own local priorities or source repo (authority model). `unknown`
@@ -54,18 +60,22 @@ portfolio intent without ever rewriting any project's own local priorities
 
 **DoD:**
 - [ ] All ACs pass; full test suite green.
-- [ ] Coverage exercises: deterministic ordering (fixed fixtures → fixed order),
-      tie-breaking, placement of `unknown` risk/deadline per the decided rule,
-      the no-local-priority-rewrite invariant, the import-boundary invariant, and
-      the dashboard render.
+- [ ] Coverage exercises: deterministic ordering (fixed fixtures → fixed order);
+      each of the five tiers populated; every ADR-0012 reason mapped to its correct
+      tier (incl. `execution-unknown`→4, `stale-evidence`→2); most-urgent-tier-wins
+      when a project matches multiple tiers (e.g. at_risk + blocker); within-tier
+      deadline-proximity ordering with `unknown` deadline sorting last; `project.id`
+      tie-break; the no-local-priority-rewrite invariant; the import-boundary
+      invariant; and the dashboard render.
 - [ ] Each new test shown to fail when its feature is removed.
 - [ ] Reviewed by `reviewer` subagent (compliance). Craft pass run.
 - [ ] **Architecture review passed** (`arch_review: true`).
 - [ ] Implementation review passed.
 - [ ] Deviation log + reconciliation sweep produced under this slice heading.
 - [ ] Reconciliation review passed.
-- [ ] The attention-overlay ADR is Accepted and linked; `docs/refinement-todo.md`
-      item marked resolved; status board updated.
+- [ ] ADR-0013 (attention-overlay policy) is Accepted and linked (done);
+      `docs/refinement-todo.md` "Cross-project attention overlay" already resolved;
+      status board updated.
 - [ ] **Primer hygiene (closes spec 009):** this slice closes the spec — apply the
       compress-on-close-out rule to `CLAUDE.md` and confirm the MVP loop is
       reflected in the release plan.
@@ -76,8 +86,13 @@ portfolio — the cross-project decision layer is visible end to end.
 
 ### Assumptions
 
-- Forecast/risk, deadline, and freshness are sufficient inputs to express the
-  MVP's portfolio intent; whether a coarser or richer overlay is needed is
-  exactly the DoR policy decision. No richer per-project comparability (e.g.
-  comparing spec counts across projects) is assumed — the product-vision warns
-  against pretending work units are comparable.
+- The queue keys on the **derived forecast read (state + reason)** plus deadline
+  plus optional blocker — not raw per-signal freshness (ADR-0013: consuming the
+  derived read keeps the "stale = source-repo-quiet, not collection-lapse"
+  grounding honest). No richer per-project comparability (e.g. comparing spec
+  counts across projects) is assumed — the product-vision warns against pretending
+  work units are comparable.
+- The `narrative` blocker field (tier-2's optional trigger) is present only for
+  legacy-Compass sources; where absent, tier 2 rests on the `stale-evidence`
+  forecast reason alone, never a fabricated blocker (ADR-0013). Confirm the exact
+  field (`narrative.value.blockers`) against `src/observation.mjs` at implementation.

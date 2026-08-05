@@ -50,7 +50,7 @@ two-week MVP and how each reports unsupported or unknown work.
 **Resolution trigger:** after probing three real projects and before drafting
 the progress/risk slice.
 
-### Forecast confidence
+### ~~Forecast confidence~~ — RESOLVED 2026-08-05
 
 **Decision needed:** minimum date/history evidence required for `on_track` or
 `at_risk`; below it the only valid result is `unknown`.
@@ -61,8 +61,27 @@ against the three-project validation set.
 **Architectural home:** the history-derived layer defined by
 [ADR-0006](decisions/adr-0006-two-layer-derivation.md); this item resolves the
 policy, not the placement.
+**Resolved by:** [ADR-0012: Forecast confidence: minimum-evidence rule for on_track/at_risk vs unknown](decisions/adr-0012-forecast-confidence-minimum-evidence.md).
 
-### Cross-project attention overlay
+### Dedicated `no-measurable-scope` forecast reason (from 009-02)
+
+**Decision needed:** whether to add a dedicated forecast reason for the
+all-abandoned / zero-denominator case. Slice 009-02 correctly routes a project
+whose delivery scope is entirely abandoned (`denom === 0`, `done === 0`, execution
+status still `supported`) to `unknown` — but reuses the existing `execution-unknown`
+reason as a stopgap, since
+[ADR-0012](decisions/adr-0012-forecast-confidence-minimum-evidence.md) did not
+anticipate `denom === 0` under a `supported` status. A dedicated
+`no-measurable-scope` reason would be more honest on the card and in the attention
+queue (its tier mapping in
+[ADR-0013](decisions/adr-0013-attention-overlay-policy.md) would need to be set).
+Adding a reason is decision-content → an amending/superseding ADR-0012 revision, not
+an inline tweak.
+
+**Resolution trigger:** when the all-abandoned case appears in the real corpus, or
+when ADR-0012's reason set is next revised.
+
+### ~~Cross-project attention overlay~~ — RESOLVED 2026-08-05
 
 **Decision needed:** smallest central policy that expresses portfolio intent
 without duplicating project-local priorities—ordered projects, coarse tiers, or
@@ -73,6 +92,7 @@ deadline-plus-attention rules.
 **Architectural home:** the history-derived layer defined by
 [ADR-0006](decisions/adr-0006-two-layer-derivation.md), downstream of
 forecast/risk; this item resolves the policy, not the placement.
+**Resolved by:** [ADR-0013: Cross-project attention-overlay policy for the global queue](decisions/adr-0013-attention-overlay-policy.md).
 
 ## Collection and security
 

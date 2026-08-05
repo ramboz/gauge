@@ -132,6 +132,52 @@ test('card render does not regress when goal/deadline are entirely absent (007/0
   assert.doesNotThrow(() => context.card(project));
 });
 
+// --- 009-02: card shows the forecast/risk read (ADR-0006/ADR-0012, AC5) ---
+
+test('card renders an on_track forecast with its reason (AC5)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'on_track', reason: 'pace-meets-required' } };
+  const html = context.card(project);
+  assert.match(html, /forecast: on_track/);
+  assert.match(html, /pace-meets-required/);
+});
+
+test('card renders an at_risk forecast with its reason (AC5)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'at_risk', reason: 'pace-behind-required' } };
+  const html = context.card(project);
+  assert.match(html, /forecast: at_risk/);
+  assert.match(html, /pace-behind-required/);
+});
+
+test('card renders unknown forecast as an explicit, legible state — never blank or a green default (AC5)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'unknown', reason: 'insufficient-history' } };
+  const html = context.card(project);
+  assert.match(html, /forecast: unknown/);
+  assert.match(html, /insufficient-history/);
+  // "unknown" must not render inside the same chip class used for on_track
+  // (the "ok"/green class) — it gets its own ("partial") legible treatment.
+  assert.doesNotMatch(html, /chip ok">forecast: unknown/);
+});
+
+test('card render does not regress when forecast is entirely absent (pre-009-02 identity)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
+  assert.doesNotThrow(() => context.card(project));
+  assert.doesNotMatch(context.card(project), /forecast:/);
+});
+
+// --- 009-02 AC1/AC5: server read layer wires the history-derived forecast ---
+
+test('server /api/data wiring reads each project\'s history and attaches the forecast via the pure fold (AC1/AC5)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /import\s*\{\s*readObservationHistory\s*\}\s*from\s*'\.\/state\.mjs'/);
+  assert.match(src, /import\s*\{\s*attachForecasts\s*\}\s*from\s*'\.\/derive\.mjs'/);
+  assert.match(src, /attachForecasts\(/);
+  assert.match(src, /readObservationHistory\(/);
+});
+
 // --- 009-01 AC5: runtime never reads/parses product-vision.md, a release doc, ---
 // or a README to derive a goal/deadline — the only reader of those source
 // artifacts (for goal/deadline purposes) is src/discover.mjs (surfacing) and
