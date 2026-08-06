@@ -241,66 +241,100 @@ function scanWorkstreams(root, profile, projectCfg) {
 
 const WORKTREE_DOC_CAP = 40;
 
-// The "already merged" baseline for worktree hygiene: the union of doc paths
-// committed on any of the repo's mainline refs (local and remote default
-// branch). Comparing worktree docs against THIS — rather than the primary
-// checkout's working tree — is what stops an already-merged doc from being
-// mislabeled "worktree-only" merely because the primary checkout happens to be
-// parked on a feature branch that predates it (the common case, and the source
-// of the false-positive inflation). The union matters for the local-single-
-// user model: a doc merged to LOCAL main but not yet pushed is not at risk, and
-// neither is one on origin/main when local main lags. Paths are normalized to
-// forward slashes. Returns an empty set when `root` is not a git repo or has no
-// resolvable mainline ref; the caller then degrades to a working-tree-only
-// comparison, preserving pre-fix behavior for non-git trees.
-function mergedDocPaths(root) {
-  const run = (args) =>
-    execFileSync('git', ['-C', root, ...args], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      maxBuffer: 64 * 1024 * 1024,
-    });
-  const refs = new Set(['main', 'master', 'origin/main', 'origin/master']);
+const gitRun = (root, args) =>
+  execFileSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    maxBuffer: 64 * 1024 * 1024,
+  });
+
+// The repo's mainline refs (local + remote default branch), in resolution
+// order — used both to build the "already merged" doc-path baseline and to
+// decide whether a worktree is fully merged. Includes whatever origin/HEAD
+// points at, so a non-main/master default branch (e.g. "trunk") is covered.
+// Returns only refs that resolve to a commit; empty for a non-git tree.
+function mainlineRefs(root) {
+  // Only when `root` is itself a git repo's top level. A project nested inside
+  // another repo (or a non-git tree — including the test fixtures) would
+  // otherwise resolve the OUTER repo's refs and worktree HEAD, mislabeling
+  // docs; degrade to a working-tree-only comparison instead.
   try {
-    // Whatever origin/HEAD points at, in case the default branch is named
-    // something other than main/master (e.g. "trunk", "develop").
-    const head = run(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']).trim();
-    if (head) refs.add(head.replace(/^refs\/remotes\//, ''));
+    const top = gitRun(root, ['rev-parse', '--show-toplevel']).trim();
+    if (!top || fs.realpathSync(top) !== fs.realpathSync(root)) return [];
+  } catch { return []; }
+  const candidates = ['main', 'master', 'origin/main', 'origin/master'];
+  try {
+    const head = gitRun(root, ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']).trim();
+    if (head) candidates.unshift(head.replace(/^refs\/remotes\//, ''));
   } catch { /* no origin/HEAD; the well-known names still apply */ }
+  const refs = [];
+  for (const ref of candidates) {
+    if (refs.includes(ref)) continue;
+    try { gitRun(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]); refs.push(ref); }
+    catch { /* ref does not resolve in this repo — skip it */ }
+  }
+  return refs;
+}
+
+// The "already merged" baseline: the union of doc paths committed on any
+// mainline ref, restricted to `artifactRootRel` (the project's artifact
+// subtree). Comparing worktree docs against THIS — rather than the primary
+// checkout's working tree — stops an already-merged doc from being mislabeled
+// "worktree-only" just because the primary checkout is parked on a feature
+// branch that predates it. Paths are normalized to forward slashes.
+function mergedDocPaths(root, refs, artifactRootRel) {
   const set = new Set();
   for (const ref of refs) {
     try {
-      const listing = run(['ls-tree', '-r', '--name-only', ref, '--', 'docs']);
+      const listing = gitRun(root, ['ls-tree', '-r', '--name-only', ref, '--', artifactRootRel]);
       for (const line of listing.split('\n')) { if (line) set.add(line); }
-    } catch { /* ref does not resolve in this repo — skip it */ }
+    } catch { /* ref does not resolve / no such path — skip */ }
   }
   return set;
 }
 
-// Deliberately repo-root-scoped, not artifactRoot-scoped (spec 007-01 blocker
-// 1 exception): worktree hygiene tracks docs lost to abandoned `.claude/
-// worktrees/*` checkouts, a whole-git-repo concern, not a per-sub-project one.
-// A nested profile (e.g. artifactRoot = docs/opportunities/cwv) still sees
-// worktree-only docs from anywhere in the repo's worktree checkouts.
-function scanWorktreeOnlyDocs(root) {
+// True when a worktree's HEAD is already contained in a mainline ref: every
+// commit in it is in mainline history, so deleting the worktree loses no
+// committed work — nothing in it is "at risk", regardless of whether some doc
+// was later removed from mainline's current tree.
+function worktreeIsMerged(root, head, refs) {
+  for (const ref of refs) {
+    try { execFileSync('git', ['-C', root, 'merge-base', '--is-ancestor', head, ref], { stdio: 'ignore' }); return true; }
+    catch { /* not an ancestor of this ref — try the next */ }
+  }
+  return false;
+}
+
+// Worktree hygiene, scoped to the project's artifact subtree (spec 007-01
+// blocker 1 was later reversed by owner direction): a multi-entry repo's
+// entries must not each show the same repo-wide list, so a worktree doc is
+// attributed only to the project whose `artifactRootRel` prefix contains it;
+// docs under no project's root are dropped. Two exclusions keep the list to
+// genuinely at-risk docs: (1) docs present on a mainline ref, and (2) every
+// doc in a fully-merged worktree (its commits are already in mainline). A
+// non-git tree resolves no refs, so both exclusions no-op and the scan
+// degrades to a working-tree-only comparison (preserving fixture behavior).
+function scanWorktreeOnlyDocs(root, artifactRootRel) {
   const wtRoot = path.join(root, '.claude', 'worktrees');
   if (!isDir(wtRoot)) return [];
-  const merged = mergedDocPaths(root);
+  const refs = mainlineRefs(root);
+  const merged = mergedDocPaths(root, refs, artifactRootRel);
   const out = [];
   const seen = new Set();
   for (const wt of fs.readdirSync(wtRoot, { withFileTypes: true })) {
     if (!wt.isDirectory()) continue;
     const wtBase = path.join(wtRoot, wt.name);
-    const wtDocs = path.join(wtBase, 'docs');
+    if (refs.length) {
+      let head = null;
+      try { head = gitRun(wtBase, ['rev-parse', 'HEAD']).trim(); } catch { /* not a git checkout */ }
+      if (head && worktreeIsMerged(root, head, refs)) continue;
+    }
+    const wtDocs = path.join(wtBase, artifactRootRel);
     if (!isDir(wtDocs)) continue;
     for (const rel of walkMd(wtDocs, wtBase)) {
       if (seen.has(rel)) continue;
       seen.add(rel);
       // Path-existence comparison only, never content diffing (slice 002-02 AC4).
-      // "Worktree-only" (at risk of loss) means absent from BOTH the primary
-      // checkout's working tree AND the default branch's committed tree — the
-      // latter is what keeps already-merged docs off the list when the primary
-      // checkout is sitting on an unrelated feature branch.
       const relKey = rel.split(path.sep).join('/');
       if (!fs.existsSync(path.join(root, rel)) && !merged.has(relKey)) {
         out.push({ worktree: wt.name, path: rel });
@@ -385,8 +419,10 @@ export function scanProject(projectCfg) {
       : 0,
   };
   Object.assign(result, scanWorkstreams(root, profile, projectCfg));
-  // Repo-root-scoped by design, not artifactRoot-scoped — see scanWorktreeOnlyDocs.
-  result.worktreeOnlyDocs = scanWorktreeOnlyDocs(root);
+  // Scoped to this project's artifact subtree so a multi-entry repo's entries
+  // don't each show the same repo-wide list — see scanWorktreeOnlyDocs.
+  const artifactRootRel = path.relative(root, profile.artifactRoot).split(path.sep).join('/');
+  result.worktreeOnlyDocs = scanWorktreeOnlyDocs(root, artifactRootRel);
   const compass = scanCompass(profile.artifactRoot);
   result.compass = compass.latest
     ? {

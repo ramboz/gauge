@@ -162,6 +162,77 @@ test('worktree hygiene compares against the default branch, not the parked worki
   }
 });
 
+// Shared setup for the git-backed worktree tests: a repo on main with an ADR
+// (so it is jig-managed) and a helper to commit files.
+function initRepo() {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-wt-')));
+  const git = (...args) => execFileSync('git', ['-C', root, ...args], { stdio: ['ignore', 'pipe', 'ignore'] });
+  const write = (rel, body) => { const abs = path.join(root, rel); fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, body); };
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'test@example.com');
+  git('config', 'user.name', 'Test');
+  return { root, git, write };
+}
+
+test('worktree hygiene skips fully-merged worktrees, keeps genuinely unmerged ones', () => {
+  const { root, git, write } = initRepo();
+  try {
+    write(path.join('docs', 'decisions', 'adr-0001-x.md'), '# ADR\n');
+    write(path.join('docs', 'bugs', 'merged-then-deleted.md'), '# m\n');
+    git('add', '-A'); git('commit', '-qm', 'c1');
+    git('branch', 'merged-wt');                 // ancestor point, still has the doc
+    git('rm', '-q', path.join('docs', 'bugs', 'merged-then-deleted.md'));
+    git('commit', '-qm', 'delete on main');     // main advances; merged-wt is now an ancestor
+    // A fully-merged worktree: HEAD is an ancestor of main, and it still holds a
+    // doc that main later removed. Nothing here is at risk → must be skipped.
+    git('worktree', 'add', '-q', path.join('.claude', 'worktrees', 'merged-wt'), 'merged-wt');
+    // A genuinely-unmerged worktree with a new doc that never reached main.
+    git('worktree', 'add', '-q', '-b', 'feature-wt', path.join('.claude', 'worktrees', 'feature-wt'), 'main');
+    const fwt = path.join(root, '.claude', 'worktrees', 'feature-wt');
+    fs.mkdirSync(path.join(fwt, 'docs', 'bugs'), { recursive: true });
+    fs.writeFileSync(path.join(fwt, 'docs', 'bugs', 'genuine.md'), '# g\n');
+    execFileSync('git', ['-C', fwt, 'add', '-A'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', fwt, 'commit', '-qm', 'unmerged doc'], { stdio: 'ignore' });
+
+    const p = scanProject({ path: root, label: 'x', pinnedWorkstreams: [], hiddenWorkstreams: [] });
+    const flagged = p.worktreeOnlyDocs.map((d) => d.path);
+    assert.ok(!flagged.includes(path.join('docs', 'bugs', 'merged-then-deleted.md')), `merged worktree doc should be skipped; got ${JSON.stringify(flagged)}`);
+    assert.deepEqual(flagged, [path.join('docs', 'bugs', 'genuine.md')]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('worktree hygiene is scoped to the project artifactRoot; unscoped docs are dropped', () => {
+  const { root, git, write } = initRepo();
+  try {
+    // Two artifact subtrees, each jig-managed by its own ADR (multi-entry shape).
+    write(path.join('docs', 'opportunities', 'cwv', 'decisions', 'adr-0001-x.md'), '# ADR\n');
+    write(path.join('docs', 'superpowers', 'decisions', 'adr-0001-x.md'), '# ADR\n');
+    git('add', '-A'); git('commit', '-qm', 'roots');
+    // One unmerged worktree carrying a doc in each subtree plus an unscoped one.
+    git('worktree', 'add', '-q', '-b', 'feature-wt', path.join('.claude', 'worktrees', 'feature-wt'), 'main');
+    const fwt = path.join(root, '.claude', 'worktrees', 'feature-wt');
+    const w = (rel) => { const abs = path.join(fwt, rel); fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, 'x'); };
+    w(path.join('docs', 'opportunities', 'cwv', 'specs', 'a.md'));
+    w(path.join('docs', 'superpowers', 'notes', 'b.md'));
+    w(path.join('docs', 'blackboard', 'c.md')); // under no project root → dropped
+    execFileSync('git', ['-C', fwt, 'add', '-A'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', fwt, 'commit', '-qm', 'docs'], { stdio: 'ignore' });
+
+    const scan = (artifactRoot) => scanProject({ path: root, label: 'e', pinnedWorkstreams: [], hiddenWorkstreams: [], profile: { artifactRoot } })
+      .worktreeOnlyDocs.map((d) => d.path);
+    const cwv = scan(path.join(root, 'docs', 'opportunities', 'cwv'));
+    const sup = scan(path.join(root, 'docs', 'superpowers'));
+    assert.deepEqual(cwv, [path.join('docs', 'opportunities', 'cwv', 'specs', 'a.md')]);
+    assert.deepEqual(sup, [path.join('docs', 'superpowers', 'notes', 'b.md')]);
+    // The unscoped repo-level doc appears on neither card.
+    assert.ok(!cwv.concat(sup).some((f) => f.includes('blackboard')), 'unscoped doc must be dropped');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('profile: no-profile default is byte-identical to an explicit default profile (007-01 AC3)', () => {
   const explicit = scanProject({
     path: path.join(FIXTURES, 'proj-jig'),
