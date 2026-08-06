@@ -236,7 +236,11 @@ function tierReason(entry, tier, deadlineAt, nowMs) {
     case 2:
       return narrativeBlockerPresent(entry) ? 'blocked — verify' : 'stale — verify';
     case 3:
-      return forecast.reason === 'deadline-unknown' ? 'needs a goal set' : 'scope changed — needs review';
+      // `deadline-unknown` means no committed deadline (forecast Gate 1) — the
+      // owner input needed is a DEADLINE, independent of whether a goal is set.
+      // (Earlier copy said "needs a goal set", which mis-read for a project that
+      // had authored a goal but no deadline — found running the real corpus.)
+      return forecast.reason === 'deadline-unknown' ? 'needs a deadline set' : 'scope changed — needs review';
     case 4:
       return forecast.reason === 'insufficient-history' ? 'awaiting more history' : 'no delivery status yet';
     default:

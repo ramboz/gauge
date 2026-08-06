@@ -49,6 +49,10 @@ fields), so the documented shape and the helper output agree.
 
 ## Entries
 
-_No entries yet. The first lightweight decision will be recorded here — usually
-prompted at session end by `/jig:memory-sync`, or during a spec slice's
-reconciliation._
+### 2026-08-05 — Attention-queue deadline-unknown copy → 'needs a deadline set'
+
+**Decision:** The tier-3 reason string for a deadline-unknown forecast is 'needs a deadline set' (was 'needs a goal set').
+
+**Context:** Found running gauge against the real corpus: a project with an authored goal but no deadline reads deadline-unknown, yet the queue said 'needs a goal set' — wrong, since this reason is about the missing deadline (forecast Gate 1), not the goal. Goal and deadline are independent fields; the copy must name the deadline. Regression test added (test/attention-queue.test.mjs).
+
+**Scope:** src/derive.mjs tierReason (attention queue, spec 009-03)

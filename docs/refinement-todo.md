@@ -111,6 +111,36 @@ credential scope and failure visibility are part of the choice.
 as edge-triggered push rather than a central runner. Both remain Proposed/DRAFT;
 central pull stays the local-MVP default.
 
+### Freshness misses branch / worktree / uncommitted work (from spec 009 corpus run)
+
+**Decision needed:** whether `gitFreshness` should reflect activity beyond the
+observed branch's HEAD commit. Today freshness = last **commit date** of the
+checked-out HEAD at the project `path` (`src/observation.mjs`, `STALE_AFTER_DAYS=14`).
+That makes three real kinds of recent work invisible: (a) commits on an **unmerged
+feature branch**, (b) commits in a **linked worktree** (both common — it made
+gauge's own `main` read stale all through spec 009's development), and (c) ADRs/specs
+**written but not committed** (mtime moves, commit date does not). Observed against
+the real corpus: servo read `stale` correctly (nothing newer than 24 days anywhere),
+but a project mid-branch-work would misreport. ADR-0012/0013 already frame freshness
+as "observed-branch quiet, a proxy" — this item asks whether the proxy should widen
+(e.g. max over branches/worktrees, or an mtime signal) or stay deliberately
+mainline-only.
+
+**Resolution trigger:** when a corpus project's genuinely-recent work sits on a
+branch/worktree and the stale reading misleads.
+
+### First-run board is all-`unknown` (from spec 009 corpus run)
+
+**Decision needed:** whether to add a first-run affordance. Forecast colours
+(`on_track`/`at_risk`) require ≥2 observations spanning ≥1 day (ADR-0012), so a
+brand-new instance's first collection yields an all-`unknown` board — honest, but
+sparse and potentially underwhelming. Candidate: a dashboard hint like "collect
+daily to unlock forecasts", or surfacing observation-count/next-useful-collection
+per project. Pure presentation; changes no derivation.
+
+**Resolution trigger:** before onboarding a new user, or with the next dashboard
+polish pass.
+
 ### Hosted small-team access
 
 **Decision needed:** GitHub App registration, server-side session model,

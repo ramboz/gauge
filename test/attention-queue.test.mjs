@@ -158,7 +158,17 @@ test('each entry carries a short reason describing its tier position (AC1)', () 
   ]);
   assert.match(ranked[0].reason, /at risk/);
   assert.match(ranked[0].reason, /day/);
-  assert.equal(ranked[1].reason, 'needs a goal set');
+  assert.equal(ranked[1].reason, 'needs a deadline set');
+});
+
+test('deadline-unknown copy names the deadline, not the goal, even when a goal is authored (AC1)', () => {
+  // Regression (found running the real corpus): a project with an authored goal
+  // but no deadline reads `deadline-unknown`; the queue copy must ask for the
+  // DEADLINE, not falsely claim "needs a goal set".
+  const withGoal = entry('gamma', { state: 'unknown', reason: 'deadline-unknown' });
+  withGoal.project.goal = { value: 'Ship the thing', provenance: 'user' };
+  const [ranked] = queueOf([withGoal]);
+  assert.equal(ranked.reason, 'needs a deadline set');
 });
 
 test('tier 2-4 reason strings are the exact user-facing dashboard copy (AC1)', () => {
@@ -167,11 +177,13 @@ test('tier 2-4 reason strings are the exact user-facing dashboard copy (AC1)', (
   const staleReason = queueOf([entry('a', { state: 'unknown', reason: 'stale-evidence' }, { deadline: '2026-09-01' })])[0].reason;
   const blockedReason = queueOf([entry('a', { state: 'unknown', reason: 'stale-evidence' }, { deadline: '2026-09-01', blockers: ['stuck'] })])[0].reason;
   const scopeReason = queueOf([entry('a', { state: 'unknown', reason: 'scope-changed' }, { deadline: '2026-09-01' })])[0].reason;
+  const dlReason = queueOf([entry('a', { state: 'unknown', reason: 'deadline-unknown' })])[0].reason;
   const histReason = queueOf([entry('a', { state: 'unknown', reason: 'insufficient-history' }, { deadline: '2026-09-01' })])[0].reason;
   const execReason = queueOf([entry('a', { state: 'unknown', reason: 'execution-unknown' })])[0].reason;
   assert.equal(staleReason, 'stale — verify');
   assert.equal(blockedReason, 'blocked — verify');
   assert.equal(scopeReason, 'scope changed — needs review');
+  assert.equal(dlReason, 'needs a deadline set');
   assert.equal(histReason, 'awaiting more history');
   assert.equal(execReason, 'no delivery status yet');
 });
