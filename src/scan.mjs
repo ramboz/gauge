@@ -358,6 +358,51 @@ function worktreeRecency(wtBase, nowMs) {
   return age <= WORKTREE_STALE_DAYS ? 'active' : 'stale';
 }
 
+// Optional GitHub PR resolution (ADR-0016). The default runner shells out to
+// `gh` in the repo dir (which infers owner/repo from the remote). Injectable so
+// tests can supply canned PR data without a network call.
+function realGhPullRequests(root) {
+  const out = execFileSync('gh',
+    ['pr', 'list', '--state', 'all', '--limit', '300', '--json', 'number,url,state,headRefName,headRefOid'],
+    { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024 });
+  return JSON.parse(out);
+}
+
+// Index a repo's PRs by head branch AND head commit, so a worktree matches
+// whether it is on a branch or a detached HEAD. On a reused branch name, an OPEN
+// PR wins over MERGED/CLOSED, then the highest number. Exported for tests.
+export function indexPullRequests(prs) {
+  const byBranch = new Map();
+  const byOid = new Map();
+  const rankOf = (state) => (state === 'OPEN' ? 2 : state === 'MERGED' ? 1 : 0);
+  for (const pr of prs || []) {
+    const entry = { number: pr.number, url: pr.url, state: pr.state };
+    if (pr.headRefOid) byOid.set(pr.headRefOid, entry);
+    if (pr.headRefName) {
+      const prev = byBranch.get(pr.headRefName);
+      if (!prev || rankOf(pr.state) > rankOf(prev.state)
+        || (rankOf(pr.state) === rankOf(prev.state) && pr.number > prev.number)) {
+        byBranch.set(pr.headRefName, entry);
+      }
+    }
+  }
+  return { byBranch, byOid };
+}
+
+// undefined → PR resolution was off or failed (caller falls back to the proxy).
+// An entry → the matching PR. null → resolution ran but this worktree has no PR.
+function matchPullRequest(index, branch, head) {
+  if (!index) return undefined;
+  return (branch && index.byBranch.get(branch)) || (head && index.byOid.get(head)) || null;
+}
+
+// Build the repo's PR index once, or null on ANY failure (gh missing, unauthed,
+// offline, non-GitHub remote) so hygiene degrades to the local push-proxy.
+function resolveRepoPullRequests(root, ghRunner) {
+  try { return indexPullRequests(ghRunner(root)); }
+  catch { return null; }
+}
+
 // Worktree hygiene, scoped to the project's artifact subtree (spec 007-01
 // blocker 1 was later reversed by owner direction; ADR-0014): a multi-entry
 // repo's entries must not each show the same repo-wide list, so a worktree doc
@@ -373,9 +418,11 @@ function worktreeRecency(wtBase, nowMs) {
 // no refs, so `safe` is just the (empty) mainline set and the scan degrades to
 // a working-tree-only comparison. Worktrees are walked in name order for a
 // deterministic attribution when a doc appears in more than one.
-function scanWorktreeOnlyDocs(root, artifactRootRel) {
+function scanWorktreeOnlyDocs(root, artifactRootRel, opts = {}) {
   const wtRoot = path.join(root, '.claude', 'worktrees');
   if (!isDir(wtRoot)) return [];
+  const resolvePRs = Boolean(opts.resolvePRs);
+  const ghRunner = opts.ghRunner || realGhPullRequests;
   const refs = mainlineRefs(root);
   const worktrees = fs.readdirSync(wtRoot, { withFileTypes: true })
     .filter((wt) => wt.isDirectory())
@@ -395,21 +442,33 @@ function scanWorktreeOnlyDocs(root, artifactRootRel) {
       for (const p of mergedWorktreeDocPaths(wtBase, artifactRootRel)) safe.add(p);
     }
   }
-  // Lifecycle metadata (ADR-0015) — recency `state` plus an orthogonal `pushed`
-  // flag — is computed lazily, only for worktrees that contribute a flagged doc,
-  // so the merged majority pays nothing.
+  // Lifecycle metadata — recency `state` + orthogonal `pushed` (ADR-0015), plus
+  // an optional resolved `pr` (ADR-0016) — computed lazily, only for worktrees
+  // that contribute a flagged doc, so the merged majority pays nothing. The PR
+  // index is resolved at most once, and only if resolution is enabled AND some
+  // doc is actually flagged (the first metaFor call triggers it).
+  let prIndex; // undefined = not yet computed; null = disabled/failed
+  const prIndexFor = () => {
+    if (prIndex === undefined) prIndex = resolvePRs ? resolveRepoPullRequests(root, ghRunner) : null;
+    return prIndex;
+  };
   const metaCache = new Map();
   const metaFor = (name, wtBase) => {
     if (!metaCache.has(name)) {
       const head = heads.get(name);
+      const index = prIndexFor();
+      let branch = null;
+      if (index) { try { branch = gitRun(wtBase, ['symbolic-ref', '--quiet', '--short', 'HEAD']).trim() || null; } catch { /* detached */ } }
       metaCache.set(name, {
         state: worktreeRecency(wtBase, nowMs),
         pushed: Boolean(head && refs.length && worktreePushed(root, head, refs)),
+        pr: index ? matchPullRequest(index, branch, head) : undefined,
       });
     }
     return metaCache.get(name);
   };
-  // Pass 2: flag at-risk docs, each tagged with its worktree's state + pushed.
+  // Pass 2: flag at-risk docs, each tagged with its worktree's state + pushed
+  // (+ pr when resolved).
   const out = [];
   const seen = new Set();
   for (const name of worktrees) {
@@ -423,7 +482,9 @@ function scanWorktreeOnlyDocs(root, artifactRootRel) {
       const relKey = rel.split(path.sep).join('/');
       if (fs.existsSync(path.join(root, rel)) || safe.has(relKey)) continue;
       const meta = metaFor(name, wtBase);
-      out.push({ worktree: name, path: rel, state: meta.state, pushed: meta.pushed });
+      const doc = { worktree: name, path: rel, state: meta.state, pushed: meta.pushed };
+      if (meta.pr !== undefined) doc.pr = meta.pr; // object (resolved PR) or null (resolved, none)
+      out.push(doc);
       if (out.length >= WORKTREE_DOC_CAP) return out;
     }
   }
@@ -465,7 +526,7 @@ function hasJigEvidence(root, profile) {
   return false;
 }
 
-export function scanProject(projectCfg) {
+export function scanProject(projectCfg, deps = {}) {
   const root = projectCfg.path;
   const name = projectCfg.label || path.basename(root);
   if (!isDir(root)) {
@@ -507,7 +568,10 @@ export function scanProject(projectCfg) {
   // Scoped to this project's artifact subtree so a multi-entry repo's entries
   // don't each show the same repo-wide list — see scanWorktreeOnlyDocs.
   const artifactRootRel = path.relative(root, profile.artifactRoot).split(path.sep).join('/');
-  result.worktreeOnlyDocs = scanWorktreeOnlyDocs(root, artifactRootRel);
+  result.worktreeOnlyDocs = scanWorktreeOnlyDocs(root, artifactRootRel, {
+    resolvePRs: Boolean(projectCfg.resolvePullRequests),
+    ghRunner: deps.ghRunner,
+  });
   const compass = scanCompass(profile.artifactRoot);
   result.compass = compass.latest
     ? {
@@ -527,6 +591,6 @@ export function scanProject(projectCfg) {
 export function scanAll(config) {
   return {
     generatedAt: new Date().toISOString(),
-    projects: config.projects.map(scanProject),
+    projects: config.projects.map((projectCfg) => scanProject(projectCfg)),
   };
 }

@@ -330,12 +330,20 @@ function validateWorkstreamsValue(value, name, errors) {
 
 const WORKTREE_STATES = new Set(['active', 'stale', 'unknown']);
 
+// A resolved PR (ADR-0016) is null (resolved, none) or {number,url,state};
+// absent entirely when resolution was off/failed.
+function validWorktreePr(pr) {
+  return pr === undefined || pr === null
+    || (isObject(pr) && typeof pr.number === 'number' && typeof pr.url === 'string' && typeof pr.state === 'string');
+}
+
 function validateHygieneValue(value, name, errors) {
   if (!isObject(value)
       || !Array.isArray(value.worktreeOnlyDocs)
       || value.worktreeOnlyDocs.some((item) => !isObject(item)
         || (item.state !== undefined && !WORKTREE_STATES.has(item.state))
-        || (item.pushed !== undefined && typeof item.pushed !== 'boolean'))
+        || (item.pushed !== undefined && typeof item.pushed !== 'boolean')
+        || !validWorktreePr(item.pr))
       || !Array.isArray(value.warnings)
       || value.warnings.some((warning) => typeof warning !== 'string'
         && (!isObject(warning) || typeof warning.message !== 'string' || !warning.message))) {

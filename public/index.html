@@ -49,25 +49,34 @@ function workstreamRow(item) { const steps=item.steps?.total?`${item.steps.done}
 // pushed+quiet one is called out as a probably-landed PR whose worktree lingers.
 const WT_GROUP_META = {
   stale:          { label: 'forgotten — local only, no commits in 7 days', color: 'var(--bad)' },
-  'pushed-stale': { label: 'pushed but quiet — likely a merged/closed PR, worktree lingering', color: 'var(--bad)' },
+  'pushed-stale': { label: 'pushed but likely done — clean up', color: 'var(--bad)' },
   active:         { label: 'in flight — local only, not pushed', color: 'var(--warn)' },
-  review:         { label: 'pushed to a remote branch — likely an open PR', color: 'var(--accent)' },
+  review:         { label: 'in review — pushed to a remote branch', color: 'var(--accent)' },
   unknown:        { label: 'state unknown', color: 'var(--muted)' },
 };
 const WT_GROUP_ORDER = ['stale', 'pushed-stale', 'active', 'review', 'unknown'];
+// When a real PR was resolved (ADR-0016), it is authoritative: an open PR is "in
+// review", anything else (merged/closed/none) is cleanup. Absent `pr` → fall
+// back to the local push-proxy (ADR-0015).
 function wtGroup(d) {
+  if('pr' in d) return (d.pr && d.pr.state==='OPEN') ? 'review' : 'pushed-stale';
   if(d.state!=='active' && d.state!=='stale') return 'unknown';
   if(d.pushed) return d.state==='stale' ? 'pushed-stale' : 'review';
   return d.state==='stale' ? 'stale' : 'active';
 }
+function prBadge(pr) {
+  if(pr===undefined) return '';
+  if(pr===null) return ' <span class="meta">· no open PR</span>';
+  return ` · <a href="${esc(pr.url)}" target="_blank" rel="noopener">PR #${esc(pr.number)} ${esc(String(pr.state).toLowerCase())}</a>`;
+}
 function worktreeWarn(docs) {
   if(!docs.length) return '';
   const byGroup=new Map();
-  for(const d of docs){ const g=wtGroup(d); if(!byGroup.has(g)) byGroup.set(g,new Map()); const wm=byGroup.get(g); if(!wm.has(d.worktree)) wm.set(d.worktree,[]); wm.get(d.worktree).push(d.path); }
+  for(const d of docs){ const g=wtGroup(d); if(!byGroup.has(g)) byGroup.set(g,new Map()); const wm=byGroup.get(g); if(!wm.has(d.worktree)) wm.set(d.worktree,{paths:[],pr:d.pr}); wm.get(d.worktree).paths.push(d.path); }
   const sections=WT_GROUP_ORDER.filter((g)=>byGroup.has(g)).map((g)=>{
     const wm=byGroup.get(g), meta=WT_GROUP_META[g];
-    const n=[...wm.values()].reduce((sum,paths)=>sum+paths.length,0);
-    const rows=[...wm.entries()].sort((a,b)=>b[1].length-a[1].length).map(([wt,paths])=>`<li><b>${esc(wt)}</b> <span class="meta">${paths.length} doc${paths.length===1?'':'s'}</span><details><summary class="meta">paths</summary><ul>${paths.map((p)=>`<li>${esc(p)}</li>`).join('')}</ul></details></li>`).join('');
+    const n=[...wm.values()].reduce((sum,e)=>sum+e.paths.length,0);
+    const rows=[...wm.entries()].sort((a,b)=>b[1].paths.length-a[1].paths.length).map(([wt,e])=>`<li><b>${esc(wt)}</b> <span class="meta">${e.paths.length} doc${e.paths.length===1?'':'s'}</span>${prBadge(e.pr)}<details><summary class="meta">paths</summary><ul>${e.paths.map((p)=>`<li>${esc(p)}</li>`).join('')}</ul></details></li>`).join('');
     return `<div class="wtsec"><div class="wthdr" style="color:${meta.color}">${n} doc${n===1?'':'s'} · ${esc(meta.label)}</div><ul>${rows}</ul></div>`;
   }).join('');
   const total=docs.length;

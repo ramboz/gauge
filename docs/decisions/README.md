@@ -22,6 +22,7 @@
 - [ADR-0013: Cross-project attention-overlay policy for the global queue](adr-0013-attention-overlay-policy.md) — Spec 009-03 builds the **global attention queue** — a single cross-project ordering that answers "which project deserves attention next, and why" — in the history-derived layer, downstream of forecast/risk ([ADR-0006](adr-0006-two-layer-derivation.md)). (2026-08-05, Accepted)
 - [ADR-0014: Per-project worktree-hygiene scoping](adr-0014-worktree-hygiene-artifactroot-scoping.md) — Worktree hygiene (`scanWorktreeOnlyDocs` in `src/scan.mjs`) surfaces documents that exist only inside an abandoned `.claude/worktrees/*` checkout and would be lost if the worktree were deleted. (2026-08-06, Accepted)
 - [ADR-0015: Worktree lifecycle state via a local push-proxy](adr-0015-worktree-lifecycle-state-local-pr-proxy.md) — ADR-0014 made worktree hygiene report the docs that live only in a worktree and are genuinely at risk. (2026-08-06, Accepted)
+- [ADR-0016: Optional GitHub PR resolution over the push-proxy](adr-0016-optional-github-pr-resolution.md) — ADR-0015 classifies worktrees with a fully-local **push-proxy**: a worktree whose HEAD is on a non-mainline remote ref is treated as "likely an open PR". (2026-08-06, Accepted)
 
 ## Format
 

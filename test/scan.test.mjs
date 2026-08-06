@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { gitInfo, scanProject } from '../src/scan.mjs';
+import { gitInfo, scanProject, indexPullRequests } from '../src/scan.mjs';
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const ROOT = path.join(FIXTURES, '..', '..');
@@ -290,6 +290,53 @@ test('worktree hygiene tags each doc with recency state AND an orthogonal pushed
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(remote, { recursive: true, force: true });
+  }
+});
+
+test('indexPullRequests keys by branch and commit, preferring an OPEN PR', () => {
+  const idx = indexPullRequests([
+    { number: 1, url: 'u1', state: 'CLOSED', headRefName: 'feat', headRefOid: 'aaa' },
+    { number: 2, url: 'u2', state: 'OPEN', headRefName: 'feat', headRefOid: 'bbb' },
+    { number: 3, url: 'u3', state: 'MERGED', headRefName: 'other', headRefOid: 'ccc' },
+  ]);
+  assert.equal(idx.byBranch.get('feat').number, 2);          // OPEN wins over CLOSED on a reused branch
+  assert.equal(idx.byBranch.get('feat').state, 'OPEN');
+  assert.deepEqual(idx.byOid.get('aaa'), { number: 1, url: 'u1', state: 'CLOSED' }); // commit-exact still indexed
+  assert.equal(idx.byBranch.get('other').state, 'MERGED');
+});
+
+test('optional PR resolution tags docs with the real PR (or null); off by default → proxy, no gh call', () => {
+  const { root, git, write } = initRepo();
+  const mk = (br, leaf) => {
+    git('worktree', 'add', '-q', '-b', br, path.join('.claude', 'worktrees', br), 'main');
+    const wt = path.join(root, '.claude', 'worktrees', br);
+    fs.mkdirSync(path.join(wt, 'docs', 'bugs'), { recursive: true });
+    fs.writeFileSync(path.join(wt, 'docs', 'bugs', leaf), 'x');
+    execFileSync('git', ['-C', wt, 'add', '-A'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', wt, 'commit', '-qm', leaf], { stdio: 'ignore' });
+  };
+  try {
+    write(path.join('docs', 'decisions', 'adr-0001-x.md'), '# ADR\n');
+    git('add', '-A'); git('commit', '-qm', 'c1');
+    mk('feat-open', 'open.md');
+    mk('feat-none', 'none.md');
+    // A fake gh runner: only feat-open has a PR. Also asserts it is not called
+    // when resolution is off (it would throw).
+    let ghCalls = 0;
+    const ghRunner = () => { ghCalls += 1; return [{ number: 42, url: 'https://gh/pr/42', state: 'OPEN', headRefName: 'feat-open', headRefOid: 'x' }]; };
+    const prOf = (docs, leaf) => docs.find((d) => path.basename(d.path) === leaf)?.pr;
+
+    const on = scanProject({ path: root, label: 'x', pinnedWorkstreams: [], hiddenWorkstreams: [], resolvePullRequests: true }, { ghRunner }).worktreeOnlyDocs;
+    assert.deepEqual(prOf(on, 'open.md'), { number: 42, url: 'https://gh/pr/42', state: 'OPEN' });
+    assert.equal(prOf(on, 'none.md'), null, 'resolved-but-no-PR is null');
+    assert.ok(ghCalls >= 1, 'gh runner used when enabled');
+
+    ghCalls = 0;
+    const off = scanProject({ path: root, label: 'x', pinnedWorkstreams: [], hiddenWorkstreams: [] }, { ghRunner }).worktreeOnlyDocs;
+    assert.ok(!('pr' in off.find((d) => path.basename(d.path) === 'open.md')), 'no pr key when resolution off');
+    assert.equal(ghCalls, 0, 'gh runner NOT called when resolution off');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

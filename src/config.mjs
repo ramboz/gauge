@@ -146,6 +146,15 @@ export function normalizeConfig(input, configPath) {
   if (input.stateDir !== undefined && (typeof input.stateDir !== 'string' || !input.stateDir.trim())) {
     configError('stateDir must be a non-empty string');
   }
+  if (input.resolvePullRequests !== undefined && typeof input.resolvePullRequests !== 'boolean') {
+    configError('resolvePullRequests must be a boolean');
+  }
+  // Opt-in GitHub PR resolution (ADR-0016): off by default keeps the local-pull
+  // loop offline. The env var is a convenience override for trying it without
+  // editing config; either turns it on. Threaded onto each project cfg below so
+  // scanProject (which only receives per-project cfgs) can see it.
+  const resolvePullRequests = input.resolvePullRequests === true
+    || process.env.GAUGE_RESOLVE_PRS === '1';
   if (!Array.isArray(input.projects)) configError('projects must be an array');
 
   const seen = new Set();
@@ -196,7 +205,8 @@ export function normalizeConfig(input, configPath) {
     // seam, since observation.mjs/state.mjs downstream see only ordinary
     // single-entry projects either way (AC1).
     if (project.profile && Array.isArray(project.profile.entries)) {
-      return expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinnedWorkstreams, hiddenWorkstreams, seen);
+      return expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinnedWorkstreams, hiddenWorkstreams, seen)
+        .map((entry) => ({ ...entry, resolvePullRequests }));
     }
 
     // No-entries case normalizes exactly as 007-01 (single-entry identity, AC1).
@@ -208,6 +218,7 @@ export function normalizeConfig(input, configPath) {
       signalPolicies,
       pinnedWorkstreams,
       hiddenWorkstreams,
+      resolvePullRequests,
       profile: profileOf(project.profile, id, resolvedPath),
     }];
   });
@@ -216,6 +227,7 @@ export function normalizeConfig(input, configPath) {
     version: 1,
     port: input.port,
     stateDir: resolveFrom(base, input.stateDir || '.gauge'),
+    resolvePullRequests,
     projects,
     warnings: legacy
       ? ['Legacy dashboard.config.json loaded; migrate to version 1 gauge.config.json with explicit project ids and stateDir.']
