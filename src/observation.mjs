@@ -328,10 +328,14 @@ function validateWorkstreamsValue(value, name, errors) {
   }
 }
 
+const WORKTREE_STATES = new Set(['active', 'stale', 'unknown']);
+
 function validateHygieneValue(value, name, errors) {
   if (!isObject(value)
       || !Array.isArray(value.worktreeOnlyDocs)
-      || value.worktreeOnlyDocs.some((item) => !isObject(item))
+      || value.worktreeOnlyDocs.some((item) => !isObject(item)
+        || (item.state !== undefined && !WORKTREE_STATES.has(item.state))
+        || (item.pushed !== undefined && typeof item.pushed !== 'boolean'))
       || !Array.isArray(value.warnings)
       || value.warnings.some((warning) => typeof warning !== 'string'
         && (!isObject(warning) || typeof warning.message !== 'string' || !warning.message))) {

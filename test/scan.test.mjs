@@ -252,6 +252,47 @@ test('a doc committed in a merged worktree is safe wherever else it appears (ord
   }
 });
 
+test('worktree hygiene tags each doc with recency state AND an orthogonal pushed flag', () => {
+  const remote = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-remote-')));
+  execFileSync('git', ['init', '-q', '--bare', remote], { stdio: 'ignore' });
+  const { root, git, write } = initRepo();
+  const OLD = { GIT_AUTHOR_DATE: '2020-01-01T00:00:00', GIT_COMMITTER_DATE: '2020-01-01T00:00:00' };
+  const commitIn = (wt, msg, env) => {
+    execFileSync('git', ['-C', wt, 'add', '-A'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', wt, 'commit', '-qm', msg], { stdio: 'ignore', env: { ...process.env, ...env } });
+  };
+  const drop = (wt, name) => { fs.mkdirSync(path.join(wt, 'docs', 'bugs'), { recursive: true }); fs.writeFileSync(path.join(wt, 'docs', 'bugs', name), 'x'); };
+  // A worktree on branch `br` with doc `leaf`; pushed to origin iff `push`, and
+  // dated old iff `old`.
+  const wtWith = (br, leaf, { push = false, old = false } = {}) => {
+    git('worktree', 'add', '-q', '-b', br, path.join('.claude', 'worktrees', br), 'main');
+    const wt = path.join(root, '.claude', 'worktrees', br);
+    drop(wt, leaf); commitIn(wt, leaf, old ? OLD : undefined);
+    if (push) execFileSync('git', ['-C', wt, 'push', '-q', '-u', 'origin', br], { stdio: 'ignore' });
+  };
+  try {
+    write(path.join('docs', 'decisions', 'adr-0001-x.md'), '# ADR\n');
+    git('add', '-A'); git('commit', '-qm', 'c1');
+    git('remote', 'add', 'origin', remote);
+    git('push', '-q', 'origin', 'main');                       // origin/main → mainline baseline
+    wtWith('feat-review', 'review.md', { push: true, old: false });        // pushed + active → in review
+    wtWith('feat-pushed-stale', 'pushed-stale.md', { push: true, old: true }); // pushed + stale → the reviewer's gap
+    wtWith('feat-active', 'active.md', { push: false, old: false });       // local + active
+    wtWith('feat-stale', 'stale.md', { push: false, old: true });          // local + stale
+
+    const docs = scanProject({ path: root, label: 'x', pinnedWorkstreams: [], hiddenWorkstreams: [] }).worktreeOnlyDocs;
+    const m = (leaf) => { const d = docs.find((x) => path.basename(x.path) === leaf); return d && { state: d.state, pushed: d.pushed }; };
+    assert.deepEqual(m('review.md'), { state: 'active', pushed: true }, `got ${JSON.stringify(docs)}`);
+    // The gap the frame-critique caught: a pushed-but-abandoned worktree is STILL stale.
+    assert.deepEqual(m('pushed-stale.md'), { state: 'stale', pushed: true });
+    assert.deepEqual(m('active.md'), { state: 'active', pushed: false });
+    assert.deepEqual(m('stale.md'), { state: 'stale', pushed: false });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(remote, { recursive: true, force: true });
+  }
+});
+
 test('worktree hygiene is scoped to the project artifactRoot; unscoped docs are dropped', () => {
   const { root, git, write } = initRepo();
   try {

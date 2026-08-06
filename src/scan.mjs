@@ -240,6 +240,7 @@ function scanWorkstreams(root, profile, projectCfg) {
 }
 
 const WORKTREE_DOC_CAP = 40;
+const WORKTREE_STALE_DAYS = 7;
 
 const gitRun = (root, args) =>
   execFileSync('git', ['-C', root, ...args], {
@@ -318,6 +319,45 @@ function mergedWorktreeDocPaths(wtBase, artifactRootRel) {
   return set;
 }
 
+// Days since the worktree's HEAD commit, or null if it can't be read.
+function worktreeAgeDays(wtBase, nowMs) {
+  try {
+    const ct = Number(gitRun(wtBase, ['log', '-1', '--format=%ct', 'HEAD']).trim());
+    if (!Number.isFinite(ct)) return null;
+    return (nowMs / 1000 - ct) / 86400;
+  } catch { return null; }
+}
+
+// True when the worktree's HEAD is reachable from a non-mainline remote-tracking
+// ref — a local, offline proxy for "an open PR exists" (ADR-0015). Works for a
+// detached HEAD too, since it matches by commit, not branch name. Merged
+// worktrees are excluded before this runs, so a match here is a feature branch
+// pushed to origin, not the mainline itself.
+function worktreePushed(root, head, refs) {
+  const mainline = new Set(refs.filter((ref) => ref.includes('/')));
+  try {
+    const out = gitRun(root, ['branch', '-r', '--contains', head, '--format=%(refname:short)']);
+    for (const line of out.split('\n')) {
+      const ref = line.trim();
+      if (!ref || ref.includes('->') || ref.endsWith('/HEAD') || mainline.has(ref)) continue;
+      return true;
+    }
+  } catch { /* no such commit on a remote / no remote — not pushed */ }
+  return false;
+}
+
+// Recency state of a worktree (ADR-0015), ORTHOGONAL to `pushed` so that a
+// pushed-then-abandoned worktree is still reported as stale (its remote ref may
+// linger after a PR merged/closed) rather than masquerading as an open PR:
+//   active  — last commit within WORKTREE_STALE_DAYS
+//   stale   — no commit within the window (quiet/forgotten)
+//   unknown — recency indeterminate; never coerced to a healthier state
+function worktreeRecency(wtBase, nowMs) {
+  const age = worktreeAgeDays(wtBase, nowMs);
+  if (age === null) return 'unknown';
+  return age <= WORKTREE_STALE_DAYS ? 'active' : 'stale';
+}
+
 // Worktree hygiene, scoped to the project's artifact subtree (spec 007-01
 // blocker 1 was later reversed by owner direction; ADR-0014): a multi-entry
 // repo's entries must not each show the same repo-wide list, so a worktree doc
@@ -341,29 +381,49 @@ function scanWorktreeOnlyDocs(root, artifactRootRel) {
     .filter((wt) => wt.isDirectory())
     .map((wt) => wt.name)
     .sort();
+  const nowMs = Date.now();
   const safe = mergedDocPaths(root, refs, artifactRootRel);
-  if (refs.length) {
-    for (const name of worktrees) {
-      const wtBase = path.join(wtRoot, name);
-      let head = null;
-      try { head = gitRun(wtBase, ['rev-parse', 'HEAD']).trim(); } catch { /* not a git checkout */ }
-      if (head && worktreeIsMerged(root, head, refs)) {
-        for (const p of mergedWorktreeDocPaths(wtBase, artifactRootRel)) safe.add(p);
-      }
+  // Pass 1: resolve each worktree's HEAD, and feed merged worktrees' committed
+  // docs into `safe`. HEADs are kept for the (lazy) state classification below.
+  const heads = new Map();
+  for (const name of worktrees) {
+    const wtBase = path.join(wtRoot, name);
+    let head = null;
+    try { head = gitRun(wtBase, ['rev-parse', 'HEAD']).trim(); } catch { /* not a git checkout */ }
+    heads.set(name, head);
+    if (head && refs.length && worktreeIsMerged(root, head, refs)) {
+      for (const p of mergedWorktreeDocPaths(wtBase, artifactRootRel)) safe.add(p);
     }
   }
+  // Lifecycle metadata (ADR-0015) — recency `state` plus an orthogonal `pushed`
+  // flag — is computed lazily, only for worktrees that contribute a flagged doc,
+  // so the merged majority pays nothing.
+  const metaCache = new Map();
+  const metaFor = (name, wtBase) => {
+    if (!metaCache.has(name)) {
+      const head = heads.get(name);
+      metaCache.set(name, {
+        state: worktreeRecency(wtBase, nowMs),
+        pushed: Boolean(head && refs.length && worktreePushed(root, head, refs)),
+      });
+    }
+    return metaCache.get(name);
+  };
+  // Pass 2: flag at-risk docs, each tagged with its worktree's state + pushed.
   const out = [];
   const seen = new Set();
   for (const name of worktrees) {
-    const wtDocs = path.join(wtRoot, name, artifactRootRel);
+    const wtBase = path.join(wtRoot, name);
+    const wtDocs = path.join(wtBase, artifactRootRel);
     if (!isDir(wtDocs)) continue;
-    for (const rel of walkMd(wtDocs, path.join(wtRoot, name))) {
+    for (const rel of walkMd(wtDocs, wtBase)) {
       if (seen.has(rel)) continue;
       seen.add(rel);
       // Path-existence comparison only, never content diffing (slice 002-02 AC4).
       const relKey = rel.split(path.sep).join('/');
       if (fs.existsSync(path.join(root, rel)) || safe.has(relKey)) continue;
-      out.push({ worktree: name, path: rel });
+      const meta = metaFor(name, wtBase);
+      out.push({ worktree: name, path: rel, state: meta.state, pushed: meta.pushed });
       if (out.length >= WORKTREE_DOC_CAP) return out;
     }
   }
