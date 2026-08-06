@@ -27,10 +27,31 @@
 <div class="grid" id="grid"><div class="meta">collecting current observations…</div></div>
 <script>
 const esc = (s) => String(s ?? '').replace(/[&<>\"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
+// Relative time for the header ("observed 5 minutes ago"), exact timestamp on
+// hover via the title attribute. Refreshes on every load() (≤ every 120s).
+function relativeTime(date) {
+  const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+  const abs = Math.abs(seconds);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const units = [['year',31536000],['month',2592000],['week',604800],['day',86400],['hour',3600],['minute',60],['second',1]];
+  for (const [unit, secs] of units) { if (abs >= secs || unit === 'second') return rtf.format(Math.round(seconds / secs), unit); }
+}
 const SIGNAL_VERSIONS = Object.freeze({ repository:1, execution:1, workstreams:1, hygiene:1, narrative:1 });
 function signal(p,type) { if(!Object.hasOwn(SIGNAL_VERSIONS,type)) return undefined; return p.signals.find((entry) => entry.type === type && entry.version === SIGNAL_VERSIONS[type]); }
 function shorten(value,n=90) { value=String(value); return value.length>n?value.slice(0,n-1)+'…':value; }
 function workstreamRow(item) { const steps=item.steps?.total?`${item.steps.done}/${item.steps.total}`:''; const next=item.next?`<div class="counts">Next: ${esc(shorten(item.next.text))}</div>`:''; return `<div class="ws"><b>${esc(item.title||item.path)}</b> <span class="meta">${esc(item.kind)} ${steps}</span>${next}</div>`; }
+// Worktree-only docs are actionable by *worktree* (which session to reopen and
+// clean up), not by individual file — so group the count by worktree name and
+// lead with that. The exact paths stay available in an expander.
+function worktreeWarn(docs) {
+  if(!docs.length) return '';
+  const byWt=new Map();
+  for(const d of docs){ if(!byWt.has(d.worktree)) byWt.set(d.worktree,[]); byWt.get(d.worktree).push(d.path); }
+  const groups=[...byWt.entries()].sort((a,b)=>b[1].length-a[1].length);
+  const rows=groups.map(([wt,paths])=>`<li><b>${esc(wt)}</b> <span class="meta">${paths.length} doc${paths.length===1?'':'s'}</span><details><summary class="meta">paths</summary><ul>${paths.map((p)=>`<li>${esc(p)}</li>`).join('')}</ul></details></li>`).join('');
+  const total=docs.length, nWt=byWt.size;
+  return `<div class="warnbox">⚠ ${total} document${total===1?'':'s'} exist only in ${nWt===1?'a worktree':nWt+' worktrees'} (unmerged; would be lost if the worktree is deleted)<ul>${rows}</ul></div>`;
+}
 function card(p) {
   const execution=signal(p,'execution'), workstreams=signal(p,'workstreams'), hygiene=signal(p,'hygiene'), narrative=signal(p,'narrative'), repository=signal(p,'repository');
   const progress=execution?.status==='supported'?execution.value.progress:null;
@@ -65,15 +86,20 @@ function card(p) {
   // stale instead of silently reading the same as one touched today.
   const git=repository?.status==='supported'?repository.value.git:null;
   const repoState=repository?.freshness?.state;
-  const recency=git?` · last commit ${esc(git.lastCommit)}${repoState==='stale'?' <span style="color:var(--warn)">(stale)</span>':''}`:(repoState==='unknown'?' · <span style="color:var(--muted)">recency unknown</span>':'');
+  // Per-card meta no longer repeats "repository observed · <collectedAt>": the
+  // header already shows one global observed time. What stays is per-project and
+  // non-redundant — source recency (last commit / stale), or an explicit
+  // "repository unavailable" when the repository signal is missing.
+  const recency=git?`last commit ${esc(git.lastCommit)}${repoState==='stale'?' <span style="color:var(--warn)">(stale)</span>':''}`:(repoState==='unknown'?'<span style="color:var(--muted)">recency unknown</span>':'');
+  const metaLine=repository?.status==='supported'?recency:'<span class="partial">repository unavailable</span>';
   return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${statusChip}</div>
-    <div class="counts">${repository?.status==='supported'?'repository observed':'repository unavailable'} · ${esc(p.collectedAt)}${recency}</div>
+    ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${goalDeadlineBlock}
     ${forecastBlock}
     ${progress?`<div class="barrow"><div class="bar"><div style="width:${pct??0}%"></div></div><span class="pct">${pct===null?'—':pct+'%'}</span></div><div class="counts">${progress.done}/${progress.denom} specs done${progress.deferred?` · ${progress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
     ${rows?`<details><summary>specs</summary><ul>${rows}</ul></details>`:''}
     ${streams.length?`<div class="sect"><span class="meta">workstreams</span>${streams.map(workstreamRow).join('')}</div>`:''}
-    ${worktreeOnly.length?`<div class="warnbox">⚠ ${worktreeOnly.length} document(s) exist only in a worktree — ${esc(worktreeOnly[0].path)}</div>`:''}
+    ${worktreeWarn(worktreeOnly)}
     ${narrativeBlock}${problems?`<p class="err">${problems}</p>`:''}</article>`;
 }
 function safeCard(project) { try { return card(project); } catch(error) { const label=project?.project?.label||project?.project?.id||'malformed project'; return `<article class="card"><div class="head"><h2>${esc(label)}</h2><span class="chip error">error</span></div><p class="err">Invalid project observation: ${esc(error?.message||error)}</p></article>`; } }
@@ -84,7 +110,7 @@ function safeCard(project) { try { return card(project); } catch(error) { const 
 // this only renders the already-ranked list, never re-sorts or re-derives.
 function queueRow(item) { return `<li class="queue-row"><span class="qtier t${esc(item.tier)}">${esc(item.tier)}</span><b>${esc(item.label||item.id)}</b><span class="meta">${esc(item.reason)}</span></li>`; }
 function safeQueueRow(item) { try { return queueRow(item); } catch(error) { return `<li class="queue-row err">Invalid attention entry: ${esc(error?.message||error)}</li>`; } }
-async function load() { try { const response=await fetch('/api/data'); const data=await response.json(); if(data.error) throw new Error(data.error); document.getElementById('scanned').textContent='observed '+new Date(data.generatedAt).toLocaleString(); document.getElementById('grid').innerHTML=data.projects.map(safeCard).join(''); document.getElementById('queue').innerHTML=(data.attention||[]).map(safeQueueRow).join('')||'<li class="meta">no projects to rank yet</li>'; } catch(error) { document.getElementById('grid').innerHTML=`<p class="err">${esc(error.message)}</p>`; } }
+async function load() { try { const response=await fetch('/api/data'); const data=await response.json(); if(data.error) throw new Error(data.error); const scanned=document.getElementById('scanned'); const observedAt=new Date(data.generatedAt); scanned.textContent='observed '+relativeTime(observedAt); scanned.title=observedAt.toLocaleString(); document.getElementById('grid').innerHTML=data.projects.map(safeCard).join(''); document.getElementById('queue').innerHTML=(data.attention||[]).map(safeQueueRow).join('')||'<li class="meta">no projects to rank yet</li>'; } catch(error) { document.getElementById('grid').innerHTML=`<p class="err">${esc(error.message)}</p>`; } }
 load(); setInterval(load,120000);
 </script>
 </body>
