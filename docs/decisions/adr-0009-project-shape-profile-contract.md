@@ -161,3 +161,24 @@ the schema, mirroring the observation-v1 dual-validation pattern.
 - Whether discovery (007-03) should ever *write* a source-owned profile, or only
   ever emit a config-inline block (default: emit config-inline; writing into a
   source stays opt-in and out of the read-only MVP).
+
+## Amendments
+
+- **2026-08-06 (spec 010-01) — `entries[]` items may carry `goal`/`deadline`.**
+  The one-repo→N-entries contract (D/E above) originally gave each entry only
+  `id` / `label` / `artifactRoot` (+ the `specsDir` / `decisionsDir` /
+  `statusProperty` / `specLayout` overrides), and authored `goal`/`deadline`
+  ([ADR-0011](adr-0011-goal-deadline-source-strategy.md)) lived only at the
+  top level of the profile. That left every multi-entry (Pattern B/C) card
+  unable to carry a goal or deadline, so it was pinned at attention tier 3
+  regardless of delivery evidence. Slice 010-01 adds an optional `goal` and
+  `deadline` to each `entries[]` item — the **same object shape** as the
+  top-level fields, single-sourced from the schema's `$defs` so the two cannot
+  drift — with fallback to the parent profile's value when the entry declares
+  none (mirroring the existing per-entry override→profile fallback for the
+  other fields). This is additive and backward-compatible (a profile with no
+  entry-level goal/deadline normalizes byte-identically to pre-010) and does
+  **not** change ADR-0011's authoring policy: values remain human-curated
+  literals, never inferred from source prose. No `project-profile-v1` version
+  bump. See
+  [spec 010](../specs/010-multi-entry-goal-deadline/spec.md).
