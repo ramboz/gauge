@@ -154,8 +154,8 @@ test('goal/deadline are additive: a profile with neither validates exactly as th
 test('additionalProperties: false still holds with goal/deadline declared (AC1)', () => {
   const schema = loadSchema();
   assert.equal(schema.additionalProperties, false);
-  assert.equal(schema.properties.goal.additionalProperties, false);
-  assert.equal(schema.properties.deadline.additionalProperties, false);
+  assert.equal(schema.$defs.goal.additionalProperties, false);
+  assert.equal(schema.$defs.deadline.additionalProperties, false);
 });
 
 test('a valid goal/deadline pair validates (AC1)', () => {
@@ -171,18 +171,18 @@ test('a valid goal/deadline pair validates (AC1)', () => {
 
 test('every declared provenance value is accepted for both fields (AC1)', () => {
   const schema = loadSchema();
-  for (const provenance of schema.properties.goal.properties.provenance.enum) {
+  for (const provenance of schema.$defs.goal.properties.provenance.enum) {
     assert.deepEqual(validateProfile({ goal: { value: 'x', provenance } }), [], `goal provenance ${provenance}`);
   }
-  for (const provenance of schema.properties.deadline.properties.provenance.enum) {
+  for (const provenance of schema.$defs.deadline.properties.provenance.enum) {
     assert.deepEqual(validateProfile({ deadline: { value: 'unknown', provenance } }), [], `deadline provenance ${provenance}`);
   }
 });
 
 test('goal/deadline provenance enum is exactly product-vision|release|readme|user (AC1)', () => {
   const schema = loadSchema();
-  assert.deepEqual(schema.properties.goal.properties.provenance.enum, ['product-vision', 'release', 'readme', 'user']);
-  assert.deepEqual(schema.properties.deadline.properties.provenance.enum, ['product-vision', 'release', 'readme', 'user']);
+  assert.deepEqual(schema.$defs.goal.properties.provenance.enum, ['product-vision', 'release', 'readme', 'user']);
+  assert.deepEqual(schema.$defs.deadline.properties.provenance.enum, ['product-vision', 'release', 'readme', 'user']);
 });
 
 test('a bad provenance value is rejected with one actionable error (AC1)', () => {
@@ -339,4 +339,97 @@ test('schema and runtime agree on the entries[] malformed-value matrix (AC1/AC2)
     entry.schemaProof();
     assert.notDeepEqual(validateProfile(entry.value), [], entry.name);
   }
+});
+
+// --- 010-01: entry-level goal/deadline (ADR-0011 + ADR-0009 D2 composed) ---
+
+test('the schema single-sources goal/deadline via $defs, $ref\'d from both the top-level and entries[] (AC1)', () => {
+  const schema = loadSchema();
+  assert.ok(schema.$defs.goal, 'schema must declare $defs.goal');
+  assert.ok(schema.$defs.deadline, 'schema must declare $defs.deadline');
+  assert.deepEqual(schema.properties.goal, { $ref: '#/$defs/goal' });
+  assert.deepEqual(schema.properties.deadline, { $ref: '#/$defs/deadline' });
+  assert.equal(schema.properties.entries.items.properties.goal.$ref, '#/$defs/goal');
+  assert.equal(schema.properties.entries.items.properties.deadline.$ref, '#/$defs/deadline');
+  // Shape/enum/pattern parity is guaranteed by construction (same $defs
+  // object), not by two independently-authored copies.
+  assert.deepEqual(schema.$defs.goal.required, ['value', 'provenance']);
+  assert.deepEqual(schema.$defs.deadline.required, ['value', 'provenance']);
+  assert.equal(schema.$defs.deadline.properties.value.pattern, '^(\\d{4}-\\d{2}-\\d{2}|unknown)$');
+});
+
+test('a valid entry-level goal/deadline is accepted (AC2)', () => {
+  assert.deepEqual(validateProfile({
+    entries: [{
+      id: 'a', label: 'A', artifactRoot: 'tracks/a',
+      goal: { value: 'Ship track A', provenance: 'product-vision' },
+      deadline: { value: '2026-09-01', provenance: 'release' },
+    }],
+  }), []);
+  // The literal deadline value "unknown" is valid at the entry level too.
+  assert.deepEqual(validateProfile({
+    entries: [{
+      id: 'a', label: 'A', artifactRoot: 'tracks/a',
+      deadline: { value: 'unknown', provenance: 'user' },
+    }],
+  }), []);
+});
+
+test('entry-level goal/deadline malformed-value matrix mirrors the top-level one (AC2)', () => {
+  const cases = [
+    {
+      name: 'entry goal not an object',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', goal: 'Ship it' }] },
+      expected: /profile\.entries\[0\]\.goal must be an object/,
+    },
+    {
+      name: 'entry deadline not an object',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', deadline: '2026-09-01' }] },
+      expected: /profile\.entries\[0\]\.deadline must be an object/,
+    },
+    {
+      name: 'entry goal unrecognized sub-field',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', goal: { value: 'x', provenance: 'user', extra: true } }] },
+      expected: /profile\.entries\[0\]\.goal\.extra is not a recognized field/,
+    },
+    {
+      name: 'entry goal missing value',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', goal: { provenance: 'user' } }] },
+      expected: /profile\.entries\[0\]\.goal\.value must be a non-empty string/,
+    },
+    {
+      name: 'entry goal empty value',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', goal: { value: '  ', provenance: 'user' } }] },
+      expected: /profile\.entries\[0\]\.goal\.value must be a non-empty string/,
+    },
+    {
+      name: 'entry goal bad provenance',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', goal: { value: 'x', provenance: 'github-milestone' } }] },
+      expected: /profile\.entries\[0\]\.goal\.provenance must be one of: product-vision, release, readme, user/,
+    },
+    {
+      name: 'entry deadline bad provenance',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', deadline: { value: '2026-09-01', provenance: 'github-milestone' } }] },
+      expected: /profile\.entries\[0\]\.deadline\.provenance must be one of: product-vision, release, readme, user/,
+    },
+    {
+      name: 'entry deadline bad value pattern',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', deadline: { value: 'soonish', provenance: 'release' } }] },
+      expected: /profile\.entries\[0\]\.deadline\.value must be an ISO date/,
+    },
+  ];
+  for (const { name, value, expected } of cases) {
+    const errors = validateProfile(value);
+    assert.equal(errors.length, 1, name);
+    assert.match(errors[0], expected, name);
+  }
+});
+
+test('entry-level goal/deadline never hit the generic non-empty-string check (AC2)', () => {
+  // A plain-object goal/deadline must never be reported via the generic
+  // "must be a non-empty string" message the other entry fields use.
+  const errors = validateProfile({
+    entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', goal: { value: 'x', provenance: 'user' }, deadline: 42 }],
+  });
+  assert.ok(errors.every((message) => !message.includes('.deadline must be a non-empty string')), errors.join('; '));
 });

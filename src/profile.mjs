@@ -40,9 +40,13 @@ const SPEC_LAYOUT_ERROR = `must be one of: ${SPEC_LAYOUTS.join(', ')}`;
 // {value, provenance}, not a scalar string — validated against the same
 // provenance enum and deadline value pattern the schema declares, so schema
 // and runtime cannot drift (mirrors the specLayout enum pattern above).
-const GOAL_PROVENANCE = PROFILE_SCHEMA.properties.goal.properties.provenance.enum;
-const DEADLINE_PROVENANCE = PROFILE_SCHEMA.properties.deadline.properties.provenance.enum;
-const DEADLINE_VALUE_PATTERN = new RegExp(PROFILE_SCHEMA.properties.deadline.properties.value.pattern);
+// Single-sourced in the schema's $defs.goal/$defs.deadline (slice 010-01, AC1)
+// and $ref'd from both the top-level profile.goal/deadline and each
+// entries[] item's goal/deadline, so both call sites read the same
+// definition here too.
+const GOAL_PROVENANCE = PROFILE_SCHEMA.$defs.goal.properties.provenance.enum;
+const DEADLINE_PROVENANCE = PROFILE_SCHEMA.$defs.deadline.properties.provenance.enum;
+const DEADLINE_VALUE_PATTERN = new RegExp(PROFILE_SCHEMA.$defs.deadline.properties.value.pattern);
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -50,7 +54,10 @@ function isObject(value) {
 
 // Validates a single entries[] item against the same shape the schema
 // declares (id/label/artifactRoot required, specsDir/decisionsDir/
-// statusProperty optional overrides, no unrecognized fields).
+// statusProperty optional overrides, no unrecognized fields). goal/deadline
+// (slice 010-01, ADR-0011/ADR-0009 D2) are object-typed, same shape as the
+// top-level profile fields — validated via validateGoalOrDeadline below, not
+// the generic non-empty-string check that applies to the other entry fields.
 function validateEntry(entry, index, errors) {
   if (!isObject(entry)) {
     errors.push(`profile.entries[${index}] must be an object`);
@@ -68,6 +75,14 @@ function validateEntry(entry, index, errors) {
     }
     if (key === 'specLayout') {
       if (!SPEC_LAYOUTS.includes(value)) errors.push(`profile.entries[${index}].specLayout ${SPEC_LAYOUT_ERROR}`);
+      continue;
+    }
+    if (key === 'goal') {
+      validateGoalOrDeadline(`entries[${index}].goal`, value, GOAL_PROVENANCE, null, errors);
+      continue;
+    }
+    if (key === 'deadline') {
+      validateGoalOrDeadline(`entries[${index}].deadline`, value, DEADLINE_PROVENANCE, DEADLINE_VALUE_PATTERN, errors);
       continue;
     }
     if (typeof value !== 'string' || !value.trim()) {

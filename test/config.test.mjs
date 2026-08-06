@@ -392,6 +392,106 @@ test('entries: an oversized or pattern-invalid composite id is rejected (AC2)', 
   );
 });
 
+// --- 010-01: entry-level goal/deadline (ADR-0011 + ADR-0009 D2 composed) ---
+
+test('entries: an entry-declared goal/deadline threads verbatim onto the expanded project profile (AC3)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: {
+        entries: [{
+          id: 'a', label: 'A', artifactRoot: 'tracks/a',
+          goal: { value: 'Ship track A', provenance: 'product-vision' },
+          deadline: { value: '2026-09-01', provenance: 'release' },
+        }],
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile.goal, { value: 'Ship track A', provenance: 'product-vision' });
+  assert.deepEqual(config.projects[0].profile.deadline, { value: '2026-09-01', provenance: 'release' });
+});
+
+test('entries: an entry with no goal/deadline inherits the parent profile\'s goal/deadline (AC3)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: {
+        goal: { value: 'Ship the umbrella', provenance: 'product-vision' },
+        deadline: { value: '2026-10-01', provenance: 'release' },
+        entries: [
+          { id: 'a', label: 'A', artifactRoot: 'tracks/a' },
+          {
+            id: 'b', label: 'B', artifactRoot: 'tracks/b',
+            goal: { value: 'Ship track B', provenance: 'user' },
+            deadline: { value: '2026-11-01', provenance: 'user' },
+          },
+        ],
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  const [a, b] = config.projects;
+  // No per-entry override: falls back to the parent profile's goal/deadline.
+  assert.deepEqual(a.profile.goal, { value: 'Ship the umbrella', provenance: 'product-vision' });
+  assert.deepEqual(a.profile.deadline, { value: '2026-10-01', provenance: 'release' });
+  // Per-entry override wins over the parent profile's value.
+  assert.deepEqual(b.profile.goal, { value: 'Ship track B', provenance: 'user' });
+  assert.deepEqual(b.profile.deadline, { value: '2026-11-01', provenance: 'user' });
+});
+
+test('entries: neither entry nor parent declares goal/deadline — no own-property, byte-identical to pre-010 (AC3/AC5)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: {
+        entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a' }],
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile, {
+    artifactRoot: path.join('/tmp/umbrella', 'tracks', 'a'),
+    specsDir: 'specs', decisionsDir: 'decisions', statusProperty: 'status', specLayout: 'nested',
+  });
+  assert.ok(!('goal' in config.projects[0].profile));
+  assert.ok(!('deadline' in config.projects[0].profile));
+});
+
+test('entries: an entry-declared deadline "unknown" threads verbatim, never coerced (AC3)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: {
+        deadline: { value: '2026-10-01', provenance: 'release' },
+        entries: [{
+          id: 'a', label: 'A', artifactRoot: 'tracks/a',
+          deadline: { value: 'unknown', provenance: 'user' },
+        }],
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile.deadline, { value: 'unknown', provenance: 'user' });
+});
+
+test('entries: a malformed entry-level goal/deadline is rejected with one actionable error (AC2)', () => {
+  const cases = [
+    ['entry goal missing provenance', { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', goal: { value: 'Ship it' } }] }],
+    ['entry deadline bad value', { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', deadline: { value: 'soonish', provenance: 'release' } }] }],
+  ];
+  for (const [name, profile] of cases) {
+    assert.throws(
+      () => normalizeConfig({
+        version: 1,
+        projects: [{ id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'], profile }],
+      }, '/tmp/gauge.config.json'),
+      /invalid configuration: project umbrella profile:/,
+      name,
+    );
+  }
+});
+
 test('entries: a composite id colliding with another project id is rejected', () => {
   assert.throws(
     () => normalizeConfig({

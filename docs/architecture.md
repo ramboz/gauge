@@ -182,7 +182,11 @@ edge-push topology (specs 005/006) remain deferred; collection stays manual pull
   (`<baseId>-<entryId>`) card scoped to its own artifact root, sharing the
   umbrella repo's git signal. The profile also carries optional authored
   `goal`/`deadline` (each `{value, provenance}`; spec 009-01, ADR-0011) that the
-  runtime reads as literals. Profile *production* is automated by the
+  runtime reads as literals; an `entries[]` item may declare its **own**
+  `goal`/`deadline` (spec 010-01, single-sourced from the schema `$defs` so the
+  entry and top-level shapes cannot drift), falling back to the parent profile's
+  value when the entry declares none — so per-track forecast/risk/attention work
+  for multi-entry projects, not just single-entry ones. Profile *production* is automated by the
   read-only discovery module `src/discover.mjs` (spec 007-03): it introspects a
   source and authors a drop-in profile, preferring the source's own
   self-declaration (a `tracks/*` layout, `repos.yaml` `scope:` tags) over

@@ -5,6 +5,44 @@
   "description": "Declares where a source's jig-style artifacts live (ADR-0009). Config-inline home only in v1 (slice 007-01); a project with no profile normalizes to these same defaults.",
   "type": "object",
   "additionalProperties": false,
+  "$defs": {
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "description": "Optional project goal (ADR-0011, slice 009-01): authored by a human-curated onboarding step (optionally Claude-assisted), never derived from source prose by the zero-dependency runtime, which reads only this literal value. `provenance` names the seeding artifact the author drew from, or 'user' when hand-set/overridden. Additive; a profile with no goal validates exactly as the pre-009-01 identity. Single-sourced (slice 010-01): referenced from both the top-level profile and each entries[] item so the two shapes cannot drift.",
+      "properties": {
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The authored goal text."
+        },
+        "provenance": {
+          "type": "string",
+          "enum": ["product-vision", "release", "readme", "user"],
+          "description": "Which artifact seeded this value ('product-vision' | 'release' | 'readme'), or 'user' when hand-set."
+        }
+      }
+    },
+    "deadline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "description": "Optional project deadline (ADR-0011, slice 009-01): authored the same way as goal. `value` is an ISO date (YYYY-MM-DD) the user committed, or the literal 'unknown' when none is set — the machine never infers a deadline from appetite prose. Additive; a profile with no deadline validates exactly as the pre-009-01 identity. Single-sourced (slice 010-01): referenced from both the top-level profile and each entries[] item so the two shapes cannot drift.",
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}|unknown)$",
+          "description": "An ISO date (YYYY-MM-DD) or the literal 'unknown'."
+        },
+        "provenance": {
+          "type": "string",
+          "enum": ["product-vision", "release", "readme", "user"],
+          "description": "Which artifact seeded this value ('product-vision' | 'release' | 'readme'), or 'user' when hand-set."
+        }
+      }
+    }
+  },
   "properties": {
     "artifactRoot": {
       "type": "string",
@@ -37,40 +75,10 @@
       "description": "Spec-artifact layout under specsDir (ADR-0010, slice 008-01): 'nested' = <dir>/spec.md (the jig preset), 'flat' = <name>.md (one file per spec). 'auto' detects nested-vs-flat by inspection at read time (slice 008-02; mixed/indeterminate resolves toward nested). Additive; a profile with no specLayout is the 007 identity."
     },
     "goal": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["value", "provenance"],
-      "description": "Optional project goal (ADR-0011, slice 009-01): authored by a human-curated onboarding step (optionally Claude-assisted), never derived from source prose by the zero-dependency runtime, which reads only this literal value. `provenance` names the seeding artifact the author drew from, or 'user' when hand-set/overridden. Additive; a profile with no goal validates exactly as the pre-009-01 identity.",
-      "properties": {
-        "value": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The authored goal text."
-        },
-        "provenance": {
-          "type": "string",
-          "enum": ["product-vision", "release", "readme", "user"],
-          "description": "Which artifact seeded this value ('product-vision' | 'release' | 'readme'), or 'user' when hand-set."
-        }
-      }
+      "$ref": "#/$defs/goal"
     },
     "deadline": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["value", "provenance"],
-      "description": "Optional project deadline (ADR-0011, slice 009-01): authored the same way as goal. `value` is an ISO date (YYYY-MM-DD) the user committed, or the literal 'unknown' when none is set — the machine never infers a deadline from appetite prose. Additive; a profile with no deadline validates exactly as the pre-009-01 identity.",
-      "properties": {
-        "value": {
-          "type": "string",
-          "pattern": "^(\\d{4}-\\d{2}-\\d{2}|unknown)$",
-          "description": "An ISO date (YYYY-MM-DD) or the literal 'unknown'."
-        },
-        "provenance": {
-          "type": "string",
-          "enum": ["product-vision", "release", "readme", "user"],
-          "description": "Which artifact seeded this value ('product-vision' | 'release' | 'readme'), or 'user' when hand-set."
-        }
-      }
+      "$ref": "#/$defs/deadline"
     },
     "entries": {
       "type": "array",
@@ -115,6 +123,14 @@
             "type": "string",
             "enum": ["nested", "flat", "auto"],
             "description": "Spec-artifact layout for this entry (ADR-0010, slice 008-01). Defaults to the profile's specLayout, then 'nested'."
+          },
+          "goal": {
+            "$ref": "#/$defs/goal",
+            "description": "Optional per-entry goal (slice 010-01), same shape as the top-level profile's goal. Defaults to the profile's goal, then absent."
+          },
+          "deadline": {
+            "$ref": "#/$defs/deadline",
+            "description": "Optional per-entry deadline (slice 010-01), same shape as the top-level profile's deadline. Defaults to the profile's deadline, then absent."
           }
         }
       }

@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { deriveForecast, attachForecasts } from '../src/derive.mjs';
+import { deriveForecast, attachForecasts, attentionQueue } from '../src/derive.mjs';
+import { normalizeConfig } from '../src/config.mjs';
+import { joinProjectProfileFields } from '../src/observation.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(HERE, '..', 'src', 'derive.mjs');
@@ -285,4 +287,59 @@ test('attachForecasts derives from an empty history when a project id has no ent
   const data = { projects: [{ project: { id: 'gamma', deadline: { value: '2026-09-14', provenance: 'user' } }, collection: { status: 'ok' } }] };
   assert.doesNotThrow(() => attachForecasts(data, {}));
   assert.deepEqual(attachForecasts(data, {}).projects[0].forecast, { state: 'unknown', reason: 'execution-unknown' });
+});
+
+// --- 010-01 AC4: entry-declared goal/deadline reaches the read layer and
+// drives derivation — through the real join → forecast → attention chain,
+// with no read/derive-layer change. Uses a fixed far-future deadline
+// (2099-12-31) so the test is not time-fragile. ---
+
+test('a multi-entry project\'s entry-level deadline reaches joinProjectProfileFields → attachForecasts → attentionQueue and lifts it off tier 3, while an undated sibling stays deadline-unknown/tier 3 (AC4)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: {
+        entries: [
+          {
+            id: 'dated', label: 'Dated track', artifactRoot: 'tracks/dated',
+            goal: { value: 'Ship the dated track', provenance: 'product-vision' },
+            deadline: { value: '2099-12-31', provenance: 'release' },
+          },
+          { id: 'sibling', label: 'Sibling track', artifactRoot: 'tracks/sibling' },
+        ],
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  const [dated, sibling] = config.projects;
+  assert.equal(dated.id, 'umbrella-dated');
+  assert.equal(sibling.id, 'umbrella-sibling');
+
+  // A stand-in for observeAll()'s output shape (test/observation.test.mjs
+  // exercises the real adapter path; here the read/join/derive composition
+  // itself is under test, so the observation record is a minimal fixture).
+  const data = {
+    generatedAt: '2026-08-05T00:00:00Z',
+    projects: [
+      { project: { id: dated.id, label: dated.label }, collection: { status: 'ok' } },
+      { project: { id: sibling.id, label: sibling.label }, collection: { status: 'ok' } },
+    ],
+  };
+  const joined = joinProjectProfileFields(data, config);
+  // The join attaches the entry's own deadline (not the parent's — there is
+  // none here) onto the matching normalized project.
+  assert.deepEqual(joined.projects[0].project.deadline, { value: '2099-12-31', provenance: 'release' });
+  assert.equal(joined.projects[1].project.deadline, undefined);
+
+  const historiesByProjectId = { [dated.id]: steadyHistory() };
+  const withForecasts = attachForecasts(joined, historiesByProjectId);
+  assert.notEqual(withForecasts.projects[0].forecast.reason, 'deadline-unknown');
+  assert.equal(withForecasts.projects[1].forecast.reason, 'deadline-unknown');
+
+  const attention = attentionQueue(withForecasts);
+  const datedEntry = attention.find((entry) => entry.id === dated.id);
+  const siblingEntry = attention.find((entry) => entry.id === sibling.id);
+  assert.notEqual(datedEntry.tier, 3);
+  assert.equal(siblingEntry.tier, 3);
+  assert.equal(siblingEntry.forecast.reason, 'deadline-unknown');
 });

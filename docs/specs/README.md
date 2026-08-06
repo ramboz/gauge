@@ -37,6 +37,7 @@
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-01 — Goal/deadline onboarding authoring | **DONE** |  |
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-02 — Forecast/risk derivation | **DONE** |  |
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-03 — Global attention queue | **DONE** |  |
+| [010-multi-entry-goal-deadline](010-multi-entry-goal-deadline/spec.md) | 010-01 — entry-level goal/deadline | **DONE** |  |
 
 ## Deferred slices
 

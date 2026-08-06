@@ -110,6 +110,16 @@ function expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinn
       statusProperty: entry.statusProperty || profileValue.statusProperty || PROFILE_DEFAULTS.statusProperty,
       specLayout: entry.specLayout || profileValue.specLayout || PROFILE_DEFAULTS.specLayout,
     };
+    // goal/deadline (slice 010-01, ADR-0011): entry-declared wins; an entry
+    // that declares neither falls back to the parent profile's goal/deadline
+    // when present (same entry→profile fallback shape as specsDir/
+    // decisionsDir/statusProperty/specLayout above), and otherwise carries no
+    // key at all — resolvedSingleProfile only copies goal/deadline onto the
+    // resolved profile when present on `merged` (AC3/AC5 identity).
+    if (entry.goal !== undefined) merged.goal = entry.goal;
+    else if (profileValue.goal !== undefined) merged.goal = profileValue.goal;
+    if (entry.deadline !== undefined) merged.deadline = entry.deadline;
+    else if (profileValue.deadline !== undefined) merged.deadline = profileValue.deadline;
     return {
       id: composite,
       label: entry.label,
