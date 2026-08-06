@@ -224,6 +224,34 @@ test('worktree hygiene still flags UNTRACKED drafts inside a fully-merged worktr
   }
 });
 
+test('a doc committed in a merged worktree is safe wherever else it appears (order-independent)', () => {
+  const { root, git, write } = initRepo();
+  try {
+    write(path.join('docs', 'decisions', 'adr-0001-x.md'), '# ADR\n');
+    write(path.join('docs', 'spikes', 'shared.md'), '# shared\n');
+    git('add', '-A'); git('commit', '-qm', 'c1');
+    git('branch', 'merged-wt');                          // ancestor point, has shared.md
+    git('rm', '-q', path.join('docs', 'spikes', 'shared.md'));
+    git('commit', '-qm', 'delete shared.md on main');    // shared.md now off main's current tree
+    // shared.md is committed in a MERGED worktree (recoverable from history)...
+    git('worktree', 'add', '-q', path.join('.claude', 'worktrees', 'merged-wt'), 'merged-wt');
+    // ...and ALSO committed on an UNMERGED branch. It must NOT be flagged from
+    // either, regardless of which worktree the walk visits first.
+    git('worktree', 'add', '-q', '-b', 'feature-wt', path.join('.claude', 'worktrees', 'feature-wt'), 'merged-wt');
+    const fwt = path.join(root, '.claude', 'worktrees', 'feature-wt');
+    fs.writeFileSync(path.join(fwt, 'docs', 'spikes', 'only-here.md'), '# genuinely unmerged\n');
+    execFileSync('git', ['-C', fwt, 'add', '-A'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', fwt, 'commit', '-qm', 'diverge with a new doc'], { stdio: 'ignore' });
+
+    const flagged = scanProject({ path: root, label: 'x', pinnedWorkstreams: [], hiddenWorkstreams: [] })
+      .worktreeOnlyDocs.map((d) => d.path);
+    assert.ok(!flagged.includes(path.join('docs', 'spikes', 'shared.md')), `recoverable doc must not be flagged; got ${JSON.stringify(flagged)}`);
+    assert.deepEqual(flagged, [path.join('docs', 'spikes', 'only-here.md')]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('worktree hygiene is scoped to the project artifactRoot; unscoped docs are dropped', () => {
   const { root, git, write } = initRepo();
   try {

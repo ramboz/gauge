@@ -294,9 +294,8 @@ function mergedDocPaths(root, refs, artifactRootRel) {
 }
 
 // True when a worktree's HEAD is already contained in a mainline ref: every
-// commit in it is in mainline history, so deleting the worktree loses no
-// committed work (its untracked drafts are a separate concern the caller still
-// surfaces — see untrackedMdPaths).
+// commit in it is in mainline history, so its committed docs are recoverable
+// (its untracked drafts are a separate concern the caller still surfaces).
 function worktreeIsMerged(root, head, refs) {
   for (const ref of refs) {
     try { execFileSync('git', ['-C', root, 'merge-base', '--is-ancestor', head, ref], { stdio: 'ignore' }); return true; }
@@ -305,20 +304,17 @@ function worktreeIsMerged(root, head, refs) {
   return false;
 }
 
-// Untracked .md paths under `artifactRootRel` in a worktree (forward-slash,
-// relative to the worktree base). These exist nowhere in git, so they are at
-// risk even in a fully-merged worktree — the merged-skip narrows to this set
-// rather than discarding the whole checkout.
-function untrackedMdPaths(wtBase, artifactRootRel) {
+// The committed docs of a merged worktree, under `artifactRootRel` (forward-
+// slash paths). Because the worktree's HEAD is an ancestor of a mainline ref,
+// these blobs are reachable from mainline history and recoverable even though
+// they may be absent from mainline's *current* tree (merged then deleted). They
+// are therefore safe wherever they appear.
+function mergedWorktreeDocPaths(wtBase, artifactRootRel) {
   const set = new Set();
   try {
-    const out = gitRun(wtBase, ['status', '--porcelain', '--untracked-files=all', '--', artifactRootRel]);
-    for (const line of out.split('\n')) {
-      if (!line.startsWith('??')) continue;
-      const p = line.slice(3).trim();
-      if (p.endsWith('.md')) set.add(p);
-    }
-  } catch { /* not a git checkout / no such path — no untracked docs */ }
+    const listing = gitRun(wtBase, ['ls-tree', '-r', '--name-only', 'HEAD', '--', artifactRootRel]);
+    for (const line of listing.split('\n')) { if (line) set.add(line); }
+  } catch { /* not a git checkout / no such path */ }
   return set;
 }
 
@@ -326,42 +322,48 @@ function untrackedMdPaths(wtBase, artifactRootRel) {
 // blocker 1 was later reversed by owner direction; ADR-0014): a multi-entry
 // repo's entries must not each show the same repo-wide list, so a worktree doc
 // is attributed only to the project whose `artifactRootRel` prefix contains it;
-// docs under no project's root are dropped. Exclusions keep the list to
-// genuinely at-risk docs: docs present on a mainline ref are safe, and a
-// fully-merged worktree's COMMITTED docs are in mainline history (safe even if
-// mainline later deleted them) — but its UNTRACKED drafts exist nowhere in git,
-// so a merged worktree is narrowed to its untracked docs rather than skipped
-// wholesale. A non-git tree resolves no refs, so the merge/untracked logic
-// no-ops and the scan degrades to a working-tree-only comparison.
+// docs under no project's root are dropped. A doc is "at risk" only when its
+// content is not recoverable from mainline-reachable history. The `safe` set
+// captures exactly that: mainline's current tree PLUS every merged worktree's
+// committed docs (recoverable via their ancestor commits). It is built in full
+// BEFORE the walk so the outcome is independent of worktree iteration order —
+// a doc committed in a merged worktree is safe wherever else it also appears.
+// What remains flagged: docs committed only on unmerged branches, and untracked
+// drafts in any worktree (they exist nowhere in git). A non-git tree resolves
+// no refs, so `safe` is just the (empty) mainline set and the scan degrades to
+// a working-tree-only comparison. Worktrees are walked in name order for a
+// deterministic attribution when a doc appears in more than one.
 function scanWorktreeOnlyDocs(root, artifactRootRel) {
   const wtRoot = path.join(root, '.claude', 'worktrees');
   if (!isDir(wtRoot)) return [];
   const refs = mainlineRefs(root);
-  const merged = mergedDocPaths(root, refs, artifactRootRel);
-  const out = [];
-  const seen = new Set();
-  for (const wt of fs.readdirSync(wtRoot, { withFileTypes: true })) {
-    if (!wt.isDirectory()) continue;
-    const wtBase = path.join(wtRoot, wt.name);
-    let wtMerged = false;
-    if (refs.length) {
+  const worktrees = fs.readdirSync(wtRoot, { withFileTypes: true })
+    .filter((wt) => wt.isDirectory())
+    .map((wt) => wt.name)
+    .sort();
+  const safe = mergedDocPaths(root, refs, artifactRootRel);
+  if (refs.length) {
+    for (const name of worktrees) {
+      const wtBase = path.join(wtRoot, name);
       let head = null;
       try { head = gitRun(wtBase, ['rev-parse', 'HEAD']).trim(); } catch { /* not a git checkout */ }
-      wtMerged = head ? worktreeIsMerged(root, head, refs) : false;
+      if (head && worktreeIsMerged(root, head, refs)) {
+        for (const p of mergedWorktreeDocPaths(wtBase, artifactRootRel)) safe.add(p);
+      }
     }
-    // In a merged worktree only untracked drafts are at risk; committed docs are
-    // recoverable from mainline history.
-    const untracked = wtMerged ? untrackedMdPaths(wtBase, artifactRootRel) : null;
-    const wtDocs = path.join(wtBase, artifactRootRel);
+  }
+  const out = [];
+  const seen = new Set();
+  for (const name of worktrees) {
+    const wtDocs = path.join(wtRoot, name, artifactRootRel);
     if (!isDir(wtDocs)) continue;
-    for (const rel of walkMd(wtDocs, wtBase)) {
+    for (const rel of walkMd(wtDocs, path.join(wtRoot, name))) {
       if (seen.has(rel)) continue;
       seen.add(rel);
       // Path-existence comparison only, never content diffing (slice 002-02 AC4).
       const relKey = rel.split(path.sep).join('/');
-      if (fs.existsSync(path.join(root, rel)) || merged.has(relKey)) continue;
-      if (wtMerged && !untracked.has(relKey)) continue;
-      out.push({ worktree: wt.name, path: rel });
+      if (fs.existsSync(path.join(root, rel)) || safe.has(relKey)) continue;
+      out.push({ worktree: name, path: rel });
       if (out.length >= WORKTREE_DOC_CAP) return out;
     }
   }
