@@ -20,6 +20,7 @@
 - [ADR-0011: Goal and deadline source strategy for the local pull loop](adr-0011-goal-deadline-source-strategy.md) — The local pull MVP still lacks the input every downstream layer depends on: a per-project **goal** and **deadline**. (2026-08-05, Accepted)
 - [ADR-0012: Forecast confidence: minimum-evidence rule for on_track/at_risk vs unknown](adr-0012-forecast-confidence-minimum-evidence.md) — Spec 009-02 derives a per-project forecast/risk read — `on_track` / `at_risk` / `unknown` — in the history-derived layer ([ADR-0006](adr-0006-two-layer-derivation.md)). (2026-08-05, Accepted)
 - [ADR-0013: Cross-project attention-overlay policy for the global queue](adr-0013-attention-overlay-policy.md) — Spec 009-03 builds the **global attention queue** — a single cross-project ordering that answers "which project deserves attention next, and why" — in the history-derived layer, downstream of forecast/risk ([ADR-0006](adr-0006-two-layer-derivation.md)). (2026-08-05, Accepted)
+- [ADR-0014: Per-project worktree-hygiene scoping](adr-0014-worktree-hygiene-artifactroot-scoping.md) — Worktree hygiene (`scanWorktreeOnlyDocs` in `src/scan.mjs`) surfaces documents that exist only inside an abandoned `.claude/worktrees/*` checkout and would be lost if the worktree were deleted. (2026-08-06, Accepted)
 
 ## Format
 

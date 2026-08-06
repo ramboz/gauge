@@ -295,8 +295,8 @@ function mergedDocPaths(root, refs, artifactRootRel) {
 
 // True when a worktree's HEAD is already contained in a mainline ref: every
 // commit in it is in mainline history, so deleting the worktree loses no
-// committed work — nothing in it is "at risk", regardless of whether some doc
-// was later removed from mainline's current tree.
+// committed work (its untracked drafts are a separate concern the caller still
+// surfaces — see untrackedMdPaths).
 function worktreeIsMerged(root, head, refs) {
   for (const ref of refs) {
     try { execFileSync('git', ['-C', root, 'merge-base', '--is-ancestor', head, ref], { stdio: 'ignore' }); return true; }
@@ -305,15 +305,34 @@ function worktreeIsMerged(root, head, refs) {
   return false;
 }
 
+// Untracked .md paths under `artifactRootRel` in a worktree (forward-slash,
+// relative to the worktree base). These exist nowhere in git, so they are at
+// risk even in a fully-merged worktree — the merged-skip narrows to this set
+// rather than discarding the whole checkout.
+function untrackedMdPaths(wtBase, artifactRootRel) {
+  const set = new Set();
+  try {
+    const out = gitRun(wtBase, ['status', '--porcelain', '--untracked-files=all', '--', artifactRootRel]);
+    for (const line of out.split('\n')) {
+      if (!line.startsWith('??')) continue;
+      const p = line.slice(3).trim();
+      if (p.endsWith('.md')) set.add(p);
+    }
+  } catch { /* not a git checkout / no such path — no untracked docs */ }
+  return set;
+}
+
 // Worktree hygiene, scoped to the project's artifact subtree (spec 007-01
-// blocker 1 was later reversed by owner direction): a multi-entry repo's
-// entries must not each show the same repo-wide list, so a worktree doc is
-// attributed only to the project whose `artifactRootRel` prefix contains it;
-// docs under no project's root are dropped. Two exclusions keep the list to
-// genuinely at-risk docs: (1) docs present on a mainline ref, and (2) every
-// doc in a fully-merged worktree (its commits are already in mainline). A
-// non-git tree resolves no refs, so both exclusions no-op and the scan
-// degrades to a working-tree-only comparison (preserving fixture behavior).
+// blocker 1 was later reversed by owner direction; ADR-0014): a multi-entry
+// repo's entries must not each show the same repo-wide list, so a worktree doc
+// is attributed only to the project whose `artifactRootRel` prefix contains it;
+// docs under no project's root are dropped. Exclusions keep the list to
+// genuinely at-risk docs: docs present on a mainline ref are safe, and a
+// fully-merged worktree's COMMITTED docs are in mainline history (safe even if
+// mainline later deleted them) — but its UNTRACKED drafts exist nowhere in git,
+// so a merged worktree is narrowed to its untracked docs rather than skipped
+// wholesale. A non-git tree resolves no refs, so the merge/untracked logic
+// no-ops and the scan degrades to a working-tree-only comparison.
 function scanWorktreeOnlyDocs(root, artifactRootRel) {
   const wtRoot = path.join(root, '.claude', 'worktrees');
   if (!isDir(wtRoot)) return [];
@@ -324,11 +343,15 @@ function scanWorktreeOnlyDocs(root, artifactRootRel) {
   for (const wt of fs.readdirSync(wtRoot, { withFileTypes: true })) {
     if (!wt.isDirectory()) continue;
     const wtBase = path.join(wtRoot, wt.name);
+    let wtMerged = false;
     if (refs.length) {
       let head = null;
       try { head = gitRun(wtBase, ['rev-parse', 'HEAD']).trim(); } catch { /* not a git checkout */ }
-      if (head && worktreeIsMerged(root, head, refs)) continue;
+      wtMerged = head ? worktreeIsMerged(root, head, refs) : false;
     }
+    // In a merged worktree only untracked drafts are at risk; committed docs are
+    // recoverable from mainline history.
+    const untracked = wtMerged ? untrackedMdPaths(wtBase, artifactRootRel) : null;
     const wtDocs = path.join(wtBase, artifactRootRel);
     if (!isDir(wtDocs)) continue;
     for (const rel of walkMd(wtDocs, wtBase)) {
@@ -336,10 +359,10 @@ function scanWorktreeOnlyDocs(root, artifactRootRel) {
       seen.add(rel);
       // Path-existence comparison only, never content diffing (slice 002-02 AC4).
       const relKey = rel.split(path.sep).join('/');
-      if (!fs.existsSync(path.join(root, rel)) && !merged.has(relKey)) {
-        out.push({ worktree: wt.name, path: rel });
-        if (out.length >= WORKTREE_DOC_CAP) return out;
-      }
+      if (fs.existsSync(path.join(root, rel)) || merged.has(relKey)) continue;
+      if (wtMerged && !untracked.has(relKey)) continue;
+      out.push({ worktree: wt.name, path: rel });
+      if (out.length >= WORKTREE_DOC_CAP) return out;
     }
   }
   return out;

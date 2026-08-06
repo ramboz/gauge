@@ -196,8 +196,29 @@ test('worktree hygiene skips fully-merged worktrees, keeps genuinely unmerged on
 
     const p = scanProject({ path: root, label: 'x', pinnedWorkstreams: [], hiddenWorkstreams: [] });
     const flagged = p.worktreeOnlyDocs.map((d) => d.path);
-    assert.ok(!flagged.includes(path.join('docs', 'bugs', 'merged-then-deleted.md')), `merged worktree doc should be skipped; got ${JSON.stringify(flagged)}`);
+    assert.ok(!flagged.includes(path.join('docs', 'bugs', 'merged-then-deleted.md')), `merged worktree committed doc should be skipped; got ${JSON.stringify(flagged)}`);
     assert.deepEqual(flagged, [path.join('docs', 'bugs', 'genuine.md')]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('worktree hygiene still flags UNTRACKED drafts inside a fully-merged worktree', () => {
+  const { root, git, write } = initRepo();
+  try {
+    write(path.join('docs', 'decisions', 'adr-0001-x.md'), '# ADR\n');
+    git('add', '-A'); git('commit', '-qm', 'c1');
+    // A worktree at main (fully merged, detached so it doesn't claim the branch)
+    // carrying an UNTRACKED draft — the doc exists nowhere in git, so it is lost
+    // if the worktree is removed.
+    git('worktree', 'add', '-q', '--detach', path.join('.claude', 'worktrees', 'merged-wt'), 'main');
+    const wt = path.join(root, '.claude', 'worktrees', 'merged-wt');
+    fs.mkdirSync(path.join(wt, 'docs', 'bugs'), { recursive: true });
+    fs.writeFileSync(path.join(wt, 'docs', 'bugs', 'draft.md'), '# never committed\n');
+
+    const p = scanProject({ path: root, label: 'x', pinnedWorkstreams: [], hiddenWorkstreams: [] });
+    const flagged = p.worktreeOnlyDocs.map((d) => d.path);
+    assert.deepEqual(flagged, [path.join('docs', 'bugs', 'draft.md')], `untracked draft in merged worktree must be flagged; got ${JSON.stringify(flagged)}`);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
