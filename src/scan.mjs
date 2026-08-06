@@ -241,6 +241,42 @@ function scanWorkstreams(root, profile, projectCfg) {
 
 const WORKTREE_DOC_CAP = 40;
 
+// The "already merged" baseline for worktree hygiene: the union of doc paths
+// committed on any of the repo's mainline refs (local and remote default
+// branch). Comparing worktree docs against THIS — rather than the primary
+// checkout's working tree — is what stops an already-merged doc from being
+// mislabeled "worktree-only" merely because the primary checkout happens to be
+// parked on a feature branch that predates it (the common case, and the source
+// of the false-positive inflation). The union matters for the local-single-
+// user model: a doc merged to LOCAL main but not yet pushed is not at risk, and
+// neither is one on origin/main when local main lags. Paths are normalized to
+// forward slashes. Returns an empty set when `root` is not a git repo or has no
+// resolvable mainline ref; the caller then degrades to a working-tree-only
+// comparison, preserving pre-fix behavior for non-git trees.
+function mergedDocPaths(root) {
+  const run = (args) =>
+    execFileSync('git', ['-C', root, ...args], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+  const refs = new Set(['main', 'master', 'origin/main', 'origin/master']);
+  try {
+    // Whatever origin/HEAD points at, in case the default branch is named
+    // something other than main/master (e.g. "trunk", "develop").
+    const head = run(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']).trim();
+    if (head) refs.add(head.replace(/^refs\/remotes\//, ''));
+  } catch { /* no origin/HEAD; the well-known names still apply */ }
+  const set = new Set();
+  for (const ref of refs) {
+    try {
+      const listing = run(['ls-tree', '-r', '--name-only', ref, '--', 'docs']);
+      for (const line of listing.split('\n')) { if (line) set.add(line); }
+    } catch { /* ref does not resolve in this repo — skip it */ }
+  }
+  return set;
+}
+
 // Deliberately repo-root-scoped, not artifactRoot-scoped (spec 007-01 blocker
 // 1 exception): worktree hygiene tracks docs lost to abandoned `.claude/
 // worktrees/*` checkouts, a whole-git-repo concern, not a per-sub-project one.
@@ -249,6 +285,7 @@ const WORKTREE_DOC_CAP = 40;
 function scanWorktreeOnlyDocs(root) {
   const wtRoot = path.join(root, '.claude', 'worktrees');
   if (!isDir(wtRoot)) return [];
+  const merged = mergedDocPaths(root);
   const out = [];
   const seen = new Set();
   for (const wt of fs.readdirSync(wtRoot, { withFileTypes: true })) {
@@ -260,7 +297,12 @@ function scanWorktreeOnlyDocs(root) {
       if (seen.has(rel)) continue;
       seen.add(rel);
       // Path-existence comparison only, never content diffing (slice 002-02 AC4).
-      if (!fs.existsSync(path.join(root, rel))) {
+      // "Worktree-only" (at risk of loss) means absent from BOTH the primary
+      // checkout's working tree AND the default branch's committed tree — the
+      // latter is what keeps already-merged docs off the list when the primary
+      // checkout is sitting on an unrelated feature branch.
+      const relKey = rel.split(path.sep).join('/');
+      if (!fs.existsSync(path.join(root, rel)) && !merged.has(relKey)) {
         out.push({ worktree: wt.name, path: rel });
         if (out.length >= WORKTREE_DOC_CAP) return out;
       }

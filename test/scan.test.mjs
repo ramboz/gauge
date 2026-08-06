@@ -118,6 +118,50 @@ test('worktree-only docs flagged by path comparison (002-02 AC4)', () => {
   assert.equal(p.worktreeOnlyDocs[0].path, path.join('docs', 'notes', 'lost-doc.md'));
 });
 
+test('worktree hygiene compares against the default branch, not the parked working tree', () => {
+  // Regression for the false-positive inflation: a doc already merged to main
+  // must NOT be flagged "worktree-only" just because the primary checkout is
+  // parked on a feature branch that predates it. Reproduces the jig case where
+  // dozens of merged docs/bugs/*.md were mislabeled.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-wt-hygiene-'));
+  const git = (...args) =>
+    execFileSync('git', ['-C', root, ...args], { stdio: ['ignore', 'pipe', 'ignore'] });
+  const writeDoc = (rel, body) => {
+    const abs = path.join(root, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, body);
+  };
+  try {
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'Test');
+    // An ADR makes the project jig-managed, so hygiene is computed at all.
+    writeDoc(path.join('docs', 'decisions', 'adr-0001-x.md'), '# ADR 1\n');
+    // main carries a merged bug doc.
+    writeDoc(path.join('docs', 'bugs', 'merged.md'), '# merged\n');
+    git('add', '-A');
+    git('commit', '-qm', 'merged doc on main');
+    // Primary checkout is parked on a feature branch that lacks merged.md.
+    git('checkout', '-q', '-b', 'feature/parked');
+    git('rm', '-q', path.join('docs', 'bugs', 'merged.md'));
+    git('commit', '-qm', 'feature branch without merged doc');
+    // A worktree checkout holds both the merged doc and a genuinely-lost one.
+    const wt = path.join(root, '.claude', 'worktrees', 'wt-x');
+    writeDoc(path.join('.claude', 'worktrees', 'wt-x', 'docs', 'bugs', 'merged.md'), '# merged\n');
+    writeDoc(path.join('.claude', 'worktrees', 'wt-x', 'docs', 'bugs', 'lost.md'), '# lost\n');
+    assert.ok(fs.existsSync(wt));
+
+    const p = scanProject({ path: root, label: 'x', pinnedWorkstreams: [], hiddenWorkstreams: [] });
+    const flagged = p.worktreeOnlyDocs.map((d) => d.path);
+    // merged.md is on main → not at risk, even though the parked working tree lacks it.
+    assert.ok(!flagged.includes(path.join('docs', 'bugs', 'merged.md')), `merged doc should not be flagged; got ${JSON.stringify(flagged)}`);
+    // lost.md is on neither main nor the working tree → genuinely worktree-only.
+    assert.deepEqual(flagged, [path.join('docs', 'bugs', 'lost.md')]);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('profile: no-profile default is byte-identical to an explicit default profile (007-01 AC3)', () => {
   const explicit = scanProject({
     path: path.join(FIXTURES, 'proj-jig'),
