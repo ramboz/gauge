@@ -43,6 +43,7 @@
 | [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-03 — fallback card: global progress + discovered workstreams | DRAFT |  |
 | [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-04 — warnings collapse to a header ⚠ icon + tooltip | DRAFT |  |
 | [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-05 — map worktrees/PRs to their milestone | DRAFT |  |
+| [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 🔬 012-01 — feasibility spike: what local data supports which metrics | DRAFT |  |
 
 ## Deferred slices
 
