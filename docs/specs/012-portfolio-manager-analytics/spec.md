@@ -25,6 +25,25 @@ milestone-centric *card*): spec 011's card becomes the middle tier of this
 architecture. Whether 011 lands independently or folds into this redesign is a
 decision to make after the spike.
 
+## Scope boundary — manager lens (this), not the engineer daily-driver
+
+Gauge is the **manager / portfolio lens**: zoom **out**, breadth, decision.
+Cross-project comparison, **milestone-level** (never slices), goals / deadlines /
+RAG / forecast, aggregate spend / velocity / PR-backlog, attention ranking. It
+owns a **shallow project detail tier** (cost by model/activity, velocity trend,
+open-PR list, worktrees) but **stops before slices, active sessions, and task
+management** — that granular, current-work depth is the **engineer daily-driver**
+view, owned by complementary tooling and deliberately *not* rebuilt here.
+
+Consequences of the line (owner decisions):
+- **Progress is milestone-scoped**, never the full history: a 122-spec project
+  shows only its active track's handful, not specs 1–60.
+- **One deliberate depth exception: token/cost analytics.** Spend is worth the
+  depth, so it goes all the way to **by-model, by-activity, and by-skill** (below)
+  even though everything else stays shallow.
+- The engineer daily-driver (slice/session-level, current work) is a separate,
+  complementary tool; Gauge may link to it but must not duplicate it.
+
 ## Manager-metrics catalog
 
 Feasibility tags: **L** = local now (git/transcripts) · **J** = join of sources
@@ -37,9 +56,12 @@ over time (history).
 | Next workstream | release plans (candidate) | L |
 | Velocity (commit cadence) | git | L |
 | Delivery throughput / cycle time | git history of spec status | L·T |
-| Token cost so far (per project) | Claude Code transcripts | L |
+| Token cost — total per project | Claude Code transcripts | L |
+| Token cost — by model | transcripts | L |
+| Token cost — by activity (review / impl / plan) | transcripts × jig `[jig:phase=…]` tags | J |
+| Token cost — by skill | transcripts × skill invocations | J |
 | Cost trend / cost-per-shipped-unit | transcripts × git | J |
-| Model mix (opus/sonnet/haiku %) | transcripts | L |
+| Time spent (engaged) per project | transcript session wall-clock, idle-gap-capped | L (fuzzy) |
 | Overall RAG status | forecast (pace vs deadline) | G |
 | On-track per milestone | pace vs milestone appetite/deadline | G |
 | Risk drivers (why yellow/red) | forecast reason strings | G·J |
