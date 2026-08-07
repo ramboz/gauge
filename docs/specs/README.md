@@ -38,6 +38,11 @@
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-02 — Forecast/risk derivation | **DONE** |  |
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-03 — Global attention queue | **DONE** |  |
 | [010-multi-entry-goal-deadline](010-multi-entry-goal-deadline/spec.md) | 010-01 — entry-level goal/deadline | **DONE** |  |
+| [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-01 — active-and-next milestone from release Status | DRAFT |  |
+| [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-02 — milestone progress from referenced parent specs | DRAFT |  |
+| [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-03 — fallback card: global progress + discovered workstreams | DRAFT |  |
+| [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-04 — warnings collapse to a header ⚠ icon + tooltip | DRAFT |  |
+| [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-05 — map worktrees/PRs to their milestone | DRAFT |  |
 
 ## Deferred slices
 
