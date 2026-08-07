@@ -132,21 +132,28 @@ warm theme.
 A developer-view sibling project (right-now / slice / session triage — the
 engineer daily-driver Gauge deliberately does not rebuild) shared its brainstorm.
 Both views converged on triage-not-report, glance/detail, current-track scoping,
-analytics-in-a-detail-tier, and derive-never-ask. Ideas flagged as transferable
-to the manager view, **captured as open questions, not yet decided:**
+analytics-in-a-detail-tier, and derive-never-ask. Owner decisions on the ideas
+flagged as transferable:
 
-- **"Who-acts-next" four-state model** (waiting-on-me / AI-ready / external /
-  idle) as a triage axis *distinct from* RAG (health/risk). Adopt alongside RAG,
-  or let it subsume RAG?
-- **Finish-first ordering** — surface near-done-but-stuck work (unreviewed /
-  unmerged / unreleased) above new starts ("what's been at 99% for two weeks").
-- **WIP as attention-debt** — count open fronts that will need a human, not
-  busyness.
-- **Colour discipline** — colour only the needs-attention state (green/on-track
-  stays monochrome?).
-- **People as a first-class dimension** — who is overloaded / blocked. The one
-  genuine manager-view divergence; deferred while the portfolio is single-owner.
-- **Shared invented sample dataset** across both views for coherent design.
+- **RAG + who-acts-next — both, decided.** Keep **RAG** as the health/risk
+  signal (a per-card chip) *and* add the **"who-acts-next"** four-state model
+  (🔴 waiting-on-you / 🟢 AI-ready/running / ⚪ external / ⚫ idle) as the
+  **triage** axis — it colours the card's left edge (colour on the waiting-on-you
+  state) and drives the **default ordering** (waiting-on-you first). Two axes,
+  not one subsuming the other.
+- **People dimension — deferred.** Stay **project-centric** initially; a people
+  axis (who is overloaded / blocked) is kept as a future extension, not v1.
+- **Shared invented sample dataset — adopted.** Design both views against the
+  sibling's 8-project fictional world (Trailhead, Verdant, Beacon, Ledger,
+  Cartographer, Almanac, Semaphore, Kestrel), projected into Gauge's manager
+  shape (RAG · who-acts-next · milestone/fallback · velocity · cost · agent).
+  Keeps the sibling views coherent and real portfolio data out of the public
+  repo.
+
+Still open (not yet decided): **finish-first ordering** (near-done-but-stuck
+above new starts) and **WIP-as-attention-debt** — both fit within the
+who-acts-next ordering and are candidates for how the 🔴/🟢 groups sort
+internally.
 - Gauge's **native** pace metric needs collection history to accrue (only one
   observation snapshot exists today); git commit cadence is the immediate proxy.
 - `Co-Authored-By: Claude` as the human-vs-agent proxy assumes that trailer is
