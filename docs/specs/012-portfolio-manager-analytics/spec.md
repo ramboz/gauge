@@ -119,6 +119,34 @@ warm theme.
   observation loop. Path→project mapping is imperfect (temp/probe paths,
   worktrees at odd roots, some projects with no mapped sessions), and cost needs
   a per-model pricing table including non-Anthropic/local models.
+- **Token counting must dedup at per-request grain (developer-view finding).**
+  Naive summing of `usage` across session logs **overcounts by up to ~3.4×** —
+  running totals repeat per record and resumed sessions replay earlier history,
+  so the same request appears many times. The spike's absolute figures were
+  computed this naive way and are therefore **inflated**; the by-model/activity/
+  skill slice must key on a unique request id and dedup globally across session
+  files. Feasibility is unchanged; the *method* is not.
+
+## Alignment with the developer-view sibling (open questions)
+
+A developer-view sibling project (right-now / slice / session triage — the
+engineer daily-driver Gauge deliberately does not rebuild) shared its brainstorm.
+Both views converged on triage-not-report, glance/detail, current-track scoping,
+analytics-in-a-detail-tier, and derive-never-ask. Ideas flagged as transferable
+to the manager view, **captured as open questions, not yet decided:**
+
+- **"Who-acts-next" four-state model** (waiting-on-me / AI-ready / external /
+  idle) as a triage axis *distinct from* RAG (health/risk). Adopt alongside RAG,
+  or let it subsume RAG?
+- **Finish-first ordering** — surface near-done-but-stuck work (unreviewed /
+  unmerged / unreleased) above new starts ("what's been at 99% for two weeks").
+- **WIP as attention-debt** — count open fronts that will need a human, not
+  busyness.
+- **Colour discipline** — colour only the needs-attention state (green/on-track
+  stays monochrome?).
+- **People as a first-class dimension** — who is overloaded / blocked. The one
+  genuine manager-view divergence; deferred while the portfolio is single-owner.
+- **Shared invented sample dataset** across both views for coherent design.
 - Gauge's **native** pace metric needs collection history to accrue (only one
   observation snapshot exists today); git commit cadence is the immediate proxy.
 - `Co-Authored-By: Claude` as the human-vs-agent proxy assumes that trailer is
