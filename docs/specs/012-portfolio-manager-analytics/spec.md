@@ -135,12 +135,22 @@ Both views converged on triage-not-report, glance/detail, current-track scoping,
 analytics-in-a-detail-tier, and derive-never-ask. Owner decisions on the ideas
 flagged as transferable:
 
-- **RAG + who-acts-next — both, decided.** Keep **RAG** as the health/risk
-  signal (a per-card chip) *and* add the **"who-acts-next"** four-state model
-  (🔴 waiting-on-you / 🟢 AI-ready/running / ⚪ external / ⚫ idle) as the
-  **triage** axis — it colours the card's left edge (colour on the waiting-on-you
-  state) and drives the **default ordering** (waiting-on-you first). Two axes,
-  not one subsuming the other.
+- **RAG kept; who-acts-next replaced by concrete attention counts (revised).**
+  The four-state who-acts-next model was **over-engineered** — deciding
+  "waiting on you vs the AI" needs interpretation, which fights derive-never-ask.
+  Replaced by a **countable attention row** on each card, all derivable facts:
+  **PRs awaiting merge** (`gh`: open · not-draft · mergeable/approved),
+  **specs in flight** (IN_PROGRESS specs ∪ feature-branch worktrees ∪ draft PRs;
+  optional live-session enrichment from the developer-view thin client), and
+  **blockers**. **RAG stays** as the per-card health chip; cards **order by the
+  actionable counts** (PRs-to-merge + blockers first). This is finish-first made
+  countable, and each count drills down in the detail tier.
+- **Blockers — approximate now, first-class concept filed upstream.** jig has no
+  first-class blocker concept; v1 renders an **approximate, labelled** count from
+  proxies (`DEFERRED`+resolution-trigger, refinement-todo deferred decisions,
+  unmet `dependencies:`, legacy narrative blockers). A clean concept is tracked
+  in jig **spec 108 — first-class blockers** (proposes a `Blocked:` /
+  `blocked_by:` convention); the count sharpens once that lands.
 - **People dimension — deferred.** Stay **project-centric** initially; a people
   axis (who is overloaded / blocked) is kept as a future extension, not v1.
 - **Shared invented sample dataset — adopted.** Design both views against the
