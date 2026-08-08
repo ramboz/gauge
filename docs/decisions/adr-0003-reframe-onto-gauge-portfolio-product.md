@@ -1,7 +1,7 @@
 ---
 status: Accepted
 dependencies: []
-last_verified: 2026-07-13
+last_verified: 2026-08-07
 frame_review: true
 ---
 
@@ -277,3 +277,13 @@ when there is no meaningful kill condition; do not invent ceremonial ones._
 - What is the smallest central priority overlay that expresses genuine
   portfolio intent without duplicating project-local priority—ordered projects,
   coarse tiers, or deadline-plus-attention rules only?
+
+## Amendments
+
+- **2026-08-07 ([ADR-0017](adr-0017-reframe-onto-manager-lens.md)) — reaffirmed
+  and sharpened, not superseded.** The portfolio-product premise here holds.
+  ADR-0017 makes the audience and boundary explicit (Gauge is the *manager /
+  portfolio lens*, complementary to a separate engineer daily-driver; milestone
+  granularity, never slices), defines the analytics scope, and refines the
+  history-source model. This ADR remains the accepted portfolio reframe;
+  ADR-0017 builds on it.

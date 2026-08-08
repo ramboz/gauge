@@ -111,6 +111,15 @@ credential scope and failure visibility are part of the choice.
 as edge-triggered push rather than a central runner. Both remain Proposed/DRAFT;
 central pull stays the local-MVP default.
 
+**Reframed 2026-08-07 ([ADR-0017](decisions/adr-0017-reframe-onto-manager-lens.md)):**
+the concrete answer is **event-driven capture, owned by the thin client** — a
+Claude Code `Stop`/`SessionEnd` hook writes a snapshot per session end (no
+scheduler, no central runner, derive-never-ask). "Central collection" becomes
+aggregation of those captures; see
+[thin-client-and-central-collection](releases/thin-client-and-central-collection.md)
+(2026-08-28). The "local scheduler vs GitHub Actions vs central runner" framing
+above is superseded by the session-stop model.
+
 ### Freshness misses branch / worktree / uncommitted work (from spec 009 corpus run)
 
 **Decision needed:** whether `gitFreshness` should reflect activity beyond the
@@ -137,6 +146,14 @@ brand-new instance's first collection yields an all-`unknown` board — honest, 
 sparse and potentially underwhelming. Candidate: a dashboard hint like "collect
 daily to unlock forecasts", or surfacing observation-count/next-useful-collection
 per project. Pure presentation; changes no derivation.
+
+**Reframed 2026-08-07 ([ADR-0017](decisions/adr-0017-reframe-onto-manager-lens.md)):**
+the cold-start is no longer "collect daily and wait." The full `progress(t)`
+series already exists in git, so a one-time **git-backfill seed** reconstructs
+history and the forecast can light up on day one — the "history gate" is a code
+limitation, not a data one. The remaining question narrows to whether to ship
+the git-backfill seed and/or a first-run hint; it is no longer premised on
+accrual.
 
 **Resolution trigger:** before onboarding a new user, or with the next dashboard
 polish pass.

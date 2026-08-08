@@ -1,15 +1,21 @@
 # Gauge
 
 > Status: Active — reframed 2026-07-13 by
-> [ADR-0003](docs/decisions/adr-0003-reframe-onto-gauge-portfolio-product.md).
+> [ADR-0003](docs/decisions/adr-0003-reframe-onto-gauge-portfolio-product.md),
+> sharpened 2026-08-07 by
+> [ADR-0017](docs/decisions/adr-0017-reframe-onto-manager-lens.md) (manager lens,
+> analytics scope, reconstructable/captured history).
 > Generated Jig workflow infrastructure remains authoritative for development.
 
 ## What this project does
 
-Gauge is a private cross-project delivery dashboard. It tracks progress toward
-project-owned goals, deadline confidence, blockers, and recommended attention
-without mutating source repositories. The committed MVP is local, single-user,
-single-repository-per-project, and limited to one active goal per project.
+Gauge is the **manager / portfolio lens** — a private, read-only, cross-project
+view: how each project advances toward its active milestone, whether it will
+hold (RAG), what it costs (token spend), and what needs a hand next (PRs to
+merge · in flight · blockers). It works at **milestone** granularity (never
+slices) and is complementary to a separate **engineer daily-driver** (slice/
+session) it does not rebuild (ADR-0017). It **derives, never asks** — no manual
+status. The committed MVP is local, single-user, single-repository-per-project.
 
 The shipped runtime implements the Gauge adapter, normalized-observation, and
 central-state boundary from
@@ -27,12 +33,26 @@ This is an index. Durable detail lives in `docs/`; update it through
 
 ### Project identity and active work
 
-- **Gauge** — portfolio observer; owns registry, central observations/history,
-  forecasts, risk, and cross-project attention policy.
+- **Gauge** — the manager/portfolio lens (ADR-0017); read-only observer that owns
+  registry, observations/history, forecasts, risk, cost/velocity analytics, and
+  cross-project attention. Milestone granularity, never slices; shallow detail
+  tier (stops before slices/sessions/tasks — that's the engineer daily-driver's
+  job). Project-centric (people dimension deferred).
 - **Source projects** — own goals, deadlines, local priorities, and lifecycle
   state; Gauge reads them without writing.
-- **Committed MVP** — maximum two weeks; see
-  [local-portfolio-loop](docs/releases/local-portfolio-loop.md).
+- **Active build (manager dashboard)** — two dated releases:
+  [manager-dashboard-local-data](docs/releases/manager-dashboard-local-data.md)
+  (committed, 2026-08-14: [spec 011](docs/specs/011-milestone-centric-cards/spec.md)
+  cards + [spec 012](docs/specs/012-portfolio-manager-analytics/spec.md) local
+  analytics — RAG, attention counts, velocity, token cost by model/activity/skill)
+  and [thin-client-and-central-collection](docs/releases/thin-client-and-central-collection.md)
+  (candidate, 2026-08-28: event-driven session-stop capture, trends). Design
+  reference: spec 012 `design/manager-dashboard-mockup.html`. **History is
+  reconstructable from git (past) + captured on session-stop (future)** — the
+  forecast "history gate" is a code limit, not a data one. Blockers count is
+  approximate pending jig#195.
+- **Committed local-pull MVP** — the prior loop; see
+  [local-portfolio-loop](docs/releases/local-portfolio-loop.md) (largely shipped).
 - **Landed runtime** —
   [spec 004](docs/specs/004-retrofit-dashboard-runtime-onto-gauge-portfolio-product/spec.md)
   (identity, adapters, normalized observations, central state), spec 007

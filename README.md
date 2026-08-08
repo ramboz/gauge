@@ -1,16 +1,25 @@
 # Gauge
 
-Gauge is a private cross-project delivery dashboard for answering three daily
-questions: how are my projects advancing, which deadlines are at risk, and
-what deserves attention next?
+Gauge is the **manager / portfolio lens** — a private, read-only view across all
+of a person's projects: how each is advancing toward its active milestone,
+whether it will hold (RAG), what it is costing (token spend), and what needs a
+hand next (PRs to merge · in flight · blockers). Zoom **out** — breadth,
+decision, trend. It is deliberately complementary to a separate **engineer
+daily-driver** dashboard (slice/session, "what am I doing right now"); Gauge
+works at **milestone** granularity and does not rebuild that inner depth.
 
-The committed MVP is local and single-user. It tracks one repository and one
-active goal per project, reads source projects without modifying them, stores
-daily observations centrally, and explains progress, risk, blockers, and its
-recommended attention order. See the
-[product vision](docs/product-vision.md),
-[accepted reframe](docs/decisions/adr-0003-reframe-onto-gauge-portfolio-product.md),
-and [MVP release plan](docs/releases/local-portfolio-loop.md).
+The committed MVP is local and single-user, and it **derives, never asks** —
+every signal comes from evidence projects already produce (git, GitHub, release
+plans, Claude Code transcripts), read without modification. See the
+[product vision](docs/product-vision.md), the
+[portfolio reframe](docs/decisions/adr-0003-reframe-onto-gauge-portfolio-product.md)
+sharpened by the
+[manager-lens reframe (ADR-0017)](docs/decisions/adr-0017-reframe-onto-manager-lens.md),
+and the release plans:
+[Manager Dashboard — local data](docs/releases/manager-dashboard-local-data.md)
+(2026-08-14) and
+[Thin Client + Central Collection](docs/releases/thin-client-and-central-collection.md)
+(2026-08-28).
 
 ## Current state
 
@@ -57,9 +66,13 @@ Legacy `dashboard.config.json` is still read with one migration warning.
 ## Product boundaries
 
 - Source projects own goals, deadlines, local priority, and lifecycle state.
-- Gauge owns its project registry, daily observations, history, forecasts,
-  risks, and cross-project attention policy.
-- Source repositories are read-only; instance history belongs in Gauge.
+- Gauge owns its project registry, observations, history, forecasts, risks,
+  cost/velocity analytics, and cross-project attention policy.
+- Gauge is a **read-only observer**: it never writes to sources and never
+  captures on their behalf — history is reconstructed from git (the past) and,
+  going forward, captured by the thin client on session-stop (the future).
+- Gauge works at **milestone** granularity, never slices; slice/session/task
+  depth is the engineer daily-driver's job (ADR-0017).
 - Jig, Shaper, Servo, and generic GitHub sources are optional adapters rather
   than hard dependencies.
 - Missing or stale evidence renders as `unknown`, never as healthy or zero.

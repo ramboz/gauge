@@ -23,6 +23,7 @@
 - [ADR-0014: Per-project worktree-hygiene scoping](adr-0014-worktree-hygiene-artifactroot-scoping.md) — Worktree hygiene (`scanWorktreeOnlyDocs` in `src/scan.mjs`) surfaces documents that exist only inside an abandoned `.claude/worktrees/*` checkout and would be lost if the worktree were deleted. (2026-08-06, Accepted)
 - [ADR-0015: Worktree lifecycle state via a local push-proxy](adr-0015-worktree-lifecycle-state-local-pr-proxy.md) — ADR-0014 made worktree hygiene report the docs that live only in a worktree and are genuinely at risk. (2026-08-06, Accepted)
 - [ADR-0016: Optional GitHub PR resolution over the push-proxy](adr-0016-optional-github-pr-resolution.md) — ADR-0015 classifies worktrees with a fully-local **push-proxy**: a worktree whose HEAD is on a non-mainline remote ref is treated as "likely an open PR". (2026-08-06, Accepted)
+- [ADR-0017: Reframe onto the manager/portfolio lens: analytics scope and reconstructable/captured history](adr-0017-reframe-onto-manager-lens.md) — ADR-0003 reframed the inherited project-dashboard POC onto the **Gauge portfolio product** — a private, read-only, cross-project delivery view. (2026-08-07, Accepted)
 
 ## Format
 

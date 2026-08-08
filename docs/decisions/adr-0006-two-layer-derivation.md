@@ -175,3 +175,16 @@ None new. The analytics policy decisions—forecast confidence, cross-project
 attention overlay, and daily-collection scheduling—remain separately triggered in
 `docs/refinement-todo.md`; this ADR fixes their architectural home, not their
 policies.
+
+## Amendments
+
+- **2026-08-07 ([ADR-0017](adr-0017-reframe-onto-manager-lens.md)):** the
+  two-layer architecture stands, but the **source of the history series** the
+  history-derived layer folds over is refined. It is not only
+  forward-accumulated snapshots: the series can be **reconstructed from git**
+  (each spec's status transition is timestamped — the "insufficient-history"
+  gate is a *code* limit, not a data one) and, going forward, is **captured
+  event-driven** by the thin client on session-stop rather than by scheduled
+  pull. The parked "daily-collection scheduling" open item above is reframed to
+  that event-driven capture model (see `docs/refinement-todo.md`). Gauge remains
+  read-only; it derives over reconstructed + captured history.

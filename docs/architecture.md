@@ -134,6 +134,28 @@ Policies are deterministic, independently testable, and explain their evidence.
 Missing dates or insufficient history cannot yield `on_track` or `at_risk`, and
 the `collection.status` envelope is never derivation evidence.
 
+**History source — reconstructed and captured (ADR-0017, refining ADR-0006).**
+The history the derivation layer folds over is not only forward-accumulated
+snapshots. The full `progress(t)` series already exists in **git** (each spec's
+status transition is timestamped), so it can be **reconstructed** by walking
+commit history — the "insufficient-history" gate is a *code* limitation, not a
+data one. Going forward, capture is **event-driven and owned by the thin
+client**: a Claude Code `Stop`/`SessionEnd` hook writes an observation snapshot
+per session end (dense, forward, derive-never-ask). "Central collection" is
+aggregation of those captures, not scheduled/manual pull. Division of labour:
+**git = the past** (optional backfill seed), **session-stop capture = the
+future** (thin client), **Gauge = read + derive** (never captures on a source's
+behalf).
+
+**Manager-lens analytics (ADR-0017; [spec 012](specs/012-portfolio-manager-analytics/spec.md)).**
+The manager view derives, at milestone granularity: RAG health; a countable
+attention row (PRs-awaiting-merge via `gh` · specs-in-flight · blockers, the
+last *approximate* pending jig#195); git velocity; human-vs-agent split; and
+**token-cost analytics** by model / activity / skill sourced from Claude Code
+transcripts (`~/.claude/projects`), which **must dedup at per-request grain**
+(naive summing overcounts materially). Slice/session/task depth is out of scope
+— the engineer daily-driver's job.
+
 ### Delivery
 
 `src/cli.mjs`, `src/server.mjs`, and `public/index.html` consume the canonical
