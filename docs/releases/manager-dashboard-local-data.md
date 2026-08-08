@@ -54,14 +54,17 @@ work (which is the next release).
 | Central data collection + history-derived pace | Next release (2026-08-28). |
 | Thin-client live-session signals | Next release. |
 | First-class blockers (clean count) | jig spec 108 (upstream); count stays approximate here. |
-| RAG lit to on_track/at_risk (needs ≥2 spaced observations) | Unblocks once central collection accrues history. |
+| RAG lit to on_track/at_risk (real values) | Two paths: an **optional git-backfill seed** (reconstruct `progress(t)` from commit history — instant past, the "takes a bit longer" local work) as a stretch here, else it accrues via the thin client's session-stop capture next release. The RAG *affordance* ships now; it reads honest `unknown` until either path provides ≥2 spaced observations. |
 
 ## Risks / Rabbit Holes
 
 - **Thin history → RAG `unknown`.** The forecast needs ≥2 spaced observations;
   with one snapshot it reads `unknown (insufficient-history)` even with a
-  deadline set. That is correct and honest, not a bug — RAG becomes real in the
-  next release. Retire by keeping `unknown` explicit and never faking green.
+  deadline set. That is correct and honest, not a bug. The data exists (git holds
+  the full `progress(t)` series), so this is a *code* gate, not a data one —
+  retire it either by the optional git-backfill seed here or by the thin client's
+  session-stop capture next release. Keep `unknown` explicit meanwhile; never
+  fake green.
 - **Token overcount.** Naive summing overcounts up to ~3.4×; must dedup at
   per-request grain (spec 012 assumption).
 - **Public-repo leakage.** Real portfolio figures must never be committed; keep

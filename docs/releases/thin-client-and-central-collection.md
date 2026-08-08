@@ -24,18 +24,23 @@ adds both.
 
 ## Solution Outline
 
-- **Central data collection.** Accrue the observation history the derivation
-  layer already reads (`readObservationHistory`), via repeated/scheduled
-  `npm run collect` runs — reaching the ≥2-spaced-observations bar so the
-  forecast produces real `on_track` / `at_risk` and the RAG layer lights up.
-  Unlocks history-derived **velocity trend**, **native pace**, and **cost
-  trend** over time.
-- **Thin-client live-session signals.** Consume the developer-view thin client's
-  per-project active-session data as an *optional enrichment* to the
-  "specs in flight" count and a "running now" indicator — the seam between the
-  manager view (this) and the engineer daily-driver (thin client). Optional and
-  degrading: absent it, "in flight" still derives from branches/worktrees/draft
-  PRs.
+- **Event-driven capture (thin client owns it).** Collection is **not** a manual
+  or scheduled `npm run collect` — the thin client installs a **session-stop
+  hook** (Claude Code `Stop`/`SessionEnd`) that writes an observation snapshot on
+  **every session end**. This yields dense, forward history with no polling and
+  no manual step (derive-never-ask). Gauge stays the read-only observer: it
+  **reads** the resulting central history and derives — it does not capture.
+- **Central data collection.** The captured snapshots accumulate centrally, past
+  the ≥2-spaced-observations bar, so the forecast produces real `on_track` /
+  `at_risk` (RAG lights up) and history-derived **velocity trend**, **native
+  pace**, and **cost trend** render over time. Session-stop capture only records
+  *going forward*; the retroactive **git-backfill seed** (see the local-data
+  release) is the complement for existing/pre-thin-client history.
+- **Thin-client live-session signals.** The same thin client also exposes
+  per-project active-session data as an *optional enrichment* to "specs in
+  flight" and a "running now" indicator — the seam to the engineer daily-driver.
+  Optional and degrading: absent it, "in flight" still derives from
+  branches/worktrees/draft PRs.
 
 ## Cutline
 
