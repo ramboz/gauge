@@ -266,6 +266,40 @@ function velocityBlock(p) {
   if (!v) return `<div class="counts">velocity <span class="unknown">unknown</span></div>`;
   return `<div class="counts">${velocityHeadline(v.perWeek)} <span class="spark" aria-hidden="true" title="weekly commits, oldest → newest">${esc(sparkline(v.buckets))}</span></div>`;
 }
+// 012-03: token cost, attached by the server read layer (src/cost.mjs's
+// attachTokenCost) as `p.tokenCost` — either `{ totalUsd, hasUnknownModel,
+// byModel }` or `null` (no mapped session transcripts — explicit unknown,
+// never a fabricated $0, AC4). `byModel` renders as a compact legend (model
+// · $amount, sorted priced-first) — an `unknown-model` bucket (AC3) shows
+// with no dollar figure of its own and flips the headline into a "at least"
+// floor (`$X+`) rather than implying the total is complete.
+function fmtUsd(usd) {
+  return `$${(Math.round(usd * 100) / 100).toFixed(2)}`;
+}
+function costLegendEntry(b) {
+  return `${esc(b.model)} ${b.usd === null ? '<span class="unknown">unknown</span>' : esc(fmtUsd(b.usd))}`;
+}
+// Reconciliation: a real, non-zero total that rounds below a cent must never
+// render as "$0.00" — that reads as "free", the exact "0-as-healthy" shape
+// velocity.mjs's velocityHeadline already guards against (its "< 0.1
+// commits/wk" treatment for a real-but-sub-precision rate). "< $0.01" is the
+// cost-headline equivalent, mirroring velocityHeadline's own convention of
+// embedding the pre-escaped `&lt;` entity directly (never further wrapped in
+// esc() by the caller — costBlock below, like velocityBlock, interpolates
+// this return value raw). The hasUnknownModel floor marker (`+`) still
+// applies on top of either form. True unknown (null tokenCost) is unchanged
+// — that stays the literal word "unknown", handled by the caller.
+function costHeadline(totalUsd, hasUnknownModel) {
+  const rounded = fmtUsd(totalUsd);
+  const text = (totalUsd > 0 && rounded === '$0.00') ? '&lt; $0.01' : rounded;
+  return hasUnknownModel ? `${text}+` : text;
+}
+function costBlock(p) {
+  const c = p.tokenCost;
+  if (!c) return `<div class="counts">cost <span class="unknown">unknown</span></div>`;
+  const legend = c.byModel.map(costLegendEntry).join(' · ');
+  return `<div class="counts">cost ${costHeadline(c.totalUsd, c.hasUnknownModel)}${legend ? ` <span class="meta">(${legend})</span>` : ''}</div>`;
+}
 function warningItems(p) {
   const items=[];
   if(p.collection?.status && p.collection.status!=='ok') {
@@ -347,6 +381,7 @@ function card(p) {
   return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${warnIcon}${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${velocityBlock(p)}
+    ${costBlock(p)}
     ${milestoneBlock}${fallbackNote}
     ${forecastBlock}
     ${barProgress?`<div class="barrow"><div class="bar"><div style="width:${barPct??0}%"></div></div><span class="pct">${barPct===null?'—':barPct+'%'}</span></div><div class="counts">${barProgress.done} / ${barProgress.denom} specs${milestoneProgress?'':' done'}${barProgress.deferred?` · ${barProgress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}

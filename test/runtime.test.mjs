@@ -901,6 +901,127 @@ test('card renders the headline AND an empty (non-crashing) sparkline span on an
   assert.match(html, /<span class="spark"[^>]*><\/span>/);
 });
 
+// --- 012-03: token cost total + by-model on the card -----------------------
+// `p.tokenCost` is attached by the server read layer (src/cost.mjs's
+// attachTokenCost), mirroring velocity: either `{ totalUsd, hasUnknownModel,
+// byModel }` or `null` (no mapped session transcripts — explicit unknown,
+// AC4). The card renders a total-cost headline plus a compact by-model
+// legend (AC5), or the literal word "unknown" when tokenCost is null, never
+// a fabricated $0.
+
+test('card renders the total cost headline and a compact by-model legend (AC5)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    tokenCost: {
+      totalUsd: 12.5,
+      hasUnknownModel: false,
+      byModel: [
+        { model: 'illustrative-model-a', usd: 10, tokens: { input: 1000, output: 500, cacheWrite: 0, cacheRead: 0 } },
+        { model: 'illustrative-model-b', usd: 2.5, tokens: { input: 200, output: 100, cacheWrite: 0, cacheRead: 0 } },
+      ],
+    },
+  };
+  const html = context.card(project);
+  assert.match(html, /cost \$12\.50/);
+  assert.match(html, /illustrative-model-a/);
+  assert.match(html, /\$10\.00/);
+  assert.match(html, /illustrative-model-b/);
+  assert.match(html, /\$2\.50/);
+  assert.doesNotMatch(html, /cost.*unknown/);
+});
+
+test('card renders explicit "unknown" (never a fabricated $0) when tokenCost is null (AC4)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, tokenCost: null };
+  const html = context.card(project);
+  assert.match(html, /cost <span class="unknown">unknown<\/span>/);
+  assert.doesNotMatch(html, /\$0\.00/);
+});
+
+test('card render does not regress when tokenCost is entirely absent (pre-012-03 identity)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
+  assert.doesNotThrow(() => context.card(project));
+  assert.match(context.card(project), /cost <span class="unknown">unknown<\/span>/);
+});
+
+test('card flags an unknown-model bucket by turning the total into a floor ("$X+"), never implying it is complete (AC3)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    tokenCost: {
+      totalUsd: 5,
+      hasUnknownModel: true,
+      byModel: [
+        { model: 'illustrative-model-a', usd: 5, tokens: { input: 500, output: 250, cacheWrite: 0, cacheRead: 0 } },
+        { model: 'unknown-model', usd: null, tokens: { input: 400, output: 150, cacheWrite: 0, cacheRead: 0 } },
+      ],
+    },
+  };
+  const html = context.card(project);
+  assert.match(html, /cost \$5\.00\+/);
+  assert.match(html, /unknown-model/);
+});
+
+test('card cost legend escapes model names — no raw markup injected (XSS safety)', () => {
+  const context = cardContext();
+  const payload = '"><img src=x onerror=alert(1)>';
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    tokenCost: { totalUsd: 1, hasUnknownModel: false, byModel: [{ model: payload, usd: 1, tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 } }] },
+  };
+  const html = context.card(project);
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /&lt;img/);
+});
+
+// --- 012-03: server /api/data wiring ----------------------------------------
+
+test('server /api/data wiring reads each project\'s transcripts and attaches token cost via the pure fold (AC1/AC4/AC6)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /import\s*\{\s*projectTokenCost,\s*attachTokenCost\s*\}\s*from\s*'\.\/cost\.mjs'/);
+  assert.match(src, /projectTokenCost\(/);
+  assert.match(src, /attachTokenCost\(/);
+});
+
+test('card shows "< $0.01" — never a bare "$0.00" — when a real, non-null total cost rounds below a cent (reconciliation, mirrors AC4\'s zero-as-healthy guard)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    tokenCost: {
+      totalUsd: 0.001,
+      hasUnknownModel: false,
+      byModel: [{ model: 'illustrative-model-a', usd: 0.001, tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 } }],
+    },
+  };
+  const html = context.card(project);
+  assert.match(html, /cost &lt; \$0\.01/);
+  assert.doesNotMatch(html, /cost \$0\.00/);
+});
+
+test('card combines the sub-cent floor with the unknown-model "+" marker sensibly ("< $0.01+")', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    tokenCost: {
+      totalUsd: 0.001,
+      hasUnknownModel: true,
+      byModel: [
+        { model: 'illustrative-model-a', usd: 0.001, tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 } },
+        { model: 'unknown-model', usd: null, tokens: { input: 400, output: 150, cacheWrite: 0, cacheRead: 0 } },
+      ],
+    },
+  };
+  const html = context.card(project);
+  assert.match(html, /cost &lt; \$0\.01\+/);
+});
+
 test('card shows "< 0.1 commits/wk" — never "≈ 0" — when a real, non-null velocity rounds to zero (AC4 zero-as-healthy guard)', () => {
   const context = cardContext();
   // A genuine but sub-0.1/wk rate (e.g. 1 commit over a large window) still

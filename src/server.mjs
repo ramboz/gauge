@@ -10,6 +10,7 @@ import { readObservationHistory } from './state.mjs';
 import { attachForecasts, attentionQueue } from './derive.mjs';
 import { attachMilestones } from './milestone.mjs';
 import { gitVelocity, attachVelocity } from './velocity.mjs';
+import { projectTokenCost, attachTokenCost } from './cost.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -58,10 +59,24 @@ const server = http.createServer((req, res) => {
         freshConfig.projects.map((project) => [project.id, gitVelocity(project.path, velocityNowMs)]),
       );
       const withVelocity = attachVelocity(withMilestones, velocityByProjectId);
+      // Token cost (spec 012, slice 012-03): the spec's one deliberate depth
+      // exception. The one I/O (enumerating + reading each project's Claude
+      // Code session transcripts, then deduping/pricing them) happens HERE,
+      // at the read layer — mirroring the git-velocity read above — so
+      // attachTokenCost itself (src/cost.mjs) stays a pure fold. The
+      // transcripts root is overridable via GAUGE_TRANSCRIPTS_ROOT (tests
+      // never touch the real `~/.claude/projects`); `undefined` here already
+      // triggers projectTokenCost's own default-parameter fallback, so no
+      // separate branch is needed.
+      const transcriptsRoot = process.env.GAUGE_TRANSCRIPTS_ROOT || undefined;
+      const costByProjectId = Object.fromEntries(
+        freshConfig.projects.map((project) => [project.id, projectTokenCost(project.path, transcriptsRoot)]),
+      );
+      const withTokenCost = attachTokenCost(withVelocity, costByProjectId);
       // Global attention queue (spec 009-03, ADR-0013): a pure ranking over
       // the forecast/risk read this loop just attached — no additional I/O,
       // no adapter/registry reach from derive.mjs itself (AC4).
-      const data = { ...withVelocity, attention: attentionQueue(withVelocity) };
+      const data = { ...withTokenCost, attention: attentionQueue(withTokenCost) };
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

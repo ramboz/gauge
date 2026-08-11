@@ -229,8 +229,12 @@ edge-push topology (specs 005/006) remain deferred; collection stays manual pull
   spec ids that release references, 011-05) so worktrees/PRs can be joined to their
   milestone(s) — plus a per-project `velocity: {perWeek, buckets}` git commit-cadence
   read-layer join (012-02, `attachVelocity` in `src/velocity.mjs`; `null` when git
-  is unavailable or the window is empty) — that are not part of the observation-v1
-  record, plus a
+  is unavailable or the window is empty) and a per-project `tokenCost` join
+  (012-03, `attachTokenCost` in `src/cost.mjs`) — total + by-model spend derived
+  from Claude Code transcripts under a configurable `GAUGE_TRANSCRIPTS_ROOT`,
+  deduped at per-request grain and priced via an illustrative table with an explicit
+  `unknown-model` bucket; `null` when no sessions map — that are not part of the
+  observation-v1 record, plus a
   top-level `attention` array (009-03): the deterministic cross-project attention
   ranking.
 - **CLI:** `npm run scan` and `npm run onboard` are read-only (`onboard`

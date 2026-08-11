@@ -1,0 +1,3 @@
+{"requestId":"req_005","cwd":"/Users/fake/alpha","gitBranch":"main","sessionId":"sess-c","timestamp":"2026-08-01T00:04:00Z","type":"user","message":{"id":"msg_005","role":"user","content":"hello"}}
+not valid json at all {{{
+{"requestId":"req_006","cwd":"/Users/fake/alpha","gitBranch":"main","sessionId":"sess-c","timestamp":"2026-08-01T00:05:00Z","message":{"id":"msg_006","model":"illustrative-model-a","usage":{"input_tokens":250,"output_tokens":100,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
