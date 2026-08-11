@@ -12,7 +12,8 @@
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px }.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px }
   .head { display:flex; justify-content:space-between; gap:8px }.head h2 { font-size:15px; margin:0 }.chip { font-size:11px; padding:2px 9px; border-radius:10px; background:var(--inset) }.ok { color:var(--good) }.partial { color:var(--warn) }.error,.err { color:var(--bad) }.meta,.counts { color:var(--muted); font-size:12px }
   .barrow { display:flex; align-items:center; gap:10px; margin-top:10px }.bar { flex:1; height:6px; background:var(--inset); border-radius:4px; overflow:hidden }.bar div { height:100%; background:var(--accent) }.pct { min-width:38px; text-align:right; font-weight:600 }
-  .sect { border-top:1px solid var(--border); margin-top:10px; padding-top:8px }.ws { padding:5px 0 }.warnbox { background:color-mix(in srgb,var(--bad) 10%,transparent); color:var(--text); padding:7px 9px; border-radius:8px }.infobox { background:var(--inset); color:var(--text); padding:7px 9px; border-radius:8px; margin-top:8px }.wtsec { margin-top:7px }.wthdr { font-weight:600; font-size:13px }.stale { opacity:.65 }
+  .sect { border-top:1px solid var(--border); margin-top:10px; padding-top:8px }.ws { padding:5px 0 }.infobox { background:var(--inset); color:var(--text); padding:7px 9px; border-radius:8px; margin-top:8px }.wtsec { margin-top:7px }.wthdr { font-weight:600; font-size:13px }.stale { opacity:.65 }
+  .warn-icon { cursor:help; color:var(--warn); font-weight:700 }.warn-icon:focus { outline:2px solid var(--accent); outline-offset:2px }
   ul { margin:6px 0; padding-left:20px } button { color:inherit; background:var(--card); border:1px solid var(--border); border-radius:7px; padding:4px 10px; cursor:pointer }
   .queue-section { max-width:1200px; margin:0 auto 20px }.queue-section h2 { font-size:14px; margin:0 0 8px }
   .queue { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px }
@@ -81,28 +82,58 @@ function prBadge(pr) {
   if(pr===null) return ' <span class="meta">· no open PR</span>';
   return ` · <a href="${esc(pr.url)}" target="_blank" rel="noopener">PR #${esc(pr.number)} ${esc(String(pr.state).toLowerCase())}</a>`;
 }
-// Cleanup-worthy states get the ⚠ "living only in a worktree" alarm; healthy
-// in-progress work (open PRs, active local branches) is shown separately as
-// plain status, not a warning.
+// Cleanup-worthy states used to get their own full-width ⚠ "living only in a
+// worktree" box; 011-04 AC3 retires that box — cleanup items now feed the
+// header ⚠ icon's tooltip instead (see warningItems below). Healthy
+// in-progress work (open PRs, active local branches) keeps its plain-status
+// "in progress" box below, unaffected.
 const WT_CLEANUP_GROUPS = new Set(['stale', 'pushed-stale', 'unknown']);
-function worktreeWarn(docs) {
+// 011-04 AC3: renders only the "in progress" info box for healthy worktree
+// groups (active/review) — the cleanup-worthy groups no longer render a body
+// block at all; they're reachable only via the header ⚠ tooltip.
+function worktreeInfo(docs) {
   if(!docs.length) return '';
   const byGroup=new Map();
-  for(const d of docs){ const g=wtGroup(d); if(!byGroup.has(g)) byGroup.set(g,new Map()); const wm=byGroup.get(g); if(!wm.has(d.worktree)) wm.set(d.worktree,{paths:[],pr:d.pr}); wm.get(d.worktree).paths.push(d.path); }
-  const countIn=(groups)=>groups.reduce((sum,g)=>sum+(byGroup.has(g)?[...byGroup.get(g).values()].reduce((s,e)=>s+e.paths.length,0):0),0);
-  const renderSections=(groups)=>groups.filter((g)=>byGroup.has(g)).map((g)=>{
+  for(const d of docs){ const g=wtGroup(d); if(WT_CLEANUP_GROUPS.has(g)) continue; if(!byGroup.has(g)) byGroup.set(g,new Map()); const wm=byGroup.get(g); if(!wm.has(d.worktree)) wm.set(d.worktree,{paths:[],pr:d.pr}); wm.get(d.worktree).paths.push(d.path); }
+  const active=WT_GROUP_ORDER.filter((g)=>!WT_CLEANUP_GROUPS.has(g));
+  const sections=active.filter((g)=>byGroup.has(g)).map((g)=>{
     const wm=byGroup.get(g), meta=WT_GROUP_META[g];
     const n=[...wm.values()].reduce((sum,e)=>sum+e.paths.length,0);
     const rows=[...wm.entries()].sort((a,b)=>b[1].paths.length-a[1].paths.length).map(([wt,e])=>`<li><b>${esc(wt)}</b> <span class="meta">${e.paths.length} doc${e.paths.length===1?'':'s'}</span>${prBadge(e.pr)}<details><summary class="meta">paths</summary><ul>${e.paths.map((p)=>`<li>${esc(p)}</li>`).join('')}</ul></details></li>`).join('');
     return `<div class="wtsec"><div class="wthdr" style="color:${meta.color}">${n} doc${n===1?'':'s'} · ${esc(meta.label)}</div><ul>${rows}</ul></div>`;
   }).join('');
-  const cleanup=WT_GROUP_ORDER.filter((g)=>WT_CLEANUP_GROUPS.has(g));
-  const active=WT_GROUP_ORDER.filter((g)=>!WT_CLEANUP_GROUPS.has(g));
-  const cN=countIn(cleanup), aN=countIn(active);
-  let html='';
-  if(cN) html+=`<div class="warnbox"><div class="meta">⚠ ${cN} document${cN===1?'':'s'} live only in worktrees, not on main:</div>${renderSections(cleanup)}</div>`;
-  if(aN) html+=`<div class="infobox"><div class="meta">${aN} document${aN===1?'':'s'} in worktrees with work in progress:</div>${renderSections(active)}</div>`;
-  return html;
+  const aN=active.reduce((sum,g)=>sum+(byGroup.has(g)?[...byGroup.get(g).values()].reduce((s,e)=>s+e.paths.length,0):0),0);
+  return aN?`<div class="infobox"><div class="meta">${aN} document${aN===1?'':'s'} in worktrees with work in progress:</div>${sections}</div>`:'';
+}
+// 011-04 AC1/AC2: pure assembly of the header ⚠ icon's attention items —
+// plain language, NEVER a file path — covering a non-ok collection status,
+// stale source recency, cleanup-worthy worktree docs (WT_CLEANUP_GROUPS),
+// and the "no release plan" gap (mirrors card()'s own `!active` fallback
+// rule, the single source of truth for that gap). Empty array ⇒ no icon
+// (AC1); a non-empty array becomes the tooltip text (AC2). No DOM, no
+// filesystem — testable directly, independent of card()'s render.
+const WT_CLEANUP_LABEL = { stale: 'forgotten', 'pushed-stale': 'pushed but likely done', unknown: 'unknown-state' };
+function warningItems(p) {
+  const items=[];
+  if(p.collection?.status && p.collection.status!=='ok') {
+    const detail=(p.errors||[]).map((e)=>e.message).join(' · ');
+    items.push(`collection ${p.collection.status}${detail?': '+detail:''}`);
+  }
+  const repository=signal(p,'repository');
+  if(repository?.freshness?.state==='stale') items.push('repository stale — no recent commits');
+  const hygiene=signal(p,'hygiene');
+  const worktreeOnly=hygiene?.status==='supported'?(hygiene.value.worktreeOnlyDocs||[]):[];
+  const byGroup=new Map();
+  for(const d of worktreeOnly){ const g=wtGroup(d); if(!WT_CLEANUP_GROUPS.has(g)) continue; if(!byGroup.has(g)) byGroup.set(g,new Map()); const wm=byGroup.get(g); if(!wm.has(d.worktree)) wm.set(d.worktree,d.pr); }
+  for(const g of WT_GROUP_ORDER){
+    if(!byGroup.has(g)) continue;
+    for(const [wt,pr] of byGroup.get(g)){
+      const prText=pr===null?', no PR':(pr&&pr.state?`, PR ${String(pr.state).toLowerCase()}`:'');
+      items.push(`${WT_CLEANUP_LABEL[g]} worktree \`${wt}\`${prText}`);
+    }
+  }
+  if(!p.milestone?.active) items.push('no release plan — overall spec progress only');
+  return items;
 }
 function card(p) {
   const execution=signal(p,'execution'), workstreams=signal(p,'workstreams'), hygiene=signal(p,'hygiene'), narrative=signal(p,'narrative'), repository=signal(p,'repository');
@@ -164,7 +195,14 @@ function card(p) {
   // "repository unavailable" when the repository signal is missing.
   const recency=git?`last commit ${esc(git.lastCommit)}${repoState==='stale'?' <span style="color:var(--warn)">(stale)</span>':''}`:(repoState==='unknown'?'<span style="color:var(--muted)">recency unknown</span>':'');
   const metaLine=repository?.status==='supported'?recency:'<span class="partial">repository unavailable</span>';
-  return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${statusChip}</div>
+  // 011-04 AC1/AC2/AC4: the header ⚠ icon replaces the old top warnings block
+  // — present only when warningItems has something to report, keyboard-
+  // reachable (tabindex + role="img") with its accessible name/tooltip in
+  // both aria-label and title so it's never hover-only.
+  const warnings=warningItems(p);
+  const warnTooltip=warnings.join(' · ');
+  const warnIcon=warnings.length?`<span class="warn-icon" tabindex="0" role="img" aria-label="${esc('Attention needed: '+warnTooltip)}" title="${esc(warnTooltip)}">⚠</span>`:'';
+  return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${warnIcon}${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${milestoneBlock}${fallbackNote}
     ${forecastBlock}
@@ -172,7 +210,7 @@ function card(p) {
     ${active
       ? (streams.length?`<div class="sect"><span class="meta">workstreams</span>${streams.map(workstreamRow).join('')}</div>`:'')
       : ((items.length||discoveredItems.length)?`<div class="sect"><span class="meta">workstreams</span>${items.map(workstreamRow).join('')}${summarizeDiscovered(discoveredItems).map(discoveredRow).join('')}</div>`:'')}
-    ${worktreeWarn(worktreeOnly)}
+    ${worktreeInfo(worktreeOnly)}
     ${narrativeBlock}${problems?`<p class="err">${problems}</p>`:''}</article>`;
 }
 function safeCard(project) { try { return card(project); } catch(error) { const label=project?.project?.label||project?.project?.id||'malformed project'; return `<article class="card"><div class="head"><h2>${esc(label)}</h2><span class="chip error">error</span></div><p class="err">Invalid project observation: ${esc(error?.message||error)}</p></article>`; } }

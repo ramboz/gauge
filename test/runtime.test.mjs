@@ -346,6 +346,164 @@ test('card fallback degrades cleanly when there are neither releases nor discove
   assert.doesNotMatch(html, /workstreams<\/span>/);
 });
 
+// --- 011-04: warnings collapse to a header ⚠ icon + tooltip ---------------
+// warningItems(project) is the pure assembly of plain-language attention
+// items (collection warning, repository stale, cleanup-worthy worktree docs,
+// "no release plan" gap) — no file paths, never DOM. card() gates the header
+// ⚠ icon on its length (AC1) and renders its items as the tooltip (AC2).
+
+const cleanProject = {
+  ...cardBase,
+  project: { id: 'alpha', label: 'Alpha' },
+  collection: { status: 'ok' },
+  signals: [
+    { type: 'repository', version: 1, status: 'supported', value: { git: { lastCommit: 'today' } }, freshness: { state: 'fresh' } },
+  ],
+  milestone: { active: { title: 'Ship V1', appetite: '2 weeks' }, next: [] },
+};
+
+test('warningItems returns an empty array for a fully clean project (011-04 AC1)', () => {
+  const context = cardContext();
+  // Array.from: warningItems returns a vm-realm Array; assert.deepEqual would
+  // reject it against a main-realm [] as "not reference-equal" even when
+  // structurally identical, so compare via a main-realm copy instead.
+  assert.deepEqual(Array.from(context.warningItems(cleanProject)), []);
+});
+
+test('card renders no ⚠ icon for a clean project (011-04 AC1)', () => {
+  const context = cardContext();
+  const html = context.card(cleanProject);
+  assert.doesNotMatch(html, /warn-icon/);
+  assert.doesNotMatch(html, /⚠/);
+});
+
+test('warningItems flags a non-ok collection status (011-04 AC1)', () => {
+  const context = cardContext();
+  const project = { ...cleanProject, collection: { status: 'partial' }, errors: [{ message: 'adapter timed out' }] };
+  const items = context.warningItems(project);
+  assert.ok(items.some((item) => /collection partial/.test(item)));
+  assert.ok(items.some((item) => /adapter timed out/.test(item)));
+});
+
+test('warningItems flags a stale repository signal (011-04 AC1)', () => {
+  const context = cardContext();
+  const project = {
+    ...cleanProject,
+    signals: [{ type: 'repository', version: 1, status: 'supported', value: { git: { lastCommit: '3 weeks ago' } }, freshness: { state: 'stale' } }],
+  };
+  const items = context.warningItems(project);
+  assert.ok(items.some((item) => /repository stale/.test(item)));
+});
+
+test('warningItems flags the "no release plan" gap (011-04 AC1)', () => {
+  const context = cardContext();
+  const project = { ...cleanProject, milestone: { active: null, next: [] } };
+  const items = context.warningItems(project);
+  assert.ok(items.some((item) => /no release plan/i.test(item)));
+});
+
+test('warningItems flags cleanup-worthy worktree docs (stale/pushed-stale/unknown) in plain language, and never a file path (011-04 AC1/AC2)', () => {
+  const context = cardContext();
+  const project = {
+    ...cleanProject,
+    signals: [
+      ...cleanProject.signals,
+      {
+        type: 'hygiene', version: 1, status: 'supported',
+        value: { worktreeOnlyDocs: [{ worktree: 'sad-jepsen', path: 'docs/wt/sad-jepsen/notes.md', state: 'stale', pushed: false }] },
+      },
+    ],
+  };
+  const items = context.warningItems(project);
+  assert.ok(items.some((item) => /forgotten/.test(item) && /sad-jepsen/.test(item)));
+  for (const item of items) assert.doesNotMatch(item, /docs\/wt\/sad-jepsen\/notes\.md/);
+});
+
+test('warningItems does NOT flag healthy in-progress worktree docs (active/review groups) — only cleanup-worthy ones (011-04 AC1)', () => {
+  const context = cardContext();
+  const project = {
+    ...cleanProject,
+    signals: [
+      ...cleanProject.signals,
+      {
+        type: 'hygiene', version: 1, status: 'supported',
+        value: { worktreeOnlyDocs: [{ worktree: 'happy-turing', path: 'docs/wt/happy-turing/notes.md', state: 'active', pushed: false }] },
+      },
+    ],
+  };
+  const items = context.warningItems(project);
+  assert.equal(items.length, 0);
+});
+
+test('card renders a ⚠ icon whose tooltip lists each attention item, with no file paths (011-04 AC1/AC2)', () => {
+  const context = cardContext();
+  const project = {
+    ...cleanProject,
+    collection: { status: 'partial' },
+    errors: [{ message: 'adapter timed out' }],
+    signals: [
+      ...cleanProject.signals,
+      {
+        type: 'hygiene', version: 1, status: 'supported',
+        value: { worktreeOnlyDocs: [{ worktree: 'sad-jepsen', path: 'docs/wt/sad-jepsen/notes.md', state: 'stale', pushed: false }] },
+      },
+    ],
+  };
+  const html = context.card(project);
+  assert.match(html, /class="warn-icon"/);
+  assert.match(html, /collection partial/);
+  assert.match(html, /sad-jepsen/);
+  assert.doesNotMatch(html, /docs\/wt\/sad-jepsen\/notes\.md/);
+});
+
+test('card ⚠ affordance is keyboard-reachable, not hover-only: focusable with an accessible name (011-04 AC4)', () => {
+  const context = cardContext();
+  const html = context.card({ ...cleanProject, collection: { status: 'partial' } });
+  const iconTag = html.match(/<span class="warn-icon"[^>]*>/)[0];
+  assert.match(iconTag, /tabindex="0"/);
+  assert.match(iconTag, /role="img"/);
+  assert.match(iconTag, /aria-label="[^"]+"/);
+  assert.match(iconTag, /title="[^"]+"/);
+});
+
+test('card no longer renders the full-width worktree warnbox for cleanup-worthy docs (011-04 AC3)', () => {
+  const context = cardContext();
+  const project = {
+    ...cleanProject,
+    signals: [
+      ...cleanProject.signals,
+      {
+        type: 'hygiene', version: 1, status: 'supported',
+        value: { worktreeOnlyDocs: [{ worktree: 'sad-jepsen', path: 'docs/wt/sad-jepsen/notes.md', state: 'stale', pushed: false }] },
+      },
+    ],
+  };
+  const html = context.card(project);
+  assert.doesNotMatch(html, /class="warnbox"/);
+});
+
+test('card retains the "in progress" info box for healthy active/review worktree docs (011-04 AC3, honesty of scope)', () => {
+  const context = cardContext();
+  const project = {
+    ...cleanProject,
+    signals: [
+      ...cleanProject.signals,
+      {
+        type: 'hygiene', version: 1, status: 'supported',
+        value: { worktreeOnlyDocs: [{ worktree: 'happy-turing', path: 'docs/wt/happy-turing/notes.md', state: 'active', pushed: false }] },
+      },
+    ],
+  };
+  const html = context.card(project);
+  assert.match(html, /class="infobox"/);
+  assert.match(html, /happy-turing/);
+});
+
+test('no leftover "warnbox" reference remains in the runtime source (011-04 AC3)', () => {
+  const html = read('public/index.html');
+  assert.doesNotMatch(html, /warnbox/);
+});
+
 // --- 009-02: card shows the forecast/risk read (ADR-0006/ADR-0012, AC5) ---
 
 test('card renders an on_track forecast with its reason (AC5)', () => {
