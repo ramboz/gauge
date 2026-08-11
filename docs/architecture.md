@@ -224,8 +224,10 @@ edge-push topology (specs 005/006) remain deferred; collection stays manual pull
   selected from the project's release-plan `## Status` (011-01, `attachMilestones`
   in `src/milestone.mjs`) — where `active` additionally carries a `specProgress`
   done/denominator rolled up from the specs its release doc references (011-02,
-  reusing `progressOf`; the release workstream carries its `body` for that parse) —
-  that are not part of the observation-v1 record, plus a
+  reusing `progressOf`; the release workstream carries its `body` for that parse),
+  and every `active`/`next` milestone carries `referencedSpecs` (the parsed parent
+  spec ids that release references, 011-05) so worktrees/PRs can be joined to their
+  milestone(s) — that are not part of the observation-v1 record, plus a
   top-level `attention` array (009-03): the deterministic cross-project attention
   ranking.
 - **CLI:** `npm run scan` and `npm run onboard` are read-only (`onboard`

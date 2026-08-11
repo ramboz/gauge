@@ -504,6 +504,226 @@ test('no leftover "warnbox" reference remains in the runtime source (011-04 AC3)
   assert.doesNotMatch(html, /warnbox/);
 });
 
+// --- 011-05: map worktrees/PRs to their milestone --------------------------
+// Two-hop join: worktree name -> spec id(s) (hop 1, extractBranchSpecIds) ->
+// milestone(s) whose release references that spec (hop 2, joined against the
+// `referencedSpecs` src/milestone.mjs already attaches to active/next — never
+// a second reimplementation of extractReferencedSpecNumbers client-side).
+// worktreeMilestoneMap(project) is the pure join; card()/worktreeInfo/
+// warningItems render its output.
+
+// Fixtures below use slashless BASENAMES with a trailing hash — the actual
+// shape of `d.worktree` (a `readdirSync('.claude/worktrees')` directory
+// name, e.g. `slice-007-03-jig-4c8845`, `gauge-e2e-exercise-1f0b0d`); it can
+// never contain a `/` or a `claude/`-style branch prefix (those exist only
+// on the git branch, which `d.worktree` does not carry — see the
+// hop-1-operates-on-the-directory-name deviation note).
+
+test('extractBranchSpecIds: a spec-NNN worktree name extracts its id (HOP 1 happy path)', () => {
+  const context = cardContext();
+  assert.deepEqual(Array.from(context.extractBranchSpecIds('spec-096-jig-ceremony-abc123')), ['096']);
+});
+
+test('extractBranchSpecIds: a slice-NNN-NN worktree name normalizes to its PARENT spec id, never the slice suffix as a second id', () => {
+  const context = cardContext();
+  assert.deepEqual(Array.from(context.extractBranchSpecIds('slice-007-03-jig-4c8845')), ['007']);
+});
+
+test('extractBranchSpecIds: a multi-spec branch (spec-018-019) extracts BOTH ids, never truncated (AC2)', () => {
+  const context = cardContext();
+  assert.deepEqual(Array.from(context.extractBranchSpecIds('spec-018-019-portfolio-sync-9f3a2b')), ['018', '019']);
+});
+
+test('extractBranchSpecIds: a codename with an incidental 3-digit run does NOT false-match (no `spec`/`slice` token)', () => {
+  const context = cardContext();
+  assert.deepEqual(Array.from(context.extractBranchSpecIds('mystifying-poincare-604')), []);
+});
+
+test('extractBranchSpecIds: a bug/issue/fix codename worktree (hop-1 miss) extracts no id', () => {
+  const context = cardContext();
+  assert.deepEqual(Array.from(context.extractBranchSpecIds('bug-028-fix-race-4c8845')), []);
+  assert.deepEqual(Array.from(context.extractBranchSpecIds('issue-111-something-4c8845')), []);
+  assert.deepEqual(Array.from(context.extractBranchSpecIds('fix-scaffold-py39-thing-4c8845')), []);
+});
+
+test('extractBranchSpecIds: a word merely containing "spec" (e.g. "respec-042") is not a false match', () => {
+  const context = cardContext();
+  assert.deepEqual(Array.from(context.extractBranchSpecIds('respec-042-thing-4c8845')), []);
+});
+
+const wt011ProjectBase = {
+  ...cardBase,
+  project: { id: 'alpha', label: 'Alpha' },
+};
+
+function withWorktreeDocs(project, docs) {
+  return {
+    ...project,
+    signals: [
+      ...(project.signals || []),
+      { type: 'hygiene', version: 1, status: 'supported', value: { worktreeOnlyDocs: docs } },
+    ],
+  };
+}
+
+test('worktreeMilestoneMap: HOP1+HOP2 happy path — a spec-encoding worktree whose spec IS release-referenced maps to that milestone', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Ship V1', path: 'docs/releases/v1.md', referencedSpecs: ['011', '012'] }, next: [] } },
+    [{ worktree: 'slice-011-05-jig-4c8845', path: 'docs/wt/x/notes.md', state: 'active', pushed: false }],
+  );
+  const { mapped, unassociated } = context.worktreeMilestoneMap(project);
+  assert.equal(mapped.length, 1);
+  assert.equal(mapped[0].milestone.path, 'docs/releases/v1.md');
+  assert.equal(mapped[0].worktrees.length, 1);
+  assert.equal(mapped[0].worktrees[0].worktree, 'slice-011-05-jig-4c8845');
+  assert.equal(unassociated.length, 0);
+});
+
+test('worktreeMilestoneMap: HOP2 miss — a valid spec id that no release references lands unassociated, SHOWING the spec id (AC5)', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Local Loop', path: 'docs/releases/local.md', referencedSpecs: ['003', '004', '009'] }, next: [] } },
+    [{ worktree: 'slice-007-03-jig-4c8845', path: 'docs/wt/x/notes.md', state: 'active', pushed: false }],
+  );
+  const { mapped, unassociated } = context.worktreeMilestoneMap(project);
+  assert.equal(mapped.length, 0);
+  assert.equal(unassociated.length, 1);
+  assert.equal(unassociated[0].worktree, 'slice-007-03-jig-4c8845');
+  assert.deepEqual(Array.from(unassociated[0].specIds), ['007']);
+});
+
+test('worktreeMilestoneMap: HOP1 miss — a codename worktree maps to no milestone and lands unassociated with an empty specIds', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Ship V1', path: 'docs/releases/v1.md', referencedSpecs: ['011'] }, next: [] } },
+    [{ worktree: 'sad-jepsen-f75be4', path: 'docs/wt/x/notes.md', state: 'active', pushed: false }],
+  );
+  const { mapped, unassociated } = context.worktreeMilestoneMap(project);
+  assert.equal(mapped.length, 0);
+  assert.equal(unassociated[0].worktree, 'sad-jepsen-f75be4');
+  assert.deepEqual(Array.from(unassociated[0].specIds), []);
+});
+
+test('worktreeMilestoneMap: multi-spec branch (spec-018-019) maps independently to each referenced id\'s milestone, never truncated (AC2)', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    {
+      ...wt011ProjectBase,
+      milestone: {
+        active: { title: 'Release A', path: 'docs/releases/a.md', referencedSpecs: ['018'] },
+        next: [{ title: 'Release B', path: 'docs/releases/b.md', referencedSpecs: ['019'] }],
+      },
+    },
+    [{ worktree: 'spec-018-019-portfolio-sync-9f3a2b', path: 'docs/wt/x/notes.md', state: 'active', pushed: false }],
+  );
+  const { mapped } = context.worktreeMilestoneMap(project);
+  const paths = Array.from(mapped).map((m) => m.milestone.path).sort();
+  assert.deepEqual(paths, ['docs/releases/a.md', 'docs/releases/b.md']);
+});
+
+test('worktreeMilestoneMap: set-valued join — one spec id referenced by SEVERAL milestones maps the worktree to EACH, never one picked arbitrarily (AC1)', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    {
+      ...wt011ProjectBase,
+      milestone: {
+        active: { title: 'Local Loop', path: 'docs/releases/local.md', referencedSpecs: ['004'] },
+        next: [{ title: 'Terminal Analytics Loop', path: 'docs/releases/terminal.md', referencedSpecs: ['004'] }],
+      },
+    },
+    [{ worktree: 'spec-004-jig-7e1a09', path: 'docs/wt/x/notes.md', state: 'active', pushed: false }],
+  );
+  const { mapped } = context.worktreeMilestoneMap(project);
+  const paths = Array.from(mapped).map((m) => m.milestone.path).sort();
+  assert.deepEqual(paths, ['docs/releases/local.md', 'docs/releases/terminal.md']);
+  for (const entry of mapped) assert.equal(entry.worktrees[0].worktree, 'spec-004-jig-7e1a09');
+});
+
+test('worktreeMilestoneMap: normalizes digit-padding on BOTH sides of the join — an unpadded release reference ("spec 7") still maps a zero-padded branch id ("spec-007") (reconciliation)', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Ship V1', path: 'docs/releases/v1.md', referencedSpecs: ['7'] }, next: [] } },
+    [{ worktree: 'spec-007-jig-4c8845', path: 'docs/wt/x/notes.md', state: 'active', pushed: false }],
+  );
+  const { mapped, unassociated } = context.worktreeMilestoneMap(project);
+  assert.equal(mapped.length, 1);
+  assert.equal(mapped[0].milestone.path, 'docs/releases/v1.md');
+  assert.equal(unassociated.length, 0);
+});
+
+test('worktreeMilestoneMap: PR-based mapping — a resolved PR is carried onto the mapped worktree entry', () => {
+  const context = cardContext();
+  const pr = { number: 42, url: 'https://example.com/pr/42', state: 'OPEN' };
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Ship V1', path: 'docs/releases/v1.md', referencedSpecs: ['011'] }, next: [] } },
+    [{ worktree: 'slice-011-05-jig-4c8845', path: 'docs/wt/x/notes.md', state: 'active', pushed: true, pr }],
+  );
+  const { mapped } = context.worktreeMilestoneMap(project);
+  assert.deepEqual(mapped[0].worktrees[0].pr, pr);
+});
+
+test('worktreeMilestoneMap: a fallback (no-release-plan) project maps every worktree — spec-encoding or not — to unassociated', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: null, next: [] } },
+    [
+      { worktree: 'slice-011-05-jig-4c8845', path: 'docs/wt/x/notes.md', state: 'active', pushed: false },
+      { worktree: 'sad-jepsen-9c21af', path: 'docs/wt/y/notes.md', state: 'stale', pushed: false },
+    ],
+  );
+  const { mapped, unassociated } = context.worktreeMilestoneMap(project);
+  assert.equal(mapped.length, 0);
+  assert.equal(unassociated.length, 2);
+});
+
+test('card renders a milestone-attributed "in progress" section for a mapped healthy worktree, with a compact PR badge and NO file paths (AC3/AC6)', () => {
+  const context = cardContext();
+  const pr = { number: 7, url: 'https://example.com/pr/7', state: 'OPEN' };
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Ship V1', path: 'docs/releases/v1.md', referencedSpecs: ['011'] }, next: [] } },
+    [{ worktree: 'slice-011-05-jig-4c8845', path: 'docs/wt/should-not-appear/notes.md', state: 'active', pushed: true, pr }],
+  );
+  const html = context.card(project);
+  assert.match(html, /Ship V1/);
+  assert.match(html, /slice-011-05-jig-4c8845/);
+  assert.match(html, /PR #7/);
+  assert.doesNotMatch(html, /docs\/wt\/should-not-appear\/notes\.md/);
+});
+
+test('card surfaces an unassociated worktree in a clearly-labelled affordance, showing its encoded spec id on a HOP2 miss (AC5)', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Local Loop', path: 'docs/releases/local.md', referencedSpecs: ['003'] }, next: [] } },
+    [{ worktree: 'slice-007-03-jig-4c8845', path: 'docs/wt/x/notes.md', state: 'active', pushed: false }],
+  );
+  const html = context.card(project);
+  assert.match(html, /unassociated/i);
+  assert.match(html, /slice-007-03-jig-4c8845/);
+  assert.match(html, /007/);
+  assert.doesNotMatch(html, /docs\/wt\/x\/notes\.md/);
+});
+
+test('card ⚠ tooltip attributes a cleanup-worthy worktree to its milestone when both hops resolve (AC4)', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Ship V1', path: 'docs/releases/v1.md', referencedSpecs: ['011'] }, next: [] } },
+    [{ worktree: 'slice-011-05-jig-4c8845', path: 'docs/wt/x/notes.md', state: 'stale', pushed: false }],
+  );
+  const items = context.warningItems(project);
+  assert.ok(items.some((item) => /forgotten/.test(item) && /slice-011-05-jig-4c8845/.test(item) && /Ship V1/.test(item)));
+});
+
+test('card ⚠ tooltip notes a cleanup-worthy worktree as unassociated when the join does not resolve (AC4)', () => {
+  const context = cardContext();
+  const project = withWorktreeDocs(
+    { ...wt011ProjectBase, milestone: { active: { title: 'Ship V1', path: 'docs/releases/v1.md', referencedSpecs: ['011'] }, next: [] } },
+    [{ worktree: 'sad-jepsen-9c21af', path: 'docs/wt/x/notes.md', state: 'stale', pushed: false }],
+  );
+  const items = context.warningItems(project);
+  assert.ok(items.some((item) => /forgotten/.test(item) && /sad-jepsen-9c21af/.test(item) && /unassociated/i.test(item)));
+});
+
 // --- 009-02: card shows the forecast/risk read (ADR-0006/ADR-0012, AC5) ---
 
 test('card renders an on_track forecast with its reason (AC5)', () => {

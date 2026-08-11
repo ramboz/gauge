@@ -216,6 +216,74 @@ test('attachMilestones attaches specProgress to the active milestone from its ow
   assert.equal(progress.denom, 2);
 });
 
+// --- 011-05 hop 2: referencedSpecs attached to active + next milestones ---
+// so the client's worktree→milestone join (public/index.html) never needs a
+// second implementation of the release→spec parse — it just reads the field.
+
+test('attachMilestones attaches referencedSpecs (via extractReferencedSpecNumbers) to the active milestone', () => {
+  const data = {
+    generatedAt: '2026-08-11T00:00:00Z',
+    projects: [
+      {
+        project: { id: 'alpha', label: 'Alpha' },
+        signals: [{
+          type: 'workstreams', status: 'supported',
+          value: {
+            items: [{
+              kind: 'release', path: 'docs/releases/a.md', status: 'committed', title: 'a.md',
+              body: 'This release covers spec 004 and spec 009.',
+            }],
+            discovered: [],
+          },
+        }],
+      },
+    ],
+  };
+  const out = attachMilestones(data);
+  assert.deepEqual(out.projects[0].milestone.active.referencedSpecs, ['004', '009']);
+});
+
+test('attachMilestones attaches referencedSpecs to each next milestone (set-valued join AC1: a spec id can appear on several releases)', () => {
+  const data = {
+    generatedAt: '2026-08-11T00:00:00Z',
+    projects: [
+      {
+        project: { id: 'alpha', label: 'Alpha' },
+        signals: [{
+          type: 'workstreams', status: 'supported',
+          value: {
+            items: [
+              { kind: 'release', path: 'docs/releases/a.md', status: 'committed', title: 'a.md', body: 'spec 004' },
+              { kind: 'release', path: 'docs/releases/b.md', status: 'candidate', title: 'b.md', body: 'spec 004 and spec 012' },
+            ],
+            discovered: [],
+          },
+        }],
+      },
+    ],
+  };
+  const out = attachMilestones(data);
+  assert.deepEqual(out.projects[0].milestone.active.referencedSpecs, ['004']);
+  assert.deepEqual(out.projects[0].milestone.next[0].referencedSpecs, ['004', '012']);
+});
+
+test('attachMilestones: a release with no `spec NNN` refs attaches an empty referencedSpecs array, never undefined', () => {
+  const data = {
+    generatedAt: '2026-08-11T00:00:00Z',
+    projects: [
+      {
+        project: { id: 'alpha', label: 'Alpha' },
+        signals: [{
+          type: 'workstreams', status: 'supported',
+          value: { items: [{ kind: 'release', path: 'docs/releases/a.md', status: 'committed', title: 'a.md', body: 'no refs' }], discovered: [] },
+        }],
+      },
+    ],
+  };
+  const out = attachMilestones(data);
+  assert.deepEqual(out.projects[0].milestone.active.referencedSpecs, []);
+});
+
 test('attachMilestones: no resolvable spec refs in the active milestone body → specProgress is null (unknown)', () => {
   const data = {
     generatedAt: '2026-08-11T00:00:00Z',

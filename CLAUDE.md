@@ -42,15 +42,24 @@ This is an index. Durable detail lives in `docs/`; update it through
   state; Gauge reads them without writing.
 - **Active build (manager dashboard)** — two dated releases:
   [manager-dashboard-local-data](docs/releases/manager-dashboard-local-data.md)
-  (committed, 2026-08-14: [spec 011](docs/specs/011-milestone-centric-cards/spec.md)
-  cards + [spec 012](docs/specs/012-portfolio-manager-analytics/spec.md) local
-  analytics — RAG, attention counts, velocity, token cost by model/activity/skill)
-  and [thin-client-and-central-collection](docs/releases/thin-client-and-central-collection.md)
-  (candidate, 2026-08-28: event-driven session-stop capture, trends). Design
-  reference: spec 012 `design/manager-dashboard-mockup.html`. **History is
-  reconstructable from git (past) + captured on session-stop (future)** — the
-  forecast "history gate" is a code limit, not a data one. Blockers count is
-  approximate pending jig#195.
+  (committed, 2026-08-14) and
+  [thin-client-and-central-collection](docs/releases/thin-client-and-central-collection.md)
+  (candidate, 2026-08-28: event-driven session-stop capture, trends).
+  [Spec 011 — milestone-centric cards](docs/specs/011-milestone-centric-cards/spec.md)
+  is **DONE** (all 5 slices landed): the card leads with the active milestone
+  (goal = active release title, appetite = timebox, milestone-scoped progress bar),
+  a no-release-plan **fallback** (global bar + discovered workstreams), warnings
+  collapsed to a header **⚠ + tooltip**, and worktrees/PRs mapped to their
+  milestone(s) with an **unassociated** bucket. The read-layer join is
+  `attachMilestones` in `src/milestone.mjs` (`milestone: {active, next}` on
+  `/api/data`, `active.specProgress` + `referencedSpecs`).
+  [Spec 012 — portfolio-manager analytics](docs/specs/012-portfolio-manager-analytics/spec.md):
+  the 012-01 feasibility spike is **DONE** and its raw-layer slices are **drafted**
+  (012-02 velocity · 012-03/04 token cost by model/activity/skill · 012-05 team ·
+  012-06 RAG chip, deadline-gated) — next to implement. Design reference: spec 012
+  `design/manager-dashboard-mockup.html`. **History is reconstructable from git
+  (past) + captured on session-stop (future)** — the forecast "history gate" is a
+  code limit, not a data one. Blockers count is approximate pending jig#195.
 - **Committed local-pull MVP** — the prior loop; see
   [local-portfolio-loop](docs/releases/local-portfolio-loop.md) (largely shipped).
 - **Landed runtime** —

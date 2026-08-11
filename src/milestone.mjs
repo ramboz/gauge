@@ -147,6 +147,16 @@ export function milestoneSpecProgress(releaseBody, specs) {
 // own release-doc body, or null/unknown when nothing resolves). A pure fold
 // — no I/O, and every entry/array below is a freshly built object, so the
 // caller's input is never mutated.
+// 011-05 hop 2: which spec ids a milestone's OWN release body references —
+// the single source of truth the client's worktree→milestone join reads
+// (public/index.html's worktreeMilestoneMap), so that join never reimplements
+// extractReferencedSpecNumbers a second time client-side. Always an array
+// (never undefined) so a release with no `spec NNN` prose still joins cleanly
+// against an empty set rather than needing a null-check at every call site.
+function withReferencedSpecs(milestone) {
+  return { ...milestone, referencedSpecs: extractReferencedSpecNumbers(milestone.body) };
+}
+
 export function attachMilestones(data) {
   return {
     ...data,
@@ -154,9 +164,10 @@ export function attachMilestones(data) {
       const items = workstreamItemsOf(entry);
       const active = selectActiveMilestone(items);
       const activeWithProgress = active
-        ? { ...active, specProgress: milestoneSpecProgress(active.body, specItemsOf(entry)) }
+        ? { ...withReferencedSpecs(active), specProgress: milestoneSpecProgress(active.body, specItemsOf(entry)) }
         : null;
-      return { ...entry, milestone: { active: activeWithProgress, next: selectNextMilestones(items, active) } };
+      const next = selectNextMilestones(items, active).map(withReferencedSpecs);
+      return { ...entry, milestone: { active: activeWithProgress, next } };
     }),
   };
 }
