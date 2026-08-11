@@ -1119,3 +1119,120 @@ test('card shows "< 0.1 commits/wk" — never "≈ 0" — when a real, non-null 
   assert.match(html, /&lt; 0\.1 commits\/wk/);
   assert.doesNotMatch(html, /≈ 0 commits\/wk/);
 });
+
+// --- 012-05: team signals — human-vs-agent split + contributors -------------
+// `p.team` is attached by the server read layer (src/team.mjs's
+// attachTeamSignals), mirroring velocity/tokenCost: either
+// `{ agentCoauthoredPct, commitCount, contributorCount }` or `null` (no
+// commits in the window, or unreadable git history — explicit unknown, AC4).
+// The split is labelled a PROXY (AC2) — the Co-Authored-By: Claude trailer
+// undercounts other agent tooling — and no author identity is ever attached
+// or rendered (AC5).
+
+test('server /api/data wiring reads each project\'s git history and attaches team signals via the pure fold (AC1/AC6)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /import\s*\{[^}]*\bgitTeamSignals\b[^}]*\battachTeamSignals\b[^}]*\}\s*from\s*'\.\/team\.mjs'/);
+  assert.match(src, /gitTeamSignals\(/);
+  assert.match(src, /attachTeamSignals\(/);
+});
+
+test('card renders the agent-coauthored split as an explicit proxy, plus the contributor count (AC1/AC2/AC3)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    team: { agentCoauthoredPct: 42, commitCount: 10, contributorCount: 3 },
+  };
+  const html = context.card(project);
+  assert.match(html, /~42% agent-coauthored/);
+  assert.match(html, /proxy/i);
+  assert.match(html, /3 contributors/);
+  assert.doesNotMatch(html, /team.*unknown/i);
+});
+
+test('card renders explicit "unknown" (never a fabricated 0%/0 contributors) when team is null (AC4)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, team: null };
+  const html = context.card(project);
+  assert.match(html, /team <span class="unknown">unknown<\/span>/);
+  assert.doesNotMatch(html, /0% agent-coauthored/);
+  assert.doesNotMatch(html, /0 contributors/);
+});
+
+test('card render does not regress when team is entirely absent (pre-012-05 identity)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
+  assert.doesNotThrow(() => context.card(project));
+  assert.match(context.card(project), /team <span class="unknown">unknown<\/span>/);
+});
+
+test('card never renders raw author identities from the team signal — only the aggregate percentage and count (AC5, no PII)', () => {
+  const context = cardContext();
+  // p.team only ever carries the aggregate shape (attachTeamSignals never
+  // attaches author names) — this pins that no rendering path in card()
+  // reaches for anything author-shaped, even if a caller mistakenly attached
+  // one. authorNames/authors fields, if present, must never surface as text.
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    team: {
+      agentCoauthoredPct: 10,
+      commitCount: 5,
+      contributorCount: 2,
+      authorNames: ['Alice Secret', 'Bob Confidential'],
+    },
+  };
+  const html = context.card(project);
+  assert.doesNotMatch(html, /Alice|Bob|Secret|Confidential/);
+});
+
+test('card singularizes "1 contributor" (never "1 contributors")', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    team: { agentCoauthoredPct: 100, commitCount: 3, contributorCount: 1 },
+  };
+  const html = context.card(project);
+  assert.match(html, /1 contributor\b/);
+  assert.doesNotMatch(html, /1 contributors/);
+});
+
+test('card shows "< 1% agent-coauthored" — never "0%" — when a real, non-zero agentCoauthoredCount rounds below 1% (reconciliation, mirrors AC4\'s zero-as-healthy guard)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    // 1 / 300 -> 0.33% -> rounds to 0 at the data layer, but 1 real agent
+    // commit exists — must not read as "no agent involvement".
+    team: { agentCoauthoredPct: 0, agentCoauthoredCount: 1, commitCount: 300, contributorCount: 4 },
+  };
+  const html = context.card(project);
+  assert.match(html, /&lt; 1% agent-coauthored/);
+  assert.doesNotMatch(html, /~0% agent-coauthored/);
+  assert.doesNotMatch(html, /(?<!&lt; )0% agent-coauthored/);
+});
+
+test('card shows a plain "0% agent-coauthored" (not "< 1%") when agentCoauthoredCount is a TRUE zero — a real, known reading, not the unknown state', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    team: { agentCoauthoredPct: 0, agentCoauthoredCount: 0, commitCount: 5, contributorCount: 2 },
+  };
+  const html = context.card(project);
+  assert.match(html, /(?<!&lt; )0% agent-coauthored/);
+  assert.doesNotMatch(html, /&lt; 1% agent-coauthored/);
+});
+
+test('card escapes team-signal values — no raw markup injected (XSS safety)', () => {
+  const context = cardContext();
+  const payload = '"><img src=x onerror=alert(1)>';
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    team: { agentCoauthoredPct: payload, commitCount: 1, contributorCount: 1 },
+  };
+  assert.doesNotThrow(() => context.card(project));
+  assert.doesNotMatch(context.card(project), /<img/);
+});

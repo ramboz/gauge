@@ -266,6 +266,36 @@ function velocityBlock(p) {
   if (!v) return `<div class="counts">velocity <span class="unknown">unknown</span></div>`;
   return `<div class="counts">${velocityHeadline(v.perWeek)} <span class="spark" aria-hidden="true" title="weekly commits, oldest → newest">${esc(sparkline(v.buckets))}</span></div>`;
 }
+// 012-05: team signals — human-vs-agent split + contributor count, attached
+// by the server read layer (src/team.mjs's attachTeamSignals) as `p.team` —
+// either `{ agentCoauthoredPct, agentCoauthoredCount, commitCount,
+// contributorCount }` or `null` (no commits in the window, or unreadable git
+// history — explicit unknown, never a fabricated 0%/0 contributors presented
+// as healthy, AC4). The split is an honest PROXY (AC2): it only counts
+// commits carrying the `Co-Authored-By: Claude` trailer, which undercounts
+// other agent tooling (spec.md `## Assumptions`) — the "~N%" prefix plus the
+// explicit "(proxy)" label keep it from reading as an exact agent-authorship
+// measure. No author identity is ever attached to `p.team` (src/team.mjs's
+// teamFromCommits) nor read here — only the aggregate percentage and
+// contributor count render (AC5, no PII).
+//
+// Reconciliation fix: `agentCoauthoredPct` is rounded to the nearest whole
+// percent at the data layer, so a real-but-tiny share (e.g. 1/300 -> 0.33%)
+// also rounds to 0 — indistinguishable from a TRUE zero (no agent-coauthored
+// commits at all) by the percentage alone. `agentCoauthoredCount` (the raw,
+// unrounded count) disambiguates: mirrors velocity's "< 0.1 commits/wk" /
+// cost's "< $0.01" sub-precision convention so a genuine sliver of agent
+// involvement never reads as "none".
+function teamHeadline(t) {
+  if (t.agentCoauthoredPct > 0) return `~${esc(t.agentCoauthoredPct)}%`;
+  return t.agentCoauthoredCount > 0 ? '&lt; 1%' : '0%';
+}
+function teamBlock(p) {
+  const t = p.team;
+  if (!t) return `<div class="counts">team <span class="unknown">unknown</span></div>`;
+  const contributorLabel = `${esc(t.contributorCount)} contributor${t.contributorCount === 1 ? '' : 's'}`;
+  return `<div class="counts">${teamHeadline(t)} agent-coauthored <span class="meta" title="Proxy: counts commits carrying a Co-Authored-By: Claude trailer; undercounts other agent tooling.">(proxy)</span> · ${contributorLabel}</div>`;
+}
 // 012-03: token cost, attached by the server read layer (src/cost.mjs's
 // attachTokenCost) as `p.tokenCost` — either `{ totalUsd, hasUnknownModel,
 // byModel }` or `null` (no mapped session transcripts — explicit unknown,
@@ -408,6 +438,7 @@ function card(p) {
   return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${warnIcon}${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${velocityBlock(p)}
+    ${teamBlock(p)}
     ${costBlock(p)}
     ${milestoneBlock}${fallbackNote}
     ${forecastBlock}

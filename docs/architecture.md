@@ -237,7 +237,11 @@ edge-push topology (specs 005/006) remain deferred; collection stays manual pull
   `tokenCostBreakdown: {byActivity, bySkill}` detail-tier join (012-04,
   `attachCostBreakdown`) that partitions the *same* deduped record set by
   `[jig:phase=…]` activity and by `skill-usage.jsonl` skill (each with an explicit
-  `unattributed` bucket; buckets sum to `tokenCost`) — that are not part of the
+  `unattributed` bucket; buckets sum to `tokenCost`), plus a per-project
+  `team: {agentCoauthoredPct, commitCount, contributorCount}` git-derived join
+  (012-05, `attachTeamSignals` in `src/team.mjs`; the agent share is a labelled
+  proxy over the `Co-Authored-By: Claude` trailer, author identities never
+  surfaced; `null` when no commits in the window) — that are not part of the
   observation-v1 record, plus a
   top-level `attention` array (009-03): the deterministic cross-project attention
   ranking.

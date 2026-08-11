@@ -10,6 +10,7 @@ import { readObservationHistory } from './state.mjs';
 import { attachForecasts, attentionQueue } from './derive.mjs';
 import { attachMilestones } from './milestone.mjs';
 import { gitVelocity, attachVelocity } from './velocity.mjs';
+import { gitTeamSignals, attachTeamSignals } from './team.mjs';
 import { projectCostBundle, attachTokenCost, attachCostBreakdown } from './cost.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -59,6 +60,18 @@ const server = http.createServer((req, res) => {
         freshConfig.projects.map((project) => [project.id, gitVelocity(project.path, velocityNowMs)]),
       );
       const withVelocity = attachVelocity(withMilestones, velocityByProjectId);
+      // Team signals — human-vs-agent split + contributor count (spec 012,
+      // slice 012-05): a raw-layer signal, git-derived like velocity above,
+      // sharing the SAME `nowMs` capture (velocityNowMs) so both git reads
+      // observe one consistent clock instant per request. gitTeamSignals
+      // (src/team.mjs) reuses velocity's DEFAULT_VELOCITY_WINDOW_WEEKS as its
+      // own default window (AC6) — the one I/O read (git log per project)
+      // happens HERE, at the read layer, so attachTeamSignals itself stays a
+      // pure fold.
+      const teamByProjectId = Object.fromEntries(
+        freshConfig.projects.map((project) => [project.id, gitTeamSignals(project.path, velocityNowMs)]),
+      );
+      const withTeam = attachTeamSignals(withVelocity, teamByProjectId);
       // Token cost — total + by-activity/by-skill (spec 012, slices 012-03/
       // 012-04): the spec's one deliberate depth exception. The one I/O
       // (enumerating + reading each project's Claude Code session
@@ -83,7 +96,7 @@ const server = http.createServer((req, res) => {
       const costByProjectId = Object.fromEntries(
         freshConfig.projects.map((project) => [project.id, costBundleByProjectId[project.id]?.tokenCost ?? null]),
       );
-      const withTokenCost = attachTokenCost(withVelocity, costByProjectId);
+      const withTokenCost = attachTokenCost(withTeam, costByProjectId);
       const breakdownByProjectId = Object.fromEntries(
         freshConfig.projects.map((project) => [project.id, costBundleByProjectId[project.id]?.tokenCostBreakdown ?? null]),
       );
