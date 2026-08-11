@@ -1,5 +1,5 @@
 ---
-status: DRAFT
+status: IN_PROGRESS
 skill:
 use_cases: []
 ---
@@ -171,11 +171,31 @@ internally.
 
 ## Decomposition
 
-_TBD — shaped after the spike concludes and the redesign direction (below) is
-chosen. Likely axes: **Interface** (portfolio glance / card / detail tiers),
-**Data** (token-cost adapter, git-velocity deriver), **Rules** (RAG thresholds
-once deadlines exist)._
+SPIDR, shaped after the spike (012-01) concluded and the owner fixed the redesign
+direction (2026-08-10): **spec 011's milestone card lands standalone; 012's
+analytics layer is layered into that card incrementally** — no from-scratch
+glance→card→detail rebuild. So the near-term slices are **Data** (derivers) and
+**Rules** (RAG), each layered onto 011's existing card, with the deeper cost cut
+demoted to a detail tier rather than a new Interface shell.
+
+- **Data** derivers, each cleared by the spike to build now (no deadline needed):
+  012-02 (git-velocity deriver), 012-03 (token-cost adapter — total + by-model,
+  deduped per-request), 012-05 (team signals — agent split + contributors).
+- **Data (detail tier)**: 012-04 (cost by-activity + by-skill — the depth
+  exception's deeper cut, off the card face).
+- **Rules**: 012-06 (RAG chip from pace-vs-deadline), deadline-gated — gray until
+  the Gauge deadline lands, then real.
+
+Ordering: 02 (velocity) → 03 (cost total/by-model) → 04 (cost detail) → 05 (team)
+→ 06 (RAG). 04 depends on 03; 06 depends on 02 (pace proxy) and the curated
+deadline. Each raw-layer slice is independently shippable and degrades to
+`unknown` honestly before the next lands.
 
 ## Slices
 
 - [012-01 — feasibility spike: what local data supports which metrics](slice-01-feasibility-spike.md)
+- [012-02 — git velocity on the card](slice-02-git-velocity.md)
+- [012-03 — token cost: total + by-model](slice-03-token-cost-total-by-model.md)
+- [012-04 — token cost: by-activity + by-skill](slice-04-token-cost-by-activity-skill.md)
+- [012-05 — team signals: human-vs-agent split + contributors](slice-05-team-signals.md)
+- [012-06 — RAG health chip (deadline-gated)](slice-06-rag-health-chip.md)
