@@ -106,6 +106,15 @@ test('workstreams: a release plan carries its parsed `## Status` and `## Appetit
   assert.equal(runbook.status, undefined);
 });
 
+test('workstreams: a release plan carries its raw body text, for the spec-reference rollup (011-02)', () => {
+  const p = jig();
+  const release = p.workstreams.find((w) => w.kind === 'release');
+  assert.match(release.body, /V1 launch plan/);
+  // Only true release plans carry a body; a pinned runbook does not.
+  const runbook = p.workstreams.find((w) => w.kind === 'runbook');
+  assert.equal(runbook.body, undefined);
+});
+
 test('workstreams: discovery excludes specs/releases/pinned (002-02 AC3)', () => {
   const p = jig();
   assert.equal(p.discovered.length, 0); // the only checkbox doc outside specs/releases is pinned

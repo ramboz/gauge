@@ -172,6 +172,72 @@ test('card no longer renders a per-spec <details> list (011-01 AC5)', () => {
   assert.match(html, /50%/);
 });
 
+// --- 011-02: the active milestone's own bar (done/denom parent specs from --
+// its release doc), replacing the project-global bar; falls back to it when
+// the milestone's specProgress is unknown (null).
+
+test('card renders the active milestone\'s own progress bar + count, not the project-global figure (011-02 AC3)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    signals: [{
+      type: 'execution', version: 1, status: 'supported',
+      value: { progress: { pct: 10, done: 1, denom: 10, deferred: 0 }, items: [] },
+    }],
+    milestone: { active: { title: 'Ship V1', specProgress: { done: 3, denom: 4, total: 4, abandoned: 0, deferred: 0, pct: 75 } }, next: [] },
+  };
+  const html = context.card(project);
+  assert.match(html, /75%/);
+  assert.match(html, /3 \/ 4 specs/);
+  assert.doesNotMatch(html, /10%/);
+});
+
+test('card falls back to the project-global bar when the active milestone has no resolvable spec refs (011-02 AC4)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    signals: [{
+      type: 'execution', version: 1, status: 'supported',
+      value: { progress: { pct: 50, done: 1, denom: 2, deferred: 0 }, items: [] },
+    }],
+    milestone: { active: { title: 'Ship V1', specProgress: null }, next: [] },
+  };
+  const html = context.card(project);
+  assert.match(html, /50%/);
+});
+
+test('card falls back to the project-global bar when every referenced spec resolved but none are measurable (denom 0) (011-02 AC4)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    signals: [{
+      type: 'execution', version: 1, status: 'supported',
+      value: { progress: { pct: 20, done: 1, denom: 5, deferred: 0 }, items: [] },
+    }],
+    milestone: { active: { title: 'Ship V1', specProgress: { done: 0, denom: 0, total: 1, abandoned: 1, deferred: 0, pct: null } }, next: [] },
+  };
+  const html = context.card(project);
+  assert.match(html, /20%/);
+});
+
+test('card render does not regress when the active milestone carries no specProgress at all (pre-011-02 identity)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    signals: [{
+      type: 'execution', version: 1, status: 'supported',
+      value: { progress: { pct: 33, done: 1, denom: 3, deferred: 0 }, items: [] },
+    }],
+    milestone: { active: { title: 'Ship V1' }, next: [] },
+  };
+  assert.doesNotThrow(() => context.card(project));
+  assert.match(context.card(project), /33%/);
+});
+
 // --- 009-02: card shows the forecast/risk read (ADR-0006/ADR-0012, AC5) ---
 
 test('card renders an on_track forecast with its reason (AC5)', () => {

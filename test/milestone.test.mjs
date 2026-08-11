@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { selectActiveMilestone, selectNextMilestones, attachMilestones } from '../src/milestone.mjs';
+import {
+  selectActiveMilestone,
+  selectNextMilestones,
+  attachMilestones,
+  extractReferencedSpecNumbers,
+  milestoneSpecProgress,
+} from '../src/milestone.mjs';
 
 // --- 011-01: active-and-next milestone from release Status -----------------
 // Pure, unit-testable deriver over an already-scanned workstreams array
@@ -111,4 +117,124 @@ test('attachMilestones does not mutate its input', () => {
   const data = { generatedAt: '2026-08-11T00:00:00Z', projects: [{ project: { id: 'alpha' }, signals: [] }] };
   attachMilestones(data);
   assert.equal(data.projects[0].milestone, undefined);
+});
+
+// --- 011-02: milestone progress from referenced parent specs --------------
+// Pure deriver, unit-tested directly with plain fixture objects — mirrors
+// scanSpecs's per-spec shape ({ id, title, status, slices }) so callers never
+// need a real filesystem scan to exercise the rollup.
+
+function spec(id, status) {
+  return { id, title: id, status, slices: [] };
+}
+
+test('AC1: extractReferencedSpecNumbers finds `spec NNN` refs, case-insensitively, in first-appearance order', () => {
+  const text = 'See Spec 011 and spec 012. Also jig spec 108 (upstream).';
+  assert.deepEqual(extractReferencedSpecNumbers(text), ['011', '012', '108']);
+});
+
+test('AC1: slice references (009-01) collapse onto their parent (009), counted once', () => {
+  const text = '[Spec 009 — complete the loop](../specs/009-complete-local-portfolio-loop/spec.md), '
+    + 'see also spec 009-01 and spec 009-02 for the sub-slices.';
+  assert.deepEqual(extractReferencedSpecNumbers(text), ['009']);
+});
+
+test('AC1: a word merely containing "spec" (e.g. "respect") is not a false match', () => {
+  assert.deepEqual(extractReferencedSpecNumbers('We respect the spec 011 scope.'), ['011']);
+});
+
+test('AC2: rollup is done/denom over referenced parent specs, using the existing spec-status done rule', () => {
+  const specs = [spec('009-x', 'DONE'), spec('010-y', 'IN_PROGRESS'), spec('011-z', 'DONE'), spec('012-w', 'DRAFT')];
+  const progress = milestoneSpecProgress('spec 009, spec 010, spec 011, spec 012', specs);
+  assert.equal(progress.done, 2);
+  assert.equal(progress.denom, 4);
+  assert.equal(progress.total, 4);
+  assert.equal(progress.pct, 50);
+});
+
+test('AC1: a slice ref and its parent ref both counted once toward the same spec (dedupe)', () => {
+  const specs = [spec('009-x', 'DONE'), spec('010-y', 'DONE')];
+  // "spec 009" and "spec 009-01" must not double-count spec 009-x.
+  const progress = milestoneSpecProgress('spec 009-01, spec 009, spec 010', specs);
+  assert.equal(progress.denom, 2);
+  assert.equal(progress.done, 2);
+});
+
+test('AC2: an abandoned/dropped referenced spec is excluded from the denominator, not counted as not-done', () => {
+  const specs = [spec('009-x', 'DONE'), spec('010-y', 'IN_PROGRESS'), spec('011-z', 'ABANDONED')];
+  const progress = milestoneSpecProgress('spec 009, spec 010, spec 011', specs);
+  // 1 done / (3 total - 1 abandoned) = 1/2, not 1/3.
+  assert.equal(progress.total, 3);
+  assert.equal(progress.abandoned, 1);
+  assert.equal(progress.denom, 2);
+  assert.equal(progress.done, 1);
+  assert.equal(progress.pct, 50);
+});
+
+test('AC4: a release referencing no `spec NNN` text at all yields unknown (null), never a fabricated 0%', () => {
+  const specs = [spec('009-x', 'DONE')];
+  assert.equal(milestoneSpecProgress('No spec references in this prose.', specs), null);
+  assert.equal(milestoneSpecProgress('', specs), null);
+  assert.equal(milestoneSpecProgress(undefined, specs), null);
+});
+
+test('AC4: a release referencing only specs absent from this project\'s scanned list yields unknown, not a fabricated 0%', () => {
+  const specs = [spec('009-x', 'DONE')];
+  // "spec 108" is a real reference (jig's own numbering) but not one of THIS
+  // project's specs — nothing resolvable, so it must not fabricate 0/0.
+  assert.equal(milestoneSpecProgress('See jig spec 108 for the upstream tracker.', specs), null);
+});
+
+test('attachMilestones attaches specProgress to the active milestone from its own body + the project\'s execution items', () => {
+  const data = {
+    generatedAt: '2026-08-11T00:00:00Z',
+    projects: [
+      {
+        project: { id: 'alpha', label: 'Alpha' },
+        signals: [
+          {
+            type: 'execution', status: 'supported',
+            value: { items: [spec('009-x', 'DONE'), spec('010-y', 'IN_PROGRESS')] },
+          },
+          {
+            type: 'workstreams', status: 'supported',
+            value: {
+              items: [{
+                kind: 'release', path: 'docs/releases/a.md', status: 'committed', title: 'a.md',
+                body: 'This release covers spec 009 and spec 010.',
+              }],
+              discovered: [],
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const out = attachMilestones(data);
+  const progress = out.projects[0].milestone.active.specProgress;
+  assert.equal(progress.done, 1);
+  assert.equal(progress.denom, 2);
+});
+
+test('attachMilestones: no resolvable spec refs in the active milestone body → specProgress is null (unknown)', () => {
+  const data = {
+    generatedAt: '2026-08-11T00:00:00Z',
+    projects: [
+      {
+        project: { id: 'alpha', label: 'Alpha' },
+        signals: [
+          { type: 'execution', status: 'supported', value: { items: [spec('009-x', 'DONE')] } },
+          {
+            type: 'workstreams', status: 'supported',
+            value: {
+              items: [{ kind: 'release', path: 'docs/releases/a.md', status: 'committed', title: 'a.md', body: 'No refs here.' }],
+              discovered: [],
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const out = attachMilestones(data);
+  assert.equal(out.projects[0].milestone.active.specProgress, null);
 });

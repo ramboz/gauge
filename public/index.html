@@ -95,7 +95,6 @@ function worktreeWarn(docs) {
 function card(p) {
   const execution=signal(p,'execution'), workstreams=signal(p,'workstreams'), hygiene=signal(p,'hygiene'), narrative=signal(p,'narrative'), repository=signal(p,'repository');
   const progress=execution?.status==='supported'?execution.value.progress:null;
-  const pct=progress?.pct??null;
   const streams=workstreams?.status==='supported'?[...(workstreams.value.items||[]),...(workstreams.value.discovered||[])]:[];
   const worktreeOnly=hygiene?.status==='supported'?(hygiene.value.worktreeOnlyDocs||[]):[];
   const problems=(p.errors||[]).map((error)=>esc(error.message)).join(' · ');
@@ -111,6 +110,16 @@ function card(p) {
   const active=p.milestone?.active;
   const nextMilestones=p.milestone?.next||[];
   const milestoneBlock=active?`<div class="meta">Goal: ${esc(active.title||active.path)} · Timebox: ${esc(active.appetite||'unknown')}${nextMilestones.length?` · Next: ${nextMilestones.map((m)=>esc(m.title||m.path)).join(', ')}`:''}</div>`:'';
+  // Milestone-scoped progress (spec 011-02): the active milestone's own bar,
+  // rolled up by src/milestone.mjs's milestoneSpecProgress (done/denom over
+  // the release doc's referenced PARENT specs, via the same progressOf rule
+  // as the project-global bar below — never a second rule). AC4: a milestone
+  // whose specProgress is null (no resolvable `spec NNN` refs) or whose
+  // denom is 0 (every resolved ref abandoned — nothing left to measure)
+  // falls back to the project-global `progress` bar, never a fabricated 0%.
+  const milestoneProgress=active?.specProgress?.denom>0?active.specProgress:null;
+  const barProgress=milestoneProgress||progress;
+  const barPct=barProgress?.pct??null;
   // Forecast/risk (spec 009-02, ADR-0006/ADR-0012): attached by the server
   // read layer as {state, reason}. `unknown` is an explicit, legible state —
   // rendered the same way as a colour, never blank and never a green default.
@@ -136,7 +145,7 @@ function card(p) {
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${milestoneBlock}
     ${forecastBlock}
-    ${progress?`<div class="barrow"><div class="bar"><div style="width:${pct??0}%"></div></div><span class="pct">${pct===null?'—':pct+'%'}</span></div><div class="counts">${progress.done}/${progress.denom} specs done${progress.deferred?` · ${progress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
+    ${barProgress?`<div class="barrow"><div class="bar"><div style="width:${barPct??0}%"></div></div><span class="pct">${barPct===null?'—':barPct+'%'}</span></div><div class="counts">${barProgress.done} / ${barProgress.denom} specs${milestoneProgress?'':' done'}${barProgress.deferred?` · ${barProgress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
     ${streams.length?`<div class="sect"><span class="meta">workstreams</span>${streams.map(workstreamRow).join('')}</div>`:''}
     ${worktreeWarn(worktreeOnly)}
     ${narrativeBlock}${problems?`<p class="err">${problems}</p>`:''}</article>`;

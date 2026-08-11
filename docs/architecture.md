@@ -222,7 +222,10 @@ edge-push topology (specs 005/006) remain deferred; collection stays manual pull
   joins — the profile `goal`/`deadline` (009-01), a derived
   `forecast: {state, reason}` (009-02), and a derived `milestone: {active, next}`
   selected from the project's release-plan `## Status` (011-01, `attachMilestones`
-  in `src/milestone.mjs`) — that are not part of the observation-v1 record, plus a
+  in `src/milestone.mjs`) — where `active` additionally carries a `specProgress`
+  done/denominator rolled up from the specs its release doc references (011-02,
+  reusing `progressOf`; the release workstream carries its `body` for that parse) —
+  that are not part of the observation-v1 record, plus a
   top-level `attention` array (009-03): the deterministic cross-project attention
   ranking.
 - **CLI:** `npm run scan` and `npm run onboard` are read-only (`onboard`

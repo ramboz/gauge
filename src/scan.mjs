@@ -211,10 +211,15 @@ function scanWorkstreams(root, profile, projectCfg) {
       // without a second read. Neither is a "goal"/"deadline" value (that
       // remains discover.mjs/ADR-0011's exclusive concern) — status is a
       // lifecycle label and appetite is a timebox phrase, not a date.
+      // `body` (spec 011-02): the release doc's full raw text (no
+      // frontmatter in the shaper release-plan convention), carried through
+      // so src/milestone.mjs's milestoneSpecProgress can parse its `spec
+      // NNN` references without a second file read.
       workstreams.push({
         kind: 'release', path: rel, ...rb,
         status: parseReleaseStatus(raw),
         appetite: parseReleaseAppetite(raw),
+        body: raw,
       });
     }
   }
