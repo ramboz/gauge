@@ -8,6 +8,7 @@ import { loadConfig, resolveConfigPath } from './config.mjs';
 import { observeAll, joinProjectProfileFields } from './observation.mjs';
 import { readObservationHistory } from './state.mjs';
 import { attachForecasts, attentionQueue } from './derive.mjs';
+import { attachMilestones } from './milestone.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -40,10 +41,16 @@ const server = http.createServer((req, res) => {
         ]),
       );
       const withForecasts = attachForecasts(joined, historiesByProjectId);
+      // Active/next milestone (spec 011-01): a pure fold over each project's
+      // already-scanned workstreams signal — the release-plan `## Status`
+      // convention resolved into exactly one active milestone (shipping ??
+      // committed) plus a next list, mirroring attachForecasts's read-layer
+      // composition style. No additional I/O.
+      const withMilestones = attachMilestones(withForecasts);
       // Global attention queue (spec 009-03, ADR-0013): a pure ranking over
       // the forecast/risk read this loop just attached — no additional I/O,
       // no adapter/registry reach from derive.mjs itself (AC4).
-      const data = { ...withForecasts, attention: attentionQueue(withForecasts) };
+      const data = { ...withMilestones, attention: attentionQueue(withMilestones) };
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

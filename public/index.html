@@ -96,21 +96,21 @@ function card(p) {
   const execution=signal(p,'execution'), workstreams=signal(p,'workstreams'), hygiene=signal(p,'hygiene'), narrative=signal(p,'narrative'), repository=signal(p,'repository');
   const progress=execution?.status==='supported'?execution.value.progress:null;
   const pct=progress?.pct??null;
-  const specs=execution?.status==='supported'?execution.value.items:[];
-  const rows=specs.map((item)=>`<li>${esc(item.id)} <span class="meta">${esc(item.status||'unknown')}</span></li>`).join('');
   const streams=workstreams?.status==='supported'?[...(workstreams.value.items||[]),...(workstreams.value.discovered||[])]:[];
   const worktreeOnly=hygiene?.status==='supported'?(hygiene.value.worktreeOnlyDocs||[]):[];
   const problems=(p.errors||[]).map((error)=>esc(error.message)).join(' · ');
-  // Goal/deadline (spec 009-01, ADR-0011): joined onto p.project by the
-  // server read layer (never derived here from prose) — echoed verbatim, or
-  // an explicit "no goal/deadline set" affordance when absent. A deadline
-  // authored as the literal "unknown" renders "Deadline: unknown" — never a
-  // fabricated date and never blank.
-  const goal=p.project.goal;
-  const deadline=p.project.deadline;
-  const goalLine=goal&&goal.value?`Goal: ${esc(goal.value)}`:'no goal set';
-  const deadlineLine=deadline&&deadline.value?`Deadline: ${esc(deadline.value)}`:'no deadline set';
-  const goalDeadlineBlock=`<div class="meta">${goalLine} · ${deadlineLine}</div>`;
+  // Active/next milestone (spec 011-01): attached by the server read layer
+  // (src/milestone.mjs's attachMilestones) as {active, next} over the
+  // project's release-plan workstreams. The active milestone's title IS the
+  // goal line — the project-description goal (ADR-0011 prose) is no longer
+  // rendered here (AC3). Its appetite renders inline as timebox text; absent
+  // or "TBD" reads the literal `unknown`, never a fabricated date or blank
+  // (AC4). With no active milestone (AC6 — e.g. no release plan, or every
+  // release shipped/dropped), this block renders nothing; 011-03 adds the
+  // fallback card face for that case.
+  const active=p.milestone?.active;
+  const nextMilestones=p.milestone?.next||[];
+  const milestoneBlock=active?`<div class="meta">Goal: ${esc(active.title||active.path)} · Timebox: ${esc(active.appetite||'unknown')}${nextMilestones.length?` · Next: ${nextMilestones.map((m)=>esc(m.title||m.path)).join(', ')}`:''}</div>`:'';
   // Forecast/risk (spec 009-02, ADR-0006/ADR-0012): attached by the server
   // read layer as {state, reason}. `unknown` is an explicit, legible state —
   // rendered the same way as a colour, never blank and never a green default.
@@ -134,10 +134,9 @@ function card(p) {
   const metaLine=repository?.status==='supported'?recency:'<span class="partial">repository unavailable</span>';
   return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
-    ${goalDeadlineBlock}
+    ${milestoneBlock}
     ${forecastBlock}
     ${progress?`<div class="barrow"><div class="bar"><div style="width:${pct??0}%"></div></div><span class="pct">${pct===null?'—':pct+'%'}</span></div><div class="counts">${progress.done}/${progress.denom} specs done${progress.deferred?` · ${progress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
-    ${rows?`<details><summary>specs</summary><ul>${rows}</ul></details>`:''}
     ${streams.length?`<div class="sect"><span class="meta">workstreams</span>${streams.map(workstreamRow).join('')}</div>`:''}
     ${worktreeWarn(worktreeOnly)}
     ${narrativeBlock}${problems?`<p class="err">${problems}</p>`:''}</article>`;

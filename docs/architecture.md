@@ -219,10 +219,12 @@ edge-push topology (specs 005/006) remain deferred; collection stays manual pull
   capability records.
 - **Local HTTP:** `/` serves the Gauge page; `/api/data` returns the canonical
   portfolio observation envelope, each project additionally carrying read-layer
-  joins — the profile `goal`/`deadline` (009-01) and a derived
-  `forecast: {state, reason}` (009-02) — that are not part of the observation-v1
-  record, plus a top-level `attention` array (009-03): the deterministic
-  cross-project attention ranking.
+  joins — the profile `goal`/`deadline` (009-01), a derived
+  `forecast: {state, reason}` (009-02), and a derived `milestone: {active, next}`
+  selected from the project's release-plan `## Status` (011-01, `attachMilestones`
+  in `src/milestone.mjs`) — that are not part of the observation-v1 record, plus a
+  top-level `attention` array (009-03): the deterministic cross-project attention
+  ranking.
 - **CLI:** `npm run scan` and `npm run onboard` are read-only (`onboard`
   prints a proposed profile-v1 document to stdout, detection source/notes to
   stderr); `npm run collect` owns durable central writes.

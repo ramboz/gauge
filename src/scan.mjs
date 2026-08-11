@@ -16,6 +16,8 @@ import {
   ageLabel,
   ageDays,
   BUG_CLOSED,
+  parseReleaseStatus,
+  parseReleaseAppetite,
 } from './lib.mjs';
 import { PROFILE_DEFAULTS } from './profile.mjs';
 // detectLayout (ADR-0010 A3, slice 008-02) is the shared nested-vs-flat
@@ -201,8 +203,19 @@ function scanWorkstreams(root, profile, projectCfg) {
       if (!f.endsWith('.md') || f.toLowerCase() === 'readme.md') continue;
       const rel = path.join(releasesLabel, f);
       if (hidden.has(rel)) continue;
-      const rb = parseRunbook(readIf(path.join(releasesDir, f)) || '');
-      workstreams.push({ kind: 'release', path: rel, ...rb });
+      const raw = readIf(path.join(releasesDir, f)) || '';
+      const rb = parseRunbook(raw);
+      // Lifecycle status + appetite (spec 011-01, ADR-0011 shaper release-plan
+      // convention): parsed alongside the existing runbook fields so the
+      // active/next milestone deriver (src/milestone.mjs) has what it needs
+      // without a second read. Neither is a "goal"/"deadline" value (that
+      // remains discover.mjs/ADR-0011's exclusive concern) — status is a
+      // lifecycle label and appetite is a timebox phrase, not a date.
+      workstreams.push({
+        kind: 'release', path: rel, ...rb,
+        status: parseReleaseStatus(raw),
+        appetite: parseReleaseAppetite(raw),
+      });
     }
   }
 

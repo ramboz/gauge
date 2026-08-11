@@ -95,6 +95,17 @@ test('workstreams: releases + pinned runbook parsed, README excluded (002-02 AC1
   assert.match(runbook.currentPhase, /Phase A/);
 });
 
+test('workstreams: a release plan carries its parsed `## Status` and `## Appetite` (011-01 AC1/AC4)', () => {
+  const p = jig();
+  const release = p.workstreams.find((w) => w.kind === 'release');
+  assert.equal(release.status, 'committed');
+  assert.equal(release.appetite, '2026-09-01.');
+  // Only true release plans (kind 'release') get these fields — a pinned
+  // runbook is a different convention and never parses a lifecycle status.
+  const runbook = p.workstreams.find((w) => w.kind === 'runbook');
+  assert.equal(runbook.status, undefined);
+});
+
 test('workstreams: discovery excludes specs/releases/pinned (002-02 AC3)', () => {
   const p = jig();
   assert.equal(p.discovered.length, 0); // the only checkbox doc outside specs/releases is pinned

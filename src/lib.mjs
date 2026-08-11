@@ -188,6 +188,71 @@ export function hasDeliveryStatus(items) {
   return items.some((it) => DELIVERY_VOCABULARY.has(it.status));
 }
 
+// Shared by parseReleaseStatus/parseReleaseAppetite: the trimmed body text of
+// an h2 (`## <name>`) section, up to (not including) the next `## ` heading or
+// end of file. Matches the shaper release-plan convention (docs/releases/*.md:
+// `## Status`, `## Appetite`, ...). Returns null when the heading is absent —
+// distinct from an empty-but-present section, though both parsers below treat
+// "nothing usable found" the same way (null).
+function sectionBody(text, headingName) {
+  const lines = text.split('\n');
+  const headingRe = new RegExp(`^##\\s+${headingName}\\s*$`, 'i');
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (headingRe.test(lines[i].trim())) { start = i + 1; break; }
+  }
+  if (start === -1) return null;
+  let end = lines.length;
+  for (let i = start; i < lines.length; i++) {
+    if (/^##\s+/.test(lines[i])) { end = i; break; }
+  }
+  return lines.slice(start, end).join('\n').trim();
+}
+
+// A release plan's lifecycle status (spec 011-01 AC1): the backtick-quoted
+// value under `## Status` (shaper convention: candidate/committed/shipping/
+// shipped/dropped), lowercased. Null when the section is absent or carries no
+// backtick value — an unparsed status is never fabricated into a lifecycle
+// state; the caller (src/milestone.mjs) treats null as "never active/next".
+export function parseReleaseStatus(text) {
+  const section = sectionBody(text, 'Status');
+  if (!section) return null;
+  const match = section.match(/`([^`]+)`/);
+  if (!match) return null;
+  const value = match[1].trim().toLowerCase();
+  return value || null;
+}
+
+// The caller (public/index.html) already prefixes the appetite with its own
+// "Timebox:" label — a leading "Deadline:" label surviving into the parsed
+// value would double-label the card ("Timebox: Deadline: 2026-08-14."). Strip
+// it here, once, so every caller gets clean timebox text.
+function stripDeadlineLabel(text) {
+  return text.replace(/^Deadline:\s*/i, '').trim();
+}
+
+// A release plan's appetite (spec 011-01 AC4), rendered inline as timebox
+// text: the bold "Deadline: ..." phrase when the appetite section leads with
+// one (the common concrete-date convention), else the first bullet's text —
+// either way, a leading "Deadline:" label is stripped (see stripDeadlineLabel)
+// so the value is timebox text only, never a doubled label. "TBD" (with or
+// without a trailing period) and an absent/empty section both read null — the
+// caller renders `unknown`, never a fabricated date or blank.
+export function parseReleaseAppetite(text) {
+  const section = sectionBody(text, 'Appetite');
+  if (!section) return null;
+  const boldDeadline = section.match(/\*\*(Deadline:[^*]+)\*\*/i);
+  if (boldDeadline) {
+    const value = stripDeadlineLabel(boldDeadline[1].trim());
+    return value || null;
+  }
+  const firstLine = section.split('\n').map((line) => line.trim()).find((line) => line);
+  if (!firstLine) return null;
+  const cleaned = stripDeadlineLabel(firstLine.replace(/^[-*]\s*/, '').replace(/\*\*/g, '').trim());
+  if (!cleaned || /^TBD\.?$/i.test(cleaned)) return null;
+  return cleaned;
+}
+
 // Last valid snapshot line wins; malformed lines are counted, never fatal.
 export function parseCompassHistory(text) {
   let latest = null;

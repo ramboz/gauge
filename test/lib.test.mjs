@@ -16,6 +16,8 @@ import {
   STALE_AFTER_DAYS,
   DELIVERY_VOCABULARY,
   hasDeliveryStatus,
+  parseReleaseStatus,
+  parseReleaseAppetite,
 } from '../src/lib.mjs';
 
 // --- 008-01: recognized jig delivery-completion vocabulary (ADR-0010) ---
@@ -203,6 +205,75 @@ test('ownerOf: only bold owner tags match (review finding 2)', () => {
   assert.equal(ownerOf('pick whatever suits (your choice)'), null);
   assert.equal(ownerOf('**(your choice)** of options'), null);
   assert.equal(ownerOf('plain (you) without bold'), null);
+});
+
+// --- 011-01: release `## Status`/`## Appetite` parsing (shaper release-plan convention) ---
+
+test('parseReleaseStatus: reads the backtick value under "## Status", lowercased', () => {
+  const text = [
+    '# Release Plan: X',
+    '',
+    '## Status',
+    '',
+    '`committed`',
+    '',
+    'Allowed statuses: `candidate`, `committed`, `shipping`, `shipped`, `dropped`.',
+  ].join('\n');
+  assert.equal(parseReleaseStatus(text), 'committed');
+});
+
+test('parseReleaseStatus: uppercase/mixed-case values normalize to lowercase', () => {
+  assert.equal(parseReleaseStatus('## Status\n\n`SHIPPING`\n'), 'shipping');
+});
+
+test('parseReleaseStatus: no "## Status" section → null (never fabricated)', () => {
+  assert.equal(parseReleaseStatus('# Plan\n\nno status section here\n'), null);
+});
+
+test('parseReleaseStatus: "## Status" section with no backtick value → null', () => {
+  assert.equal(parseReleaseStatus('## Status\n\nTBD\n'), null);
+});
+
+test('parseReleaseAppetite: prefers the bold "Deadline: ..." phrase when present', () => {
+  const text = [
+    '## Appetite',
+    '',
+    '- **Deadline: 2026-08-14.** Finish the milestone-centric manager dashboard.',
+    '- Fixed constraints: read-only sources.',
+  ].join('\n');
+  assert.equal(parseReleaseAppetite(text), '2026-08-14.');
+});
+
+// Reconciliation nit 1: a real release plan's appetite leads with a bold
+// "Deadline: ..." label (e.g. docs/releases/manager-dashboard-local-data.md).
+// The card already prefixes the appetite with its own "Timebox:" label, so an
+// unstripped "Deadline:" here rendered a double-labeled "Timebox: Deadline:
+// 2026-08-14." wart. The parsed value must carry the date/timebox text only.
+test('parseReleaseAppetite: strips a leading "Deadline:" label so the card never double-labels it as "Timebox: Deadline: ..." (reconciliation nit 1)', () => {
+  const text = [
+    '## Appetite',
+    '',
+    '- **Deadline: 2026-08-14.** Finish the milestone-centric manager dashboard on',
+    '  local data only.',
+  ].join('\n');
+  const value = parseReleaseAppetite(text);
+  assert.doesNotMatch(value, /Deadline:/i);
+  assert.equal(value, '2026-08-14.');
+});
+
+test('parseReleaseAppetite: falls back to the first bullet when no bold Deadline phrase', () => {
+  const text = [
+    '## Appetite',
+    '',
+    '- Maximum two weeks from implementation start.',
+    '- Fixed constraints: ...',
+  ].join('\n');
+  assert.equal(parseReleaseAppetite(text), 'Maximum two weeks from implementation start.');
+});
+
+test('parseReleaseAppetite: "TBD" and an absent "## Appetite" section both read null (renders "unknown", never fabricated)', () => {
+  assert.equal(parseReleaseAppetite('## Appetite\n\nTBD\n'), null);
+  assert.equal(parseReleaseAppetite('# Plan\n\nno appetite section\n'), null);
 });
 
 test('ageLabel: morning/afternoon/evening/yesterday/N days, null on garbage (002-03 AC3+AC5)', () => {

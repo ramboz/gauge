@@ -38,7 +38,7 @@
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-02 — Forecast/risk derivation | **DONE** |  |
 | [009-complete-local-portfolio-loop](009-complete-local-portfolio-loop/spec.md) | 009-03 — Global attention queue | **DONE** |  |
 | [010-multi-entry-goal-deadline](010-multi-entry-goal-deadline/spec.md) | 010-01 — entry-level goal/deadline | **DONE** |  |
-| [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-01 — active-and-next milestone from release Status | DRAFT |  |
+| [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-01 — active-and-next milestone from release Status | **DONE** |  |
 | [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-02 — milestone progress from referenced parent specs | DRAFT |  |
 | [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-03 — fallback card: global progress + discovered workstreams | DRAFT |  |
 | [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-04 — warnings collapse to a header ⚠ icon + tooltip | DRAFT |  |
@@ -72,3 +72,11 @@
 | [003-sessions-panel](003-sessions-panel/spec.md) | 003-01 — sessions-scan-and-render |  |
 | [003-sessions-panel](003-sessions-panel/spec.md) | 003-02 — recency-expand-toggle |  |
 | [003-sessions-panel](003-sessions-panel/spec.md) | 003-03 — pr-badges |  |
+
+## Richer-skill selection audit (spec 096-05)
+
+Advisory (ADR-0040 auditability — never blocks). Regenerated from `reviews/slice-*.md` `substrate:` fields.
+
+- **0** pass(es) recorded `not-shown` (selection step did not run — the kill-criterion-1 defect signal).
+- **1** pass(es) recorded `non-interactive` (declared no-orchestrator / CI).
+- **0** shown-and-declined anomaly(ies) (a high-confidence richer skill was shown and not applied):

@@ -71,7 +71,11 @@ test('browser interprets only understood capability type and version pairs', () 
   assert.match(portfolio, /50%/);
 });
 
-// --- 009-01: card shows goal + deadline (AC6) ---
+// --- 011-01: card leads with the active milestone (goal=title,             ---
+// --- deadline=appetite inline) + a compact Next list. Supersedes the       ---
+// --- 009-01 project-description goal/deadline card tests below (ADR-0011's ---
+// --- prose goal is no longer rendered on the card — AC3); those assertions ---
+// --- are replaced, not just extended, per the slice's explicit AC3.       ---
 
 function cardContext() {
   const html = read('public/index.html');
@@ -89,47 +93,83 @@ const cardBase = {
   signals: [],
 };
 
-test('card renders the authored goal and a concrete deadline date (AC6)', () => {
+test('card renders the active milestone\'s title as the goal line, and no longer the project-description goal (011-01 AC3)', () => {
   const context = cardContext();
   const project = {
     ...cardBase,
-    project: {
-      id: 'alpha', label: 'Alpha',
-      goal: { value: 'Ship the MVP', provenance: 'product-vision' },
-      deadline: { value: '2026-09-01', provenance: 'release' },
-    },
+    project: { id: 'alpha', label: 'Alpha', goal: { value: 'Retired description goal', provenance: 'product-vision' } },
+    milestone: { active: { title: 'Ship the MVP', appetite: '≤ 2 weeks from start' }, next: [] },
   };
   const html = context.card(project);
   assert.match(html, /Ship the MVP/);
-  assert.match(html, /2026-09-01/);
+  assert.doesNotMatch(html, /Retired description goal/);
 });
 
-test('card renders an explicit "deadline: unknown" for an authored-but-unknown deadline, never blank (AC3/AC6)', () => {
+test('card renders the active milestone\'s appetite inline as timebox text (011-01 AC4)', () => {
   const context = cardContext();
   const project = {
     ...cardBase,
-    project: {
-      id: 'alpha', label: 'Alpha',
-      goal: { value: 'Ship the MVP', provenance: 'user' },
-      deadline: { value: 'unknown', provenance: 'user' },
+    project: { id: 'alpha', label: 'Alpha' },
+    milestone: { active: { title: 'Ship the MVP', appetite: '≤ 2 weeks from start' }, next: [] },
+  };
+  const html = context.card(project);
+  assert.match(html, /≤ 2 weeks from start/);
+});
+
+test('card renders "unknown" timebox when the active milestone has no appetite ("TBD"/absent) — never a fabricated date or blank (011-01 AC4)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    milestone: { active: { title: 'Ship the MVP', appetite: null }, next: [] },
+  };
+  const html = context.card(project);
+  assert.match(html, /Timebox:\s*unknown/);
+});
+
+test('card renders a compact Next list from remaining candidate/committed releases (011-01 AC2)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    milestone: {
+      active: { title: 'Ship V1', appetite: '2 weeks' },
+      next: [{ title: 'V2 planning', path: 'docs/releases/v2.md' }, { title: 'V3 planning', path: 'docs/releases/v3.md' }],
     },
   };
   const html = context.card(project);
-  assert.match(html, /Deadline:\s*unknown/);
+  assert.match(html, /Next:.*V2 planning.*V3 planning/);
 });
 
-test('card shows an explicit "no goal set" affordance when goal is absent — never fabricated or blank (AC6)', () => {
+test('card renders no milestone/goal line and does not crash when there is no active milestone (011-01 AC6)', () => {
   const context = cardContext();
-  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
-  const html = context.card(project);
-  assert.match(html, /no goal set/);
-  assert.match(html, /no deadline set/);
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, milestone: { active: null, next: [] } };
+  assert.doesNotThrow(() => context.card(project));
+  assert.doesNotMatch(context.card(project), /Goal:/);
 });
 
-test('card render does not regress when goal/deadline are entirely absent (007/008 identity)', () => {
+test('card render does not regress when milestone is entirely absent (pre-011-01 identity)', () => {
   const context = cardContext();
   const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
   assert.doesNotThrow(() => context.card(project));
+});
+
+test('card no longer renders a per-spec <details> list (011-01 AC5)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    signals: [{
+      type: 'execution', version: 1, status: 'supported',
+      value: { progress: { pct: 50, done: 1, denom: 2, deferred: 0 }, items: [{ id: '001-a', status: 'DONE' }] },
+    }],
+  };
+  const html = context.card(project);
+  assert.doesNotMatch(html, /<details><summary>specs<\/summary>/);
+  assert.doesNotMatch(html, /001-a/);
+  // The progress bar itself is unaffected — 011-02 replaces it with
+  // milestone-scoped progress; until then the existing global bar is reused.
+  assert.match(html, /50%/);
 });
 
 // --- 009-02: card shows the forecast/risk read (ADR-0006/ADR-0012, AC5) ---
@@ -194,6 +234,14 @@ test('the literal string "product-vision.md" appears only in the onboarding/disc
 });
 
 // --- 009-03: global attention queue (ADR-0013, AC5) ------------------------
+
+// --- 011-01: active/next milestone wiring -----------------------------
+
+test('server /api/data wiring attaches the active/next milestone via the pure fold (011-01)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /import\s*\{\s*attachMilestones\s*\}\s*from\s*'\.\/milestone\.mjs'/);
+  assert.match(src, /attachMilestones\(/);
+});
 
 test('server /api/data wiring attaches the attention queue via the pure ranking fold (AC5)', () => {
   const src = read('src/server.mjs');
