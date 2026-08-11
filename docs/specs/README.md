@@ -44,7 +44,7 @@
 | [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-04 — warnings collapse to a header ⚠ icon + tooltip | **DONE** |  |
 | [011-milestone-centric-cards](011-milestone-centric-cards/spec.md) | 011-05 — map worktrees/PRs to their milestone | **DONE** |  |
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 🔬 012-01 — feasibility spike: what local data supports which metrics | **DONE** |  |
-| [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-02 — git velocity on the card | DRAFT |  |
+| [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-02 — git velocity on the card | **DONE** |  |
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-03 — token cost: total + by-model | DRAFT |  |
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-04 — token cost: by-activity + by-skill | DRAFT |  |
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-05 — team signals: human-vs-agent split + contributors | DRAFT |  |
@@ -78,5 +78,5 @@
 Advisory (ADR-0040 auditability — never blocks). Regenerated from `reviews/slice-*.md` `substrate:` fields.
 
 - **0** pass(es) recorded `not-shown` (selection step did not run — the kill-criterion-1 defect signal).
-- **5** pass(es) recorded `non-interactive` (declared no-orchestrator / CI).
+- **6** pass(es) recorded `non-interactive` (declared no-orchestrator / CI).
 - **0** shown-and-declined anomaly(ies) (a high-confidence richer skill was shown and not applied):

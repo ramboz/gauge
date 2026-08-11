@@ -9,6 +9,7 @@ import { observeAll, joinProjectProfileFields } from './observation.mjs';
 import { readObservationHistory } from './state.mjs';
 import { attachForecasts, attentionQueue } from './derive.mjs';
 import { attachMilestones } from './milestone.mjs';
+import { gitVelocity, attachVelocity } from './velocity.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -47,10 +48,20 @@ const server = http.createServer((req, res) => {
       // committed) plus a next list, mirroring attachForecasts's read-layer
       // composition style. No additional I/O.
       const withMilestones = attachMilestones(withForecasts);
+      // Git velocity (spec 012, slice 012-02): a raw-layer signal, no deadline
+      // dependency. The one I/O read (git log per project) happens HERE, at
+      // the read layer — mirroring the forecast history read above — so
+      // attachVelocity itself (src/velocity.mjs) stays a pure fold. `nowMs` is
+      // captured once so every project's window shares the same clock (AC5).
+      const velocityNowMs = Date.now();
+      const velocityByProjectId = Object.fromEntries(
+        freshConfig.projects.map((project) => [project.id, gitVelocity(project.path, velocityNowMs)]),
+      );
+      const withVelocity = attachVelocity(withMilestones, velocityByProjectId);
       // Global attention queue (spec 009-03, ADR-0013): a pure ranking over
       // the forecast/risk read this loop just attached — no additional I/O,
       // no adapter/registry reach from derive.mjs itself (AC4).
-      const data = { ...withMilestones, attention: attentionQueue(withMilestones) };
+      const data = { ...withVelocity, attention: attentionQueue(withVelocity) };
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

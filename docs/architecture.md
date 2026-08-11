@@ -227,7 +227,10 @@ edge-push topology (specs 005/006) remain deferred; collection stays manual pull
   reusing `progressOf`; the release workstream carries its `body` for that parse),
   and every `active`/`next` milestone carries `referencedSpecs` (the parsed parent
   spec ids that release references, 011-05) so worktrees/PRs can be joined to their
-  milestone(s) — that are not part of the observation-v1 record, plus a
+  milestone(s) — plus a per-project `velocity: {perWeek, buckets}` git commit-cadence
+  read-layer join (012-02, `attachVelocity` in `src/velocity.mjs`; `null` when git
+  is unavailable or the window is empty) — that are not part of the observation-v1
+  record, plus a
   top-level `attention` array (009-03): the deterministic cross-project attention
   ranking.
 - **CLI:** `npm run scan` and `npm run onboard` are read-only (`onboard`

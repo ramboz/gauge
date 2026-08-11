@@ -802,6 +802,15 @@ test('server /api/data wiring attaches the attention queue via the pure ranking 
   assert.match(src, /attention:\s*attentionQueue/);
 });
 
+// --- 012-02: git velocity wiring --------------------------------------------
+
+test('server /api/data wiring reads each project\'s git history and attaches velocity via the pure fold (AC1/AC5/AC6)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /import\s*\{\s*gitVelocity,\s*attachVelocity\s*\}\s*from\s*'\.\/velocity\.mjs'/);
+  assert.match(src, /gitVelocity\(/);
+  assert.match(src, /attachVelocity\(/);
+});
+
 test('dashboard renders a ranked attention queue region distinct from the per-project cards (AC5)', () => {
   const html = read('public/index.html');
   // A distinct container/section, rendered by a distinct function from the
@@ -847,4 +856,64 @@ test('no runtime module (outside discover.mjs) computes a "goal" or "deadline" v
   const scan = read('src/scan.mjs');
   assert.doesNotMatch(scan, /\bgoal\s*:/);
   assert.doesNotMatch(scan, /\bdeadline\s*:/);
+});
+
+// --- 012-02: git velocity on the card ---------------------------------------
+// `p.velocity` is attached by the server read layer (src/velocity.mjs's
+// attachVelocity), mirroring milestone/forecast — either `{ perWeek, buckets }`
+// or `null` (explicit unknown, AC4). The card renders a headline "commits/wk"
+// number plus a compact sparkline (AC2/AC3), or the literal word "unknown"
+// when velocity is null, never a fabricated 0 (AC4).
+
+test('card renders the commits/wk headline and a sparkline from a supported velocity (AC2/AC3)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    velocity: { perWeek: 3.5, buckets: [0, 1, 2, 3, 4, 5, 6, 7] },
+  };
+  const html = context.card(project);
+  assert.match(html, /3\.5 commits\/wk/i);
+  assert.doesNotMatch(html, /velocity.*unknown/i);
+});
+
+test('card renders explicit "unknown" (never a fabricated 0) when velocity is null (AC4)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, velocity: null };
+  const html = context.card(project);
+  // Scoped to the velocity block's own markup, not just any "unknown" text on
+  // the card (the card's unrelated execution-signal fallback also renders
+  // "Execution signal unknown.", which would make a bare /\bunknown\b/i
+  // assertion pass even if velocityBlock rendered nothing at all).
+  assert.match(html, /velocity <span class="unknown">unknown<\/span>/);
+  assert.doesNotMatch(html, /0 commits\/wk/i);
+});
+
+test('card renders the headline AND an empty (non-crashing) sparkline span on an empty bucket series', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    velocity: { perWeek: 0.1, buckets: [] },
+  };
+  const html = context.card(project);
+  assert.match(html, /≈ 0\.1 commits\/wk/);
+  assert.match(html, /<span class="spark"[^>]*><\/span>/);
+});
+
+test('card shows "< 0.1 commits/wk" — never "≈ 0" — when a real, non-null velocity rounds to zero (AC4 zero-as-healthy guard)', () => {
+  const context = cardContext();
+  // A genuine but sub-0.1/wk rate (e.g. 1 commit over a large window) still
+  // rounds `perWeek` to 0 at the data layer (see velocity.test.mjs), yet the
+  // velocity object stays non-null — this is KNOWN, near-zero activity, not
+  // the unknown state AC4 guards. The display must not collapse that into
+  // the same "0" text an unknown/healthy-zero would use.
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    velocity: { perWeek: 0, buckets: [0, 0, 0, 0, 0, 0, 0, 1] },
+  };
+  const html = context.card(project);
+  assert.match(html, /&lt; 0\.1 commits\/wk/);
+  assert.doesNotMatch(html, /≈ 0 commits\/wk/);
 });

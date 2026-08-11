@@ -14,6 +14,7 @@
   .barrow { display:flex; align-items:center; gap:10px; margin-top:10px }.bar { flex:1; height:6px; background:var(--inset); border-radius:4px; overflow:hidden }.bar div { height:100%; background:var(--accent) }.pct { min-width:38px; text-align:right; font-weight:600 }
   .sect { border-top:1px solid var(--border); margin-top:10px; padding-top:8px }.ws { padding:5px 0 }.infobox { background:var(--inset); color:var(--text); padding:7px 9px; border-radius:8px; margin-top:8px }.wtsec { margin-top:7px }.wthdr { font-weight:600; font-size:13px }.stale { opacity:.65 }
   .warn-icon { cursor:help; color:var(--warn); font-weight:700 }.warn-icon:focus { outline:2px solid var(--accent); outline-offset:2px }
+  .unknown { color:var(--muted) }.spark { letter-spacing:1px }
   ul { margin:6px 0; padding-left:20px } button { color:inherit; background:var(--card); border:1px solid var(--border); border-radius:7px; padding:4px 10px; cursor:pointer }
   .queue-section { max-width:1200px; margin:0 auto 20px }.queue-section h2 { font-size:14px; margin:0 0 8px }
   .queue { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px }
@@ -236,6 +237,35 @@ function cleanupWarningLines(p) {
     return `${WT_CLEANUP_LABEL[w.group]} worktree \`${w.worktree}\`${prText(w.pr)}${dest}`;
   });
 }
+// 012-02: git commit cadence, attached by the server read layer
+// (src/velocity.mjs's attachVelocity) as `p.velocity` — either
+// `{ perWeek, buckets }` or `null` (no git, no commits in the window, or an
+// unreadable history — explicit unknown, never a fabricated `0` presented as
+// healthy, AC4). `sparkline` degrades gracefully on a short/empty bucket
+// series (AC3): no bars rather than a crash. Unicode block chars keep this
+// zero-dep (ADR-0001) and inline in the stat row (AC3); `esc` still guards
+// the numeric headline even though it is server-derived, matching the rest
+// of the card's escape-everything convention.
+const SPARK_BLOCKS = '▁▂▃▄▅▆▇█';
+function sparkline(buckets) {
+  if (!Array.isArray(buckets) || !buckets.length) return '';
+  const max = Math.max(1, ...buckets);
+  return buckets.map((n) => SPARK_BLOCKS[Math.min(SPARK_BLOCKS.length - 1, Math.floor((n / max) * (SPARK_BLOCKS.length - 1)))]).join('');
+}
+// perWeek is rounded to 1 decimal (velocity.mjs's velocityFromTimestamps), so
+// a real-but-sparse rate (e.g. 1 commit over a wide window) can round to
+// 0 — that is KNOWN, near-zero activity (the object is non-null), not the
+// AC4 unknown state. Displaying it as "≈ 0 commits/wk" would read exactly
+// like a fabricated healthy zero, so a rounded-to-zero rate reads "< 0.1"
+// instead; any positive value renders normally.
+function velocityHeadline(perWeek) {
+  return perWeek > 0 ? `≈ ${esc(perWeek)} commits/wk` : '&lt; 0.1 commits/wk';
+}
+function velocityBlock(p) {
+  const v = p.velocity;
+  if (!v) return `<div class="counts">velocity <span class="unknown">unknown</span></div>`;
+  return `<div class="counts">${velocityHeadline(v.perWeek)} <span class="spark" aria-hidden="true" title="weekly commits, oldest → newest">${esc(sparkline(v.buckets))}</span></div>`;
+}
 function warningItems(p) {
   const items=[];
   if(p.collection?.status && p.collection.status!=='ok') {
@@ -316,6 +346,7 @@ function card(p) {
   const warnIcon=warnings.length?`<span class="warn-icon" tabindex="0" role="img" aria-label="${esc('Attention needed: '+warnTooltip)}" title="${esc(warnTooltip)}">⚠</span>`:'';
   return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${warnIcon}${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
+    ${velocityBlock(p)}
     ${milestoneBlock}${fallbackNote}
     ${forecastBlock}
     ${barProgress?`<div class="barrow"><div class="bar"><div style="width:${barPct??0}%"></div></div><span class="pct">${barPct===null?'—':barPct+'%'}</span></div><div class="counts">${barProgress.done} / ${barProgress.denom} specs${milestoneProgress?'':' done'}${barProgress.deferred?` · ${barProgress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
