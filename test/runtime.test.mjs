@@ -238,6 +238,114 @@ test('card render does not regress when the active milestone carries no specProg
   assert.match(context.card(project), /33%/);
 });
 
+// --- 011-03: fallback card for projects with no active milestone (no       --
+// release plan) — a labelled project-global bar plus the discovered         --
+// checklist workstreams, instead of an empty milestone area. --------------
+
+test('card renders a distinct fallback layout (not the milestone layout) when there is no active milestone (011-03 AC1)', () => {
+  const context = cardContext();
+  const withMilestone = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    milestone: { active: { title: 'Ship V1', appetite: '2 weeks' }, next: [] },
+  };
+  const withoutMilestone = {
+    ...cardBase,
+    project: { id: 'beta', label: 'Beta' },
+    milestone: { active: null, next: [] },
+  };
+  const withHtml = context.card(withMilestone);
+  const withoutHtml = context.card(withoutMilestone);
+  assert.doesNotMatch(withHtml, /no release plan/i);
+  assert.match(withoutHtml, /no release plan/i);
+  assert.doesNotMatch(withoutHtml, /Goal:/);
+});
+
+test('card labels the global bar as fallback overall spec progress when there is no active milestone (011-03 AC2)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    signals: [{
+      type: 'execution', version: 1, status: 'supported',
+      value: { progress: { pct: 40, done: 2, denom: 5, deferred: 0 }, items: [] },
+    }],
+    milestone: { active: null, next: [] },
+  };
+  const html = context.card(project);
+  assert.match(html, /40%/);
+  assert.match(html, /no release plan/i);
+  assert.match(html, /overall spec progress/i);
+});
+
+test('card surfaces discovered checklist workstreams compactly (title + step count), with a completed-treatment chip applied only where all checkboxes are done (011-03 AC3)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    signals: [{
+      type: 'workstreams', version: 1, status: 'supported',
+      value: {
+        items: [],
+        discovered: [
+          { path: 'docs/onboarding.md', title: 'Onboarding checklist', steps: { done: 2, total: 5 } },
+          { path: 'docs/setup.md', title: 'Setup guide', steps: { done: 4, total: 4 } },
+        ],
+      },
+    }],
+    milestone: { active: null, next: [] },
+  };
+  const html = context.card(project);
+  assert.match(html, /Onboarding checklist/);
+  assert.match(html, /2\/5/);
+  assert.match(html, /Setup guide/);
+  assert.match(html, /chip ok">done/);
+  // The completed-treatment chip must come from ONLY the fully-done item —
+  // workstreamRow (the pre-011-03 renderer discovered items already went
+  // through, via the merged streams/workstreamRow render) has no notion of
+  // "done" at all, so this assertion is only satisfiable by the new
+  // discoveredRow helper, not by the old merged render: it fails red if the
+  // fallback branch is reverted to `streams.map(workstreamRow)`.
+  const onboardingRowStart = html.indexOf('Onboarding checklist');
+  const onboardingRow = html.slice(onboardingRowStart, html.indexOf('</div>', onboardingRowStart));
+  assert.doesNotMatch(onboardingRow, /chip ok">done/);
+});
+
+test('card fallback shows no per-spec <details> list and no raw discovered path when a title is present (011-03 AC4)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    signals: [
+      {
+        type: 'execution', version: 1, status: 'supported',
+        value: { progress: { pct: 50, done: 1, denom: 2, deferred: 0 }, items: [{ id: '001-a', status: 'DONE' }] },
+      },
+      {
+        type: 'workstreams', version: 1, status: 'supported',
+        value: { items: [], discovered: [{ path: 'docs/onboarding.md', title: 'Onboarding checklist', steps: { done: 1, total: 3 } }] },
+      },
+    ],
+    milestone: { active: null, next: [] },
+  };
+  const html = context.card(project);
+  // No per-spec markup at all (the app's only <details> widget is the
+  // worktree-paths expander, never a spec list) and no raw discovered path
+  // once a title is available.
+  assert.doesNotMatch(html, /001-a/);
+  assert.doesNotMatch(html, /docs\/onboarding\.md/);
+  assert.match(html, /Onboarding checklist/);
+});
+
+test('card fallback degrades cleanly when there are neither releases nor discovered workstreams (011-03)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, milestone: { active: null, next: [] } };
+  assert.doesNotThrow(() => context.card(project));
+  const html = context.card(project);
+  assert.match(html, /no release plan/i);
+  assert.doesNotMatch(html, /workstreams<\/span>/);
+});
+
 // --- 009-02: card shows the forecast/risk read (ADR-0006/ADR-0012, AC5) ---
 
 test('card renders an on_track forecast with its reason (AC5)', () => {

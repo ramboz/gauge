@@ -40,6 +40,18 @@ const SIGNAL_VERSIONS = Object.freeze({ repository:1, execution:1, workstreams:1
 function signal(p,type) { if(!Object.hasOwn(SIGNAL_VERSIONS,type)) return undefined; return p.signals.find((entry) => entry.type === type && entry.version === SIGNAL_VERSIONS[type]); }
 function shorten(value,n=90) { value=String(value); return value.length>n?value.slice(0,n-1)+'…':value; }
 function workstreamRow(item) { const steps=item.steps?.total?`${item.steps.done}/${item.steps.total}`:''; const next=item.next?`<div class="counts">Next: ${esc(shorten(item.next.text))}</div>`:''; return `<div class="ws"><b>${esc(item.title||item.path)}</b> <span class="meta">${esc(item.kind)} ${steps}</span>${next}</div>`; }
+// 011-03 AC3: discovered checklist workstreams (src/scan.mjs's ≥3-checkbox
+// docs, surfaced in the fallback card for projects with no active milestone)
+// get a compact title + step-count row, with a "done" treatment applied only
+// where inferable — every checkbox checked (steps.total>0 && done===total).
+// Where it isn't inferable (no steps, or partial), the item is simply listed,
+// never a fabricated status. A pure summarizer (no DOM) so it stays testable
+// independent of the row markup, mirroring workstreamRow's title||path
+// fallback (no raw path shown once a title exists — AC4).
+function summarizeDiscovered(discovered) {
+  return (discovered||[]).map((item)=>({ title: item.title||item.path, steps: item.steps, done: Boolean(item.steps?.total) && item.steps.done===item.steps.total }));
+}
+function discoveredRow(item) { const steps=item.steps?.total?`${item.steps.done}/${item.steps.total}`:''; return `<div class="ws"><b>${esc(item.title)}</b> <span class="meta">${steps}</span>${item.done?' <span class="chip ok">done</span>':''}</div>`; }
 // Worktree-only docs are actionable by *worktree* (which session to reopen and
 // clean up), not by individual file. Each doc carries its worktree's recency
 // `state` and an orthogonal `pushed` flag (ADR-0015); we compose the two into a
@@ -95,7 +107,9 @@ function worktreeWarn(docs) {
 function card(p) {
   const execution=signal(p,'execution'), workstreams=signal(p,'workstreams'), hygiene=signal(p,'hygiene'), narrative=signal(p,'narrative'), repository=signal(p,'repository');
   const progress=execution?.status==='supported'?execution.value.progress:null;
-  const streams=workstreams?.status==='supported'?[...(workstreams.value.items||[]),...(workstreams.value.discovered||[])]:[];
+  const items=workstreams?.status==='supported'?(workstreams.value.items||[]):[];
+  const discoveredItems=workstreams?.status==='supported'?(workstreams.value.discovered||[]):[];
+  const streams=[...items,...discoveredItems];
   const worktreeOnly=hygiene?.status==='supported'?(hygiene.value.worktreeOnlyDocs||[]):[];
   const problems=(p.errors||[]).map((error)=>esc(error.message)).join(' · ');
   // Active/next milestone (spec 011-01): attached by the server read layer
@@ -110,6 +124,15 @@ function card(p) {
   const active=p.milestone?.active;
   const nextMilestones=p.milestone?.next||[];
   const milestoneBlock=active?`<div class="meta">Goal: ${esc(active.title||active.path)} · Timebox: ${esc(active.appetite||'unknown')}${nextMilestones.length?` · Next: ${nextMilestones.map((m)=>esc(m.title||m.path)).join(', ')}`:''}</div>`:'';
+  // 011-03 AC1/AC2: fallback layout for a project with no active milestone
+  // (no release plan, or none yielding active/next) — a labelled note so the
+  // project-global bar below (already the fallback value of barProgress,
+  // unchanged from 011-02) is never mistaken for milestone progress. Gated
+  // strictly on `!active`, so a milestone WITH an active release but an
+  // unresolved specProgress (011-02's own fallback-to-global case) never
+  // shows this "no release plan" note — that project does have a release
+  // plan, just no resolvable spec refs.
+  const fallbackNote=active?'':`<div class="meta">No release plan — overall spec progress.</div>`;
   // Milestone-scoped progress (spec 011-02): the active milestone's own bar,
   // rolled up by src/milestone.mjs's milestoneSpecProgress (done/denom over
   // the release doc's referenced PARENT specs, via the same progressOf rule
@@ -143,10 +166,12 @@ function card(p) {
   const metaLine=repository?.status==='supported'?recency:'<span class="partial">repository unavailable</span>';
   return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
-    ${milestoneBlock}
+    ${milestoneBlock}${fallbackNote}
     ${forecastBlock}
     ${barProgress?`<div class="barrow"><div class="bar"><div style="width:${barPct??0}%"></div></div><span class="pct">${barPct===null?'—':barPct+'%'}</span></div><div class="counts">${barProgress.done} / ${barProgress.denom} specs${milestoneProgress?'':' done'}${barProgress.deferred?` · ${barProgress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
-    ${streams.length?`<div class="sect"><span class="meta">workstreams</span>${streams.map(workstreamRow).join('')}</div>`:''}
+    ${active
+      ? (streams.length?`<div class="sect"><span class="meta">workstreams</span>${streams.map(workstreamRow).join('')}</div>`:'')
+      : ((items.length||discoveredItems.length)?`<div class="sect"><span class="meta">workstreams</span>${items.map(workstreamRow).join('')}${summarizeDiscovered(discoveredItems).map(discoveredRow).join('')}</div>`:'')}
     ${worktreeWarn(worktreeOnly)}
     ${narrativeBlock}${problems?`<p class="err">${problems}</p>`:''}</article>`;
 }
