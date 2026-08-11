@@ -53,13 +53,20 @@ This is an index. Durable detail lives in `docs/`; update it through
   milestone(s) with an **unassociated** bucket. The read-layer join is
   `attachMilestones` in `src/milestone.mjs` (`milestone: {active, next}` on
   `/api/data`, `active.specProgress` + `referencedSpecs`).
-  [Spec 012 — portfolio-manager analytics](docs/specs/012-portfolio-manager-analytics/spec.md):
-  the 012-01 feasibility spike is **DONE** and its raw-layer slices are **drafted**
-  (012-02 velocity · 012-03/04 token cost by model/activity/skill · 012-05 team ·
-  012-06 RAG chip, deadline-gated) — next to implement. Design reference: spec 012
+  [Spec 012 — portfolio-manager analytics](docs/specs/012-portfolio-manager-analytics/spec.md)
+  is **DONE** (spike + all 5 raw-layer/RAG slices landed): git **velocity**
+  (`src/velocity.mjs`, sparkline), **token cost** total + by-model and the
+  by-activity/by-skill detail tier (`src/cost.mjs`, per-request deduped, illustrative
+  pricing, `GAUGE_TRANSCRIPTS_ROOT`), **team** signals (`src/team.mjs`, agent-coauthor
+  proxy + contributors, no PII), and the deadline-gated **RAG health chip**
+  (`forecastToRag` over the existing 009-02 forecast; gray "needs a deadline set"
+  until a curated deadline exists; worst-first card sort). Each is a `/api/data`
+  read-layer join. Design reference: spec 012
   `design/manager-dashboard-mockup.html`. **History is reconstructable from git
   (past) + captured on session-stop (future)** — the forecast "history gate" is a
   code limit, not a data one. Blockers count is approximate pending jig#195.
+  **Remaining owner action (out of code):** set a real deadline on Gauge in the
+  gitignored onboarding config to light the RAG chip green (spike 012-01 dogfood).
 - **Committed local-pull MVP** — the prior loop; see
   [local-portfolio-loop](docs/releases/local-portfolio-loop.md) (largely shipped).
 - **Landed runtime** —

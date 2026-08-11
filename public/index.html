@@ -9,7 +9,16 @@
   @media (prefers-color-scheme:dark) { :root { --bg:#1d1d1a; --card:#262622; --inset:#31312c; --text:#eceae4; --muted:#aaa89f; --border:#3a3a34; --accent:#85b7eb; --good:#97c459; --warn:#ef9f27; --bad:#f09595; } }
   * { box-sizing:border-box } body { margin:0; padding:24px; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif }
   header,.grid { max-width:1200px; margin:auto } header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:18px } h1 { font-size:20px; margin:0 }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px }.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px }.card { background:var(--card); border:1px solid var(--border); border-left-width:4px; border-radius:12px; padding:16px 18px }
+  /* 012-06: RAG health chip — colored left border (per-band, on the card itself) */
+  /* plus the leading status callout (headline + ⚠ tooltip) rendered inside it. */
+  .card.rag-green { border-left-color:var(--good) }.card.rag-yellow { border-left-color:var(--warn) }
+  .card.rag-red { border-left-color:var(--bad) }.card.rag-gray { border-left-color:var(--muted) }
+  .rag-callout { display:flex; align-items:center; gap:8px; margin-bottom:10px }
+  .rag-headline { font-weight:600; font-size:13px }
+  .rag-callout.rag-green .rag-headline { color:var(--good) }.rag-callout.rag-yellow .rag-headline { color:var(--warn) }
+  .rag-callout.rag-red .rag-headline { color:var(--bad) }.rag-callout.rag-gray .rag-headline { color:var(--muted) }
+  .rag-flag { margin-left:auto; cursor:help; font-weight:700 }.rag-flag:focus { outline:2px solid var(--accent); outline-offset:2px }
   .head { display:flex; justify-content:space-between; gap:8px }.head h2 { font-size:15px; margin:0 }.chip { font-size:11px; padding:2px 9px; border-radius:10px; background:var(--inset) }.ok { color:var(--good) }.partial { color:var(--warn) }.error,.err { color:var(--bad) }.meta,.counts { color:var(--muted); font-size:12px }
   .barrow { display:flex; align-items:center; gap:10px; margin-top:10px }.bar { flex:1; height:6px; background:var(--inset); border-radius:4px; overflow:hidden }.bar div { height:100%; background:var(--accent) }.pct { min-width:38px; text-align:right; font-weight:600 }
   .sect { border-top:1px solid var(--border); margin-top:10px; padding-top:8px }.ws { padding:5px 0 }.infobox { background:var(--inset); color:var(--text); padding:7px 9px; border-radius:8px; margin-top:8px }.wtsec { margin-top:7px }.wthdr { font-weight:600; font-size:13px }.stale { opacity:.65 }
@@ -357,6 +366,77 @@ function costDetailBlock(p) {
     <div class="wtsec"><span class="wthdr">by skill</span>${skillRows}</div>
   </details>`;
 }
+// 012-06: RAG health chip. Reuses the already-derived ADR-0012 forecast
+// (`p.forecast = {state, reason}`, attached server-side by
+// src/derive.mjs's deriveForecast/attachForecasts — spec 009-02) — this file
+// never re-derives a forecast from raw progress/history, only maps the
+// finished read to a display band.
+//
+// AC1 threshold rule (documented, not magic): `on_track` -> green.
+// `at_risk` SPLITS on whether the deadline has already been missed:
+// `pace-behind-required` still has time left to recover (a warning, not yet
+// a failure) -> yellow; `deadline-passed` (time is up) and
+// `no-forward-progress` (zero progress observed at all) are failures as-is
+// -> red. Any other/future `at_risk` reason not named here defaults to red
+// — the safer of the two bands when the specific threshold isn't known.
+// `unknown`, and any absent/malformed forecast, reads gray — AC2's
+// "never green-by-default" guard (a missing/broken forecast must never read
+// as healthy).
+const RAG_YELLOW_REASONS = new Set(['pace-behind-required']);
+function forecastToRag(forecast) {
+  const state = forecast && forecast.state;
+  if (state === 'on_track') return 'green';
+  if (state === 'at_risk') return RAG_YELLOW_REASONS.has(forecast.reason) ? 'yellow' : 'red';
+  return 'gray';
+}
+// AC5: worst-first sort key, built directly on forecastToRag's band — never
+// a second, independent mapping. Lower sorts first: red, yellow, gray, green.
+const RAG_SORT_ORDER = { red: 0, yellow: 1, gray: 2, green: 3 };
+function ragSortKey(forecast) {
+  return RAG_SORT_ORDER[forecastToRag(forecast)];
+}
+// AC4: short, human phrases for each ADR-0012 forecast reason (src/derive.mjs
+// deriveForecast) — sourced directly from the reason output, never invented
+// copy. Reused for BOTH the callout's one-line headline and its ⚠ tooltip,
+// so the two never disagree. A reason not in this table (a future ADR-0012
+// addition) falls back to the raw reason string itself rather than a generic
+// label, so it is never silently swallowed; an entirely absent forecast (no
+// `p.forecast` at all) gets its own explicit phrase.
+const RAG_REASON_TEXT = {
+  'deadline-unknown': 'needs a deadline set',
+  'execution-unknown': 'no delivery status yet',
+  'stale-evidence': 'evidence is stale',
+  'insufficient-history': 'not enough history yet',
+  'scope-changed': 'scope changed — needs review',
+  'already-complete': 'already complete',
+  'pace-meets-required': 'on track for the deadline',
+  'pace-behind-required': 'behind pace — deadline not yet missed',
+  'deadline-passed': 'deadline has passed',
+  'no-forward-progress': 'no forward progress',
+};
+function ragReasonText(forecast) {
+  if (!forecast || !forecast.reason) return 'no forecast available';
+  return RAG_REASON_TEXT[forecast.reason] || forecast.reason;
+}
+// AC2/AC3/AC4: the card's LEADING element (rendered first inside <article>,
+// ahead of the existing .head block) — a colored left border (the
+// `rag-${band}` class applied to the <article> itself, see card()) plus a
+// one-line headline, both carrying the SAME reason phrase. The ⚠ tooltip is
+// gated on `band !== 'green'` (reconciliation fix): AC3's ⚠ carries a RISK
+// reason, so a healthy on_track/green card — whose only "reason" is
+// something like "on track for the deadline" — must never wrap that in a
+// warning glyph; that both misreads as risk and breaks 011-04's established
+// convention that ⚠ appears only when there is something to report. Yellow/
+// red/gray genuinely need attention (at-risk, or an unresolved gate like
+// "needs a deadline set"), so they keep the ⚠, keyboard-reachable exactly
+// like 011-04's warn-icon (tabindex + role="img" + aria-label + title) so
+// the reason is legible without hover. Green loses nothing: the colored
+// border + headline already carry the healthy state.
+function forecastCallout(p, band) {
+  const reasonText = ragReasonText(p.forecast);
+  const flag = band === 'green' ? '' : `<span class="rag-flag" tabindex="0" role="img" aria-label="${esc('Forecast: ' + reasonText)}" title="${esc(reasonText)}">⚠</span>`;
+  return `<div class="rag-callout rag-${band}"><span class="rag-headline">${esc(reasonText)}</span>${flag}</div>`;
+}
 function warningItems(p) {
   const items=[];
   if(p.collection?.status && p.collection.status!=='ok') {
@@ -435,7 +515,12 @@ function card(p) {
   const warnings=warningItems(p);
   const warnTooltip=warnings.join(' · ');
   const warnIcon=warnings.length?`<span class="warn-icon" tabindex="0" role="img" aria-label="${esc('Attention needed: '+warnTooltip)}" title="${esc(warnTooltip)}">⚠</span>`:'';
-  return `<article class="card"><div class="head"><h2>${esc(p.project.label)}</h2>${warnIcon}${statusChip}</div>
+  // 012-06 AC2/AC3/AC6: RAG band computed once (forecastToRag) and used both
+  // for the card's colored left border (the `rag-${band}` class below) and
+  // the leading status callout — a project with no curated deadline (and so
+  // no real forecast, deadline-unknown) stays gray here, never green.
+  const ragBand=forecastToRag(p.forecast);
+  return `<article class="card rag-${ragBand}">${forecastCallout(p,ragBand)}<div class="head"><h2>${esc(p.project.label)}</h2>${warnIcon}${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${velocityBlock(p)}
     ${teamBlock(p)}
@@ -458,7 +543,11 @@ function safeCard(project) { try { return card(project); } catch(error) { const 
 // this only renders the already-ranked list, never re-sorts or re-derives.
 function queueRow(item) { return `<li class="queue-row"><span class="qtier t${esc(item.tier)}">${esc(item.tier)}</span><b>${esc(item.label||item.id)}</b><span class="meta">${esc(item.reason)}</span></li>`; }
 function safeQueueRow(item) { try { return queueRow(item); } catch(error) { return `<li class="queue-row err">Invalid attention entry: ${esc(error?.message||error)}</li>`; } }
-async function load() { try { const response=await fetch('/api/data'); const data=await response.json(); if(data.error) throw new Error(data.error); const scanned=document.getElementById('scanned'); const observedAt=new Date(data.generatedAt); scanned.textContent='observed '+relativeTime(observedAt); scanned.title=observedAt.toLocaleString(); document.getElementById('grid').innerHTML=data.projects.map(safeCard).join(''); document.getElementById('queue').innerHTML=(data.attention||[]).map(safeQueueRow).join('')||'<li class="meta">no projects to rank yet</li>'; } catch(error) { document.getElementById('grid').innerHTML=`<p class="err">${esc(error.message)}</p>`; } }
+// 012-06 AC5: cards render worst-first by RAG band (red, yellow, gray, then
+// green) — the grid-level application of ragSortKey; a stable sort (Array's
+// native sort, guaranteed stable since ES2019) so same-band projects keep
+// their /api/data order rather than reshuffling on every refresh.
+async function load() { try { const response=await fetch('/api/data'); const data=await response.json(); if(data.error) throw new Error(data.error); const scanned=document.getElementById('scanned'); const observedAt=new Date(data.generatedAt); scanned.textContent='observed '+relativeTime(observedAt); scanned.title=observedAt.toLocaleString(); data.projects=[...data.projects].sort((a,b)=>ragSortKey(a.forecast)-ragSortKey(b.forecast)); document.getElementById('grid').innerHTML=data.projects.map(safeCard).join(''); document.getElementById('queue').innerHTML=(data.attention||[]).map(safeQueueRow).join('')||'<li class="meta">no projects to rank yet</li>'; } catch(error) { document.getElementById('grid').innerHTML=`<p class="err">${esc(error.message)}</p>`; } }
 load(); setInterval(load,120000);
 </script>
 </body>

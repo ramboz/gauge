@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { deriveForecast } from '../src/derive.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (name) => fs.readFileSync(path.join(ROOT, name), 'utf8');
@@ -84,6 +85,17 @@ function cardContext() {
   const context = vm.createContext({});
   vm.runInContext(script, context);
   return context;
+}
+
+// 012-06: isolates just the RAG callout's own markup out of a full card()
+// render, so a green-card ⚠ assertion checks ONLY the RAG chip's flag — never
+// the unrelated 011-04 cleanup "warn-icon" that a fixture (e.g. one with no
+// milestone) may separately and legitimately carry elsewhere on the same
+// card. The callout has no nested `<div>`, so a non-greedy match up to the
+// first closing `</div>` captures exactly its contents.
+function ragCalloutMarkup(html) {
+  const match = html.match(/<div class="rag-callout[^>]*>[\s\S]*?<\/div>/);
+  return match ? match[0] : '';
 }
 
 const cardBase = {
@@ -370,11 +382,21 @@ test('warningItems returns an empty array for a fully clean project (011-04 AC1)
   assert.deepEqual(Array.from(context.warningItems(cleanProject)), []);
 });
 
-test('card renders no ⚠ icon for a clean project (011-04 AC1)', () => {
+test('card renders no cleanup/attention warn-icon for a clean project (011-04 AC1)', () => {
   const context = cardContext();
   const html = context.card(cleanProject);
+  // 012-06 note (reconciliation fix): this test's ORIGINAL bare "no ⚠ at
+  // all" assertion no longer holds unconditionally, and the fix is now
+  // exactly the invariant this note pins: green ⇒ no ⚠, but a non-green
+  // band legitimately DOES show one. `cleanProject` carries no `forecast`
+  // field at all, so forecastToRag reads it gray (never green-by-default —
+  // AC2), and a gray card's RAG ⚠ ("no forecast available") IS a genuine,
+  // legitimate attention signal here, distinct from and unrelated to this
+  // test's actual subject: 011-04's CLEANUP "warn-icon" (class "warn-icon"),
+  // which stays absent because warningItems(cleanProject) is empty. See the
+  // dedicated 012-06 tests below for the green-card-has-no-⚠ / non-green-
+  // card-has-⚠ invariant itself.
   assert.doesNotMatch(html, /warn-icon/);
-  assert.doesNotMatch(html, /⚠/);
 });
 
 test('warningItems flags a non-ok collection status (011-04 AC1)', () => {
@@ -1235,4 +1257,177 @@ test('card escapes team-signal values — no raw markup injected (XSS safety)', 
   };
   assert.doesNotThrow(() => context.card(project));
   assert.doesNotMatch(context.card(project), /<img/);
+});
+
+// --- 012-06: RAG health chip (deadline-gated) — reuses the ADR-0012        ---
+// forecast layer's already-derived p.forecast; forecastToRag is a pure,     ---
+// client-side band mapping (AC1), never a re-derivation of the forecast     ---
+// itself (src/derive.mjs's deriveForecast/attachForecasts stay untouched).  ---
+
+test('forecastToRag: on_track maps to green (AC1)', () => {
+  const context = cardContext();
+  assert.equal(context.forecastToRag({ state: 'on_track', reason: 'pace-meets-required' }), 'green');
+  assert.equal(context.forecastToRag({ state: 'on_track', reason: 'already-complete' }), 'green');
+});
+
+test('forecastToRag: at_risk with "behind but not yet failed" reason maps to yellow, not red (AC1, documented threshold)', () => {
+  const context = cardContext();
+  assert.equal(context.forecastToRag({ state: 'at_risk', reason: 'pace-behind-required' }), 'yellow');
+});
+
+test('forecastToRag: at_risk with a "failed" reason (deadline passed / no forward progress) stays red (AC1)', () => {
+  const context = cardContext();
+  assert.equal(context.forecastToRag({ state: 'at_risk', reason: 'deadline-passed' }), 'red');
+  assert.equal(context.forecastToRag({ state: 'at_risk', reason: 'no-forward-progress' }), 'red');
+});
+
+test('forecastToRag: every unknown reason (including deadline-unknown) maps to gray (AC1/AC2)', () => {
+  const context = cardContext();
+  for (const reason of ['deadline-unknown', 'execution-unknown', 'stale-evidence', 'insufficient-history', 'scope-changed']) {
+    assert.equal(context.forecastToRag({ state: 'unknown', reason }), 'gray', reason);
+  }
+});
+
+test('forecastToRag: absent/malformed forecast is never coerced to green — it reads gray (never-green-default guard)', () => {
+  const context = cardContext();
+  assert.equal(context.forecastToRag(undefined), 'gray');
+  assert.equal(context.forecastToRag(null), 'gray');
+  assert.equal(context.forecastToRag({}), 'gray');
+});
+
+test('ragSortKey: worst-first ordering — red < yellow < gray < green (AC5)', () => {
+  const context = cardContext();
+  const red = context.ragSortKey({ state: 'at_risk', reason: 'deadline-passed' });
+  const yellow = context.ragSortKey({ state: 'at_risk', reason: 'pace-behind-required' });
+  const gray = context.ragSortKey({ state: 'unknown', reason: 'deadline-unknown' });
+  const green = context.ragSortKey({ state: 'on_track', reason: 'pace-meets-required' });
+  assert.ok(red < yellow);
+  assert.ok(yellow < gray);
+  assert.ok(gray < green);
+});
+
+test('card renders the RAG callout as a gray "needs a deadline set" chip when the forecast is deadline-unknown — never green-by-default (AC2)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'unknown', reason: 'deadline-unknown' } };
+  const html = context.card(project);
+  assert.match(html, /rag-gray/);
+  assert.match(html, /needs a deadline set/);
+  assert.doesNotMatch(html, /rag-green/);
+});
+
+test('card renders a real (non-gray) RAG band + colored left border when a deadline and forecast are present (AC3/AC6, fixture project lights up)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'gauge', label: 'Gauge' }, forecast: { state: 'on_track', reason: 'pace-meets-required' } };
+  const html = context.card(project);
+  assert.match(html, /class="card rag-green"/);
+  assert.match(html, /rag-callout rag-green/);
+  assert.doesNotMatch(html, /rag-gray/);
+});
+
+// Reconciliation fix: AC3's ⚠ carries a RISK reason, so a healthy green
+// (on_track) card — whose only "reason" is something like "on track for the
+// deadline" — must never wrap that in a warning glyph (that both misreads as
+// risk and breaks 011-04's established "⚠ only when there's something to
+// report" convention). The colored border + headline already carry the
+// healthy state on their own; green loses nothing by omitting the flag.
+test('card RAG callout on a GREEN (on_track) card shows the headline but NO ⚠ — the healthy state needs no warning glyph (reconciliation fix)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'gauge', label: 'Gauge' }, forecast: { state: 'on_track', reason: 'pace-meets-required' } };
+  const html = context.card(project);
+  const callout = ragCalloutMarkup(html);
+  assert.match(callout, /rag-callout rag-green/);
+  assert.match(callout, /on track for the deadline/);
+  assert.doesNotMatch(callout, /rag-flag/);
+  assert.doesNotMatch(callout, /⚠/);
+});
+
+// The converse of the fix above: yellow/red/gray genuinely need attention
+// (at-risk pace, a missed deadline, no progress, or an unresolved gate like
+// "needs a deadline set"), so each of them KEEPS the ⚠ + reason tooltip.
+test('card RAG callout on a non-green (yellow/red/gray) card DOES show the ⚠ + reason tooltip', () => {
+  const context = cardContext();
+  const bands = [
+    { forecast: { state: 'at_risk', reason: 'pace-behind-required' }, band: 'yellow' },
+    { forecast: { state: 'at_risk', reason: 'deadline-passed' }, band: 'red' },
+    { forecast: { state: 'unknown', reason: 'deadline-unknown' }, band: 'gray' },
+  ];
+  for (const { forecast, band } of bands) {
+    const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast };
+    const callout = ragCalloutMarkup(context.card(project));
+    assert.match(callout, new RegExp(`rag-callout rag-${band}`), band);
+    assert.match(callout, /class="rag-flag" tabindex="0" role="img"/, band);
+    assert.match(callout, /⚠/, band);
+  }
+});
+
+test('card RAG callout carries the forecast reason string in its ⚠ tooltip (AC4, sourced from p.forecast.reason, no invented copy)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'at_risk', reason: 'pace-behind-required' } };
+  const html = context.card(project);
+  assert.match(html, /rag-callout rag-yellow/);
+  assert.match(html, /title="behind pace/);
+  assert.match(html, /behind pace/);
+});
+
+test('card RAG callout leads the card — it renders before the existing head/title markup (AC3)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'at_risk', reason: 'deadline-passed' } };
+  const html = context.card(project);
+  const calloutIndex = html.indexOf('rag-callout');
+  const headIndex = html.indexOf('class="head"');
+  assert.ok(calloutIndex >= 0 && headIndex >= 0);
+  assert.ok(calloutIndex < headIndex);
+});
+
+test('card RAG callout\'s ⚠ flag is keyboard-reachable, not hover-only (accessibility, mirrors 011-04\'s warn-icon affordance)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'at_risk', reason: 'no-forward-progress' } };
+  const html = context.card(project);
+  assert.match(html, /class="rag-flag" tabindex="0" role="img" aria-label="[^"]*no forward progress/);
+});
+
+test('card RAG callout still renders (gray, no-forecast reason) when p.forecast is entirely absent — never a crash, never green (defensive)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
+  assert.doesNotThrow(() => context.card(project));
+  const html = context.card(project);
+  assert.match(html, /rag-gray/);
+  assert.doesNotMatch(html, /rag-green/);
+});
+
+// AC6, end-to-end dogfood proof: a FIXTURE project's history run through the
+// REAL ADR-0012 pipeline (deriveForecast, src/derive.mjs — the exact same
+// function attachForecasts wires onto /api/data) with a curated deadline
+// produces a real on_track forecast, which then lights up a real (non-gray)
+// band + colored border end-to-end. No fabricated deadline lands in
+// committed data (per the slice's Resolution note) — this is a test-only
+// fixture, not a config change.
+test('end-to-end (AC6): a fixture project with a real deadline + history, run through the ACTUAL deriveForecast pipeline, lights up a real (non-gray) RAG band on the card', () => {
+  const context = cardContext();
+  const history = [
+    { collectedAt: '2026-08-01T00:00:00Z', collection: { status: 'ok' }, signals: [{ type: 'execution', status: 'supported', freshness: { state: 'fresh' }, value: { progress: { done: 2, total: 10, abandoned: 0, deferred: 0, denom: 10, pct: 20 } } }] },
+    { collectedAt: '2026-08-05T00:00:00Z', collection: { status: 'ok' }, signals: [{ type: 'execution', status: 'supported', freshness: { state: 'fresh' }, value: { progress: { done: 6, total: 10, abandoned: 0, deferred: 0, denom: 10, pct: 60 } } }] },
+  ];
+  const forecast = deriveForecast(history, '2026-09-14');
+  assert.deepEqual(forecast, { state: 'on_track', reason: 'pace-meets-required' });
+  const project = { ...cardBase, project: { id: 'gauge', label: 'Gauge' }, forecast };
+  const html = context.card(project);
+  assert.match(html, /class="card rag-green"/);
+  assert.match(html, /rag-callout rag-green/);
+  assert.match(html, /on track for the deadline/);
+  // Reconciliation fix: the dogfooded green card's RAG callout must show no
+  // ⚠ — the colored border + "on track" headline already say everything a
+  // healthy forecast needs to say. (Scoped to the callout itself, not the
+  // whole card: an unrelated 011-04 cleanup warn-icon may legitimately
+  // appear elsewhere on this no-milestone fixture.)
+  assert.doesNotMatch(ragCalloutMarkup(html), /⚠/);
+});
+
+test('card RAG callout escapes forecast reason text — no raw markup injected (XSS safety)', () => {
+  const context = cardContext();
+  const payload = '"><img src=x onerror=alert(1)>';
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'unknown', reason: payload } };
+  assert.doesNotThrow(() => context.card(project));
+  const html = context.card(project);
+  assert.doesNotMatch(html, /<img/);
 });
