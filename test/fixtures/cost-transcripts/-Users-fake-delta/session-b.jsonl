@@ -1,0 +1,3 @@
+{"requestId":"req_d4","sessionId":"sess-d2","message":{"id":"m_d4","model":"illustrative-model-a","usage":{"input_tokens":700,"output_tokens":200,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+{"sessionId":"sess-d2","message":{"id":"u3","role":"user","content":[{"type":"text","text":"[jig:phase=plan] plan work"}]}}
+{"requestId":"req_d5","sessionId":"sess-d2","message":{"id":"m_d5","model":"illustrative-model-a","usage":{"input_tokens":300,"output_tokens":100,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}

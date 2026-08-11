@@ -1,0 +1,4 @@
+{"timestamp":"2026-08-01T00:00:00Z","session_id":"sess-d1","event":"skill_invoked","tool_name":"Skill","skill_name":"spec-workflow"}
+{"timestamp":"2026-08-01T00:00:30Z","session_id":"sess-d2","event":"skill_invoked","tool_name":"Skill","skill_name":""}
+{"timestamp":"2026-08-01T00:01:00Z","session_id":"sess-d2","event":"task_spawned","tool_name":"Task","skill_name":"should-be-ignored-event"}
+not valid json at all {{{

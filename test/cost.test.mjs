@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_PRICE_TABLE,
   UNKNOWN_MODEL_BUCKET,
+  UNATTRIBUTED,
   encodeProjectPath,
   dedupeRecords,
   costFromRecords,
@@ -13,6 +14,15 @@ import {
   readTranscriptRecords,
   projectTokenCost,
   attachTokenCost,
+  costByActivity,
+  costBySkill,
+  buildSkillBySession,
+  skillUsagePathForProject,
+  readSkillUsageRecords,
+  projectCostByActivity,
+  projectCostBySkill,
+  projectCostBundle,
+  attachCostBreakdown,
 } from '../src/cost.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +30,8 @@ const FIXTURE_ROOT = path.join(HERE, 'fixtures', 'cost-transcripts');
 const ALPHA_PATH = '/Users/fake/alpha';
 const BETA_PATH = '/Users/fake/beta';
 const GAMMA_PATH = '/Users/fake/gamma'; // deliberately unmapped: no fixture dir
+const DELTA_PATH = '/Users/fake/delta'; // 012-04: phase-tagged + skill-mappable fixtures
+const ILLUSTRATIVE_A_PRICE = { 'illustrative-model-a': { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3 } };
 
 // --- encodeProjectPath (AC1/AC4) --------------------------------------------
 // Mirrors Claude Code's own projects-root encoding (probed against real
@@ -194,4 +206,191 @@ test('cost.mjs is read-only and never logs raw prompt/message text (source-level
   const src = fs.readFileSync(path.join(HERE, '..', 'src', 'cost.mjs'), 'utf8');
   assert.doesNotMatch(src, /console\./);
   assert.doesNotMatch(src, /fs\.write|fs\.append|fs\.unlink|fs\.rm(?!Sync\()/);
+});
+
+// === 012-04: by-activity + by-skill cost detail =============================
+// Delta fixtures (-Users-fake-delta): session sess-d1 carries two
+// `[jig:phase=...]` tags mid-session (impl, then compliance) in user-turn
+// records; session sess-d2 opens with an untagged assistant record (must
+// land in `unattributed`) before a `[jig:phase=plan]` tag (as a content-block
+// array, not a bare string — the other real-world shape) flips later
+// records to `plan`.
+
+function deltaRecords() {
+  const files = sessionFilesForProject(FIXTURE_ROOT, DELTA_PATH);
+  return files.flatMap(readTranscriptRecords);
+}
+
+// Dollar math on real-world token counts is IEEE-754 float division, so
+// hand-checked expectations are compared with tolerance rather than strict
+// equality (mirrors the LOAD-BEARING reconciliation tests further below).
+function closeTo(actual, expected, message) {
+  assert.ok(Math.abs(actual - expected) < 1e-9, message || `${actual} !~= ${expected}`);
+}
+
+// --- costByActivity (AC1) ----------------------------------------------------
+
+test('costByActivity: attributes cost to the most-recent-preceding [jig:phase=...] tag within a session (AC1)', () => {
+  const buckets = costByActivity(deltaRecords(), ILLUSTRATIVE_A_PRICE);
+  const byLabel = Object.fromEntries(buckets.map((b) => [b.activity, b]));
+  assert.ok(byLabel.impl, 'impl bucket must exist');
+  assert.ok(byLabel.compliance, 'compliance bucket must exist');
+  assert.ok(byLabel.plan, 'plan bucket must exist');
+  // impl: req_d1 only (1000 in, 500 out) => 0.003 + 0.0075 = 0.0105
+  closeTo(byLabel.impl.totalUsd, 0.0105);
+  // compliance: req_d2 (2000,300) + req_d3 (500,100) => 0.0075+0.006 = 0.0135
+  closeTo(byLabel.compliance.totalUsd, 0.0135);
+  // plan: req_d5 (300,100) => 0.0009+0.0015 = 0.0024
+  closeTo(byLabel.plan.totalUsd, 0.0024);
+});
+
+test('costByActivity: a record before any phase tag in its session falls into the explicit "unattributed" bucket, never dropped (AC1/AC5)', () => {
+  const buckets = costByActivity(deltaRecords(), ILLUSTRATIVE_A_PRICE);
+  const unattributed = buckets.find((b) => b.activity === UNATTRIBUTED);
+  assert.ok(unattributed, 'unattributed bucket must be present, not dropped');
+  // req_d4 (700,200) => 0.0021+0.003 = 0.0051
+  closeTo(unattributed.totalUsd, 0.0051);
+});
+
+test('costByActivity: parses the [jig:phase=...] tag from a content-block array, not only a bare string (real-world shape)', () => {
+  // sess-d2's tag arrives as message.content = [{type:'text', text:'[jig:phase=plan] ...'}]
+  const buckets = costByActivity(deltaRecords(), ILLUSTRATIVE_A_PRICE);
+  assert.ok(buckets.some((b) => b.activity === 'plan'));
+});
+
+// --- costBySkill (AC2) -------------------------------------------------------
+
+test('buildSkillBySession: maps session id -> skill name from skill_invoked entries, ignoring empty names and other events', () => {
+  const raw = readSkillUsageRecords(path.join(FIXTURE_ROOT, 'skill-usage-delta.jsonl'));
+  const bySession = buildSkillBySession(raw);
+  assert.equal(bySession.get('sess-d1'), 'spec-workflow');
+  assert.equal(bySession.has('sess-d2'), false); // empty skill_name + wrong event: no signal
+});
+
+test('costBySkill: attributes cost to the joined skill for the session, "unattributed" where no skill signal exists (AC2/AC5)', () => {
+  const bySession = buildSkillBySession(readSkillUsageRecords(path.join(FIXTURE_ROOT, 'skill-usage-delta.jsonl')));
+  const buckets = costBySkill(deltaRecords(), bySession, ILLUSTRATIVE_A_PRICE);
+  const byLabel = Object.fromEntries(buckets.map((b) => [b.skill, b]));
+  assert.ok(byLabel['spec-workflow'], 'skill bucket must exist');
+  assert.ok(byLabel[UNATTRIBUTED], 'unattributed bucket must exist for sess-d2 (no skill signal)');
+  // spec-workflow == all of sess-d1: req_d1+req_d2+req_d3 => input 3500, output 900
+  // usd = (3500/1e6)*3 + (900/1e6)*15 = 0.0105 + 0.0135 = 0.024
+  closeTo(byLabel['spec-workflow'].totalUsd, 0.024);
+  // unattributed == all of sess-d2: req_d4+req_d5 => input 1000, output 300
+  // usd = 0.003 + 0.0045 = 0.0075
+  closeTo(byLabel[UNATTRIBUTED].totalUsd, 0.0075);
+});
+
+test('readSkillUsageRecords: a missing skill-usage file returns an empty array, not a throw', () => {
+  assert.deepEqual(readSkillUsageRecords(path.join(FIXTURE_ROOT, 'does-not-exist.jsonl')), []);
+});
+
+test('readSkillUsageRecords: skips malformed lines without crashing', () => {
+  const records = readSkillUsageRecords(path.join(FIXTURE_ROOT, 'skill-usage-delta.jsonl'));
+  assert.equal(records.length, 3); // the trailing "not valid json" line is dropped
+});
+
+test('skillUsagePathForProject: points at <projectPath>/.claude/skill-usage.jsonl (the jig-telemetry.sh write location)', () => {
+  assert.equal(skillUsagePathForProject('/Users/fake/delta'), path.join('/Users/fake/delta', '.claude', 'skill-usage.jsonl'));
+});
+
+// --- Reconciles-to-total invariant (AC4, LOAD-BEARING) ----------------------
+// For any record set, the sum of by-activity buckets — and separately the
+// sum of by-skill buckets — must equal costFromRecords' own deduped total
+// exactly (both cuts partition the SAME deduped records; price is linear per
+// token, so summing bucketed totals must reproduce the whole-set total).
+
+test('costByActivity: the sum of all buckets (incl. unattributed) equals costFromRecords\' deduped total (AC4, LOAD-BEARING)', () => {
+  const records = deltaRecords();
+  const total = costFromRecords(records, ILLUSTRATIVE_A_PRICE).totalUsd;
+  const buckets = costByActivity(records, ILLUSTRATIVE_A_PRICE);
+  const sum = buckets.reduce((s, b) => s + b.totalUsd, 0);
+  assert.ok(Math.abs(sum - total) < 1e-9, `by-activity sum (${sum}) must equal total (${total})`);
+});
+
+test('costBySkill: the sum of all buckets (incl. unattributed) equals costFromRecords\' deduped total (AC4, LOAD-BEARING)', () => {
+  const records = deltaRecords();
+  const bySession = buildSkillBySession(readSkillUsageRecords(path.join(FIXTURE_ROOT, 'skill-usage-delta.jsonl')));
+  const total = costFromRecords(records, ILLUSTRATIVE_A_PRICE).totalUsd;
+  const buckets = costBySkill(records, bySession, ILLUSTRATIVE_A_PRICE);
+  const sum = buckets.reduce((s, b) => s + b.totalUsd, 0);
+  assert.ok(Math.abs(sum - total) < 1e-9, `by-skill sum (${sum}) must equal total (${total})`);
+});
+
+test('costByActivity/costBySkill: the invariant holds even with a mix of known + unpriced ("unknown-model") records, without inflating or losing dollars', () => {
+  // Combine delta (phase-tagged) with beta (a known + an unpriced model,
+  // no phase tags -> all unattributed) to exercise both dimensions at once.
+  const combined = [...deltaRecords(), ...readTranscriptRecords(path.join(FIXTURE_ROOT, '-Users-fake-beta', 'session-a.jsonl'))];
+  const priceTable = { ...ILLUSTRATIVE_A_PRICE };
+  const total = costFromRecords(combined, priceTable).totalUsd;
+  const activitySum = costByActivity(combined, priceTable).reduce((s, b) => s + b.totalUsd, 0);
+  const skillSum = costBySkill(combined, new Map(), priceTable).reduce((s, b) => s + b.totalUsd, 0);
+  assert.ok(Math.abs(activitySum - total) < 1e-9);
+  assert.ok(Math.abs(skillSum - total) < 1e-9);
+});
+
+// --- projectCostByActivity / projectCostBySkill (I/O combinators) -----------
+
+test('projectCostByActivity: computes activity buckets for a mapped project from its fixture transcripts, matching the pure fold', () => {
+  const result = projectCostByActivity(DELTA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE);
+  assert.deepEqual(result, costByActivity(deltaRecords(), ILLUSTRATIVE_A_PRICE));
+});
+
+test('projectCostByActivity: an unmapped project path is explicit unknown (null), never an empty array (AC4/AC5 parity with projectTokenCost)', () => {
+  assert.equal(projectCostByActivity(GAMMA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE), null);
+});
+
+test('projectCostBySkill: computes skill buckets for a mapped project, honoring an overridden skill-usage file path (testability)', () => {
+  const skillUsagePath = path.join(FIXTURE_ROOT, 'skill-usage-delta.jsonl');
+  const result = projectCostBySkill(DELTA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE, skillUsagePath);
+  const expectedSession = buildSkillBySession(readSkillUsageRecords(skillUsagePath));
+  assert.deepEqual(result, costBySkill(deltaRecords(), expectedSession, ILLUSTRATIVE_A_PRICE));
+});
+
+test('projectCostBySkill: with no skill-usage file present (default path, unmapped fake project dir), every bucket falls to "unattributed"', () => {
+  const result = projectCostBySkill(DELTA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].skill, UNATTRIBUTED);
+});
+
+test('projectCostBySkill: an unmapped project path is explicit unknown (null), never an empty array', () => {
+  assert.equal(projectCostBySkill(GAMMA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE), null);
+});
+
+// --- attachCostBreakdown: pure read-layer join (mirrors attachTokenCost) ----
+
+test('attachCostBreakdown: joins precomputed {byActivity, bySkill} onto each project; unmapped project stays explicit unknown (null) (AC3)', () => {
+  const data = { generatedAt: 'x', projects: [{ project: { id: 'alpha' } }, { project: { id: 'beta' } }] };
+  const breakdown = { byActivity: [{ activity: 'impl', totalUsd: 1, hasUnknownModel: false, byModel: [], recordCount: 1 }], bySkill: [] };
+  const breakdownByProjectId = { alpha: breakdown };
+  const result = attachCostBreakdown(data, breakdownByProjectId);
+  assert.deepEqual(result.projects[0].tokenCostBreakdown, breakdown);
+  assert.equal(result.projects[1].tokenCostBreakdown, null);
+});
+
+// --- projectCostBundle: single-read combinator (reconciliation fix) --------
+// Both reviewers flagged the same project's transcripts being enumerated,
+// read/parsed, and deduped three times per `/api/data` request (once each
+// for projectTokenCost/projectCostByActivity/projectCostBySkill). This
+// combinator reads + dedupes ONCE and fans the same deduped set out to all
+// three pure folds — production wiring (src/server.mjs) calls only this.
+
+test('projectCostBundle: reads a project\'s transcripts once and returns {tokenCost, tokenCostBreakdown}, matching the three separate combinators exactly', () => {
+  const skillUsagePath = path.join(FIXTURE_ROOT, 'skill-usage-delta.jsonl');
+  const bundle = projectCostBundle(DELTA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE, skillUsagePath);
+  assert.deepEqual(bundle.tokenCost, costFromRecords(deltaRecords(), ILLUSTRATIVE_A_PRICE));
+  assert.deepEqual(bundle.tokenCostBreakdown.byActivity, projectCostByActivity(DELTA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE));
+  assert.deepEqual(bundle.tokenCostBreakdown.bySkill, projectCostBySkill(DELTA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE, skillUsagePath));
+});
+
+test('projectCostBundle: an unmapped project path is explicit unknown (null), never a partially-populated object (AC4)', () => {
+  assert.equal(projectCostBundle(GAMMA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE), null);
+});
+
+test('projectCostBundle: the by-activity/by-skill buckets still reconcile to the bundled tokenCost total (AC4, LOAD-BEARING, single-read path)', () => {
+  const bundle = projectCostBundle(DELTA_PATH, FIXTURE_ROOT, ILLUSTRATIVE_A_PRICE, path.join(FIXTURE_ROOT, 'skill-usage-delta.jsonl'));
+  const activitySum = bundle.tokenCostBreakdown.byActivity.reduce((s, b) => s + b.totalUsd, 0);
+  const skillSum = bundle.tokenCostBreakdown.bySkill.reduce((s, b) => s + b.totalUsd, 0);
+  closeTo(activitySum, bundle.tokenCost.totalUsd);
+  closeTo(skillSum, bundle.tokenCost.totalUsd);
 });

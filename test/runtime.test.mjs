@@ -983,8 +983,13 @@ test('card cost legend escapes model names — no raw markup injected (XSS safet
 
 test('server /api/data wiring reads each project\'s transcripts and attaches token cost via the pure fold (AC1/AC4/AC6)', () => {
   const src = read('src/server.mjs');
-  assert.match(src, /import\s*\{\s*projectTokenCost,\s*attachTokenCost\s*\}\s*from\s*'\.\/cost\.mjs'/);
-  assert.match(src, /projectTokenCost\(/);
+  // Matched on presence within the './cost.mjs' import, not an exact/ordered
+  // name list — a sibling assertion (012-04, below) was previously brittle
+  // this same way; both stay presence-based so an import-line reorder or
+  // addition doesn't regress either. Post-012-04-reconciliation, the actual
+  // transcript read happens via projectCostBundle (see that test) — this one
+  // only checks that the total-cost read layer (attachTokenCost) is wired.
+  assert.match(src, /import\s*\{[^}]*\battachTokenCost\b[^}]*\}\s*from\s*'\.\/cost\.mjs'/);
   assert.match(src, /attachTokenCost\(/);
 });
 
@@ -1020,6 +1025,82 @@ test('card combines the sub-cent floor with the unknown-model "+" marker sensibl
   };
   const html = context.card(project);
   assert.match(html, /cost &lt; \$0\.01\+/);
+});
+
+// --- 012-04: cost detail (by-activity / by-skill) in the DETAIL tier -------
+// `p.tokenCostBreakdown` is attached by the server read layer (src/cost.mjs's
+// attachCostBreakdown), mirroring tokenCost: `{byActivity, bySkill}` (each an
+// array of buckets) or `null`. It renders inside a collapsed `<details>`,
+// separate from the compact card face (AC3) — the face itself (costBlock,
+// tested above) must render byte-identically whether or not the breakdown
+// is present.
+
+test('card renders the by-activity/by-skill cost breakdown inside a collapsed <details>, not on the compact stat row (AC2/AC3)', () => {
+  const context = cardContext();
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    tokenCostBreakdown: {
+      byActivity: [
+        { activity: 'impl', totalUsd: 5, hasUnknownModel: false, byModel: [{ model: 'illustrative-model-a', usd: 5, tokens: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0 } }] },
+        { activity: 'unattributed', totalUsd: 1.5, hasUnknownModel: false, byModel: [] },
+      ],
+      bySkill: [
+        { skill: 'spec-workflow', totalUsd: 6, hasUnknownModel: false, byModel: [] },
+        { skill: 'unattributed', totalUsd: 0.5, hasUnknownModel: false, byModel: [] },
+      ],
+    },
+  };
+  const html = context.card(project);
+  assert.match(html, /<details class="sect">/);
+  assert.match(html, /impl: \$5\.00/);
+  assert.match(html, /unattributed: \$1\.50/);
+  assert.match(html, /spec-workflow: \$6\.00/);
+  // The face (costBlock's own top-of-card counts line) must be unaffected —
+  // exactly one "cost" headline outside the <details>, none of the
+  // by-activity/by-skill labels leak above the <details> boundary.
+  const faceHtml = html.split('<details')[0];
+  assert.doesNotMatch(faceHtml, /impl:|spec-workflow:/);
+});
+
+test('card omits the cost-detail <details> entirely when tokenCostBreakdown is absent (no data yet, AC3/AC5 honest-unknown parity)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, tokenCostBreakdown: null };
+  const html = context.card(project);
+  assert.doesNotMatch(html, /<details class="sect">/);
+});
+
+test('card cost-detail rows escape activity/skill labels — no raw markup injected (XSS safety)', () => {
+  const context = cardContext();
+  const payload = '"><img src=x onerror=alert(1)>';
+  const project = {
+    ...cardBase,
+    project: { id: 'alpha', label: 'Alpha' },
+    tokenCostBreakdown: {
+      byActivity: [{ activity: payload, totalUsd: 1, hasUnknownModel: false, byModel: [] }],
+      bySkill: [],
+    },
+  };
+  const html = context.card(project);
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /&lt;img/);
+});
+
+test('server /api/data wiring reads each project\'s transcripts + skill-usage and attaches the by-activity/by-skill breakdown via the pure fold (AC1/AC2/AC3)', () => {
+  const src = read('src/server.mjs');
+  // Presence-based, not an exact/ordered name list (loosened during 012-04
+  // reconciliation review to match the sibling assertion above).
+  assert.match(src, /import\s*\{[^}]*\bprojectCostBundle\b[^}]*\battachCostBreakdown\b[^}]*\}\s*from\s*'\.\/cost\.mjs'/);
+  assert.match(src, /projectCostBundle\(/);
+  assert.match(src, /attachCostBreakdown\(/);
+});
+
+test('server /api/data wiring reads each project\'s transcripts exactly ONCE via projectCostBundle — never the three separate single-purpose combinators (012-04 reconciliation fix: eliminates 3x read/parse/dedup per project per request)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /projectCostBundle\(/);
+  assert.doesNotMatch(src, /\bprojectTokenCost\(/);
+  assert.doesNotMatch(src, /\bprojectCostByActivity\(/);
+  assert.doesNotMatch(src, /\bprojectCostBySkill\(/);
 });
 
 test('card shows "< 0.1 commits/wk" — never "≈ 0" — when a real, non-null velocity rounds to zero (AC4 zero-as-healthy guard)', () => {

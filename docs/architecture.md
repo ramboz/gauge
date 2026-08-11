@@ -233,7 +233,11 @@ edge-push topology (specs 005/006) remain deferred; collection stays manual pull
   (012-03, `attachTokenCost` in `src/cost.mjs`) — total + by-model spend derived
   from Claude Code transcripts under a configurable `GAUGE_TRANSCRIPTS_ROOT`,
   deduped at per-request grain and priced via an illustrative table with an explicit
-  `unknown-model` bucket; `null` when no sessions map — that are not part of the
+  `unknown-model` bucket; `null` when no sessions map — plus a
+  `tokenCostBreakdown: {byActivity, bySkill}` detail-tier join (012-04,
+  `attachCostBreakdown`) that partitions the *same* deduped record set by
+  `[jig:phase=…]` activity and by `skill-usage.jsonl` skill (each with an explicit
+  `unattributed` bucket; buckets sum to `tokenCost`) — that are not part of the
   observation-v1 record, plus a
   top-level `attention` array (009-03): the deterministic cross-project attention
   ranking.

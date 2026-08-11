@@ -10,7 +10,7 @@ import { readObservationHistory } from './state.mjs';
 import { attachForecasts, attentionQueue } from './derive.mjs';
 import { attachMilestones } from './milestone.mjs';
 import { gitVelocity, attachVelocity } from './velocity.mjs';
-import { projectTokenCost, attachTokenCost } from './cost.mjs';
+import { projectCostBundle, attachTokenCost, attachCostBreakdown } from './cost.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -59,24 +59,39 @@ const server = http.createServer((req, res) => {
         freshConfig.projects.map((project) => [project.id, gitVelocity(project.path, velocityNowMs)]),
       );
       const withVelocity = attachVelocity(withMilestones, velocityByProjectId);
-      // Token cost (spec 012, slice 012-03): the spec's one deliberate depth
-      // exception. The one I/O (enumerating + reading each project's Claude
-      // Code session transcripts, then deduping/pricing them) happens HERE,
-      // at the read layer — mirroring the git-velocity read above — so
-      // attachTokenCost itself (src/cost.mjs) stays a pure fold. The
-      // transcripts root is overridable via GAUGE_TRANSCRIPTS_ROOT (tests
-      // never touch the real `~/.claude/projects`); `undefined` here already
-      // triggers projectTokenCost's own default-parameter fallback, so no
-      // separate branch is needed.
+      // Token cost — total + by-activity/by-skill (spec 012, slices 012-03/
+      // 012-04): the spec's one deliberate depth exception. The one I/O
+      // (enumerating + reading each project's Claude Code session
+      // transcripts, plus its skill-usage.jsonl) happens HERE, at the read
+      // layer — mirroring the git-velocity read above — via projectCostBundle
+      // (src/cost.mjs), which reads + dedupes a project's transcripts ONCE
+      // and fans that single deduped record set out to all three pure folds
+      // (costFromRecords/costByActivity/costBySkill). Reconciliation fix
+      // (both review passes): calling projectTokenCost + projectCostByActivity
+      // + projectCostBySkill separately re-read/re-parsed/re-deduped the SAME
+      // bytes three times per project per request; the bundle collapses that
+      // to one read. attachTokenCost/attachCostBreakdown stay pure folds over
+      // the bundle's two fields. The transcripts root is overridable via
+      // GAUGE_TRANSCRIPTS_ROOT (tests never touch the real
+      // `~/.claude/projects`); `undefined` here already triggers
+      // projectCostBundle's own default-parameter fallback, so no separate
+      // branch is needed.
       const transcriptsRoot = process.env.GAUGE_TRANSCRIPTS_ROOT || undefined;
+      const costBundleByProjectId = Object.fromEntries(
+        freshConfig.projects.map((project) => [project.id, projectCostBundle(project.path, transcriptsRoot)]),
+      );
       const costByProjectId = Object.fromEntries(
-        freshConfig.projects.map((project) => [project.id, projectTokenCost(project.path, transcriptsRoot)]),
+        freshConfig.projects.map((project) => [project.id, costBundleByProjectId[project.id]?.tokenCost ?? null]),
       );
       const withTokenCost = attachTokenCost(withVelocity, costByProjectId);
+      const breakdownByProjectId = Object.fromEntries(
+        freshConfig.projects.map((project) => [project.id, costBundleByProjectId[project.id]?.tokenCostBreakdown ?? null]),
+      );
+      const withCostBreakdown = attachCostBreakdown(withTokenCost, breakdownByProjectId);
       // Global attention queue (spec 009-03, ADR-0013): a pure ranking over
       // the forecast/risk read this loop just attached — no additional I/O,
       // no adapter/registry reach from derive.mjs itself (AC4).
-      const data = { ...withTokenCost, attention: attentionQueue(withTokenCost) };
+      const data = { ...withCostBreakdown, attention: attentionQueue(withCostBreakdown) };
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

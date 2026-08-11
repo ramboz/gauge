@@ -215,3 +215,220 @@ export function attachTokenCost(data, costByProjectId) {
     })),
   };
 }
+
+// === Slice 012-04: token cost — by-activity + by-skill ======================
+// The deeper cut, for a project's DETAIL tier (never the card face — that
+// stays 012-03's totalUsd/byModel headline). Reuses dedupeRecords and
+// costFromRecords wholesale — dedup and pricing are never reimplemented here.
+
+// AC5: the explicit bucket both cuts fall back to when no phase tag (by-
+// activity) or no skill signal (by-skill) is available — never dropped,
+// never silently zero-cost.
+export const UNATTRIBUTED = 'unattributed';
+
+const PHASE_TAG_RE = /\[jig:phase=([A-Za-z0-9_.:-]+)\]/;
+
+// AC1: `[jig:phase=...]` is emitted by jig-telemetry.sh into the USER-turn
+// prompt text (never the assistant's own usage record) — probed as either a
+// plain string `message.content`, or a content-block array whose first
+// `{type:'text'}` block carries the tagged text (both observed real-world
+// shapes). Any other record (assistant, tool-result, malformed) returns
+// null: no tag, no state change.
+function extractPhaseTag(record) {
+  const message = record?.message;
+  if (!message || message.role !== 'user') return null;
+  const content = message.content;
+  let text = null;
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    const block = content.find((entry) => entry?.type === 'text' && typeof entry.text === 'string');
+    text = block?.text ?? null;
+  }
+  if (!text) return null;
+  const match = PHASE_TAG_RE.exec(text);
+  return match ? match[1] : null;
+}
+
+// Shared by costByActivity/costBySkill: re-runs costFromRecords per bucket
+// (never a second dedup/pricing implementation) and sorts priced-first,
+// mirroring costFromRecords' own byModel ordering. Every bucket's record
+// list is non-empty by construction (only usage-bearing records are ever
+// pushed into a bucket), so costFromRecords never returns null here.
+function finalizeBuckets(recordsByBucket, labelKey, priceTable) {
+  const buckets = [];
+  for (const [label, recs] of recordsByBucket) {
+    buckets.push({ [labelKey]: label, ...costFromRecords(recs, priceTable) });
+  }
+  buckets.sort((a, b) => b.totalUsd - a.totalUsd);
+  return buckets;
+}
+
+// AC1/AC4/AC5 (LOAD-BEARING): dedupes ONCE up front (the same global dedup
+// costFromRecords itself performs), then partitions the deduped set by
+// activity phase before re-pricing each partition — since price is a linear
+// function of token counts, summing every bucket's totalUsd reproduces
+// costFromRecords' own whole-set total exactly (asserted by the
+// reconciles-to-total test). Phase state is tracked PER SESSION, in the
+// given record order: a `[jig:phase=X]` tag sets the "current phase" for
+// every subsequent usage-bearing record in that same session until the next
+// tag changes it; a session with no tag yet falls to `unattributed` (AC5),
+// never dropped and never borrowed from another session's phase.
+export function costByActivity(records, priceTable = DEFAULT_PRICE_TABLE) {
+  const deduped = dedupeRecords(records);
+  const currentPhaseBySession = new Map();
+  const recordsByBucket = new Map();
+  for (const record of deduped) {
+    const tag = extractPhaseTag(record);
+    if (tag) {
+      currentPhaseBySession.set(record?.sessionId ?? null, tag);
+      continue; // the tag-bearing user turn itself carries no usage to price
+    }
+    if (!record?.message?.model || !record?.message?.usage) continue;
+    const activity = currentPhaseBySession.get(record?.sessionId ?? null) ?? UNATTRIBUTED;
+    if (!recordsByBucket.has(activity)) recordsByBucket.set(activity, []);
+    recordsByBucket.get(activity).push(record);
+  }
+  return finalizeBuckets(recordsByBucket, 'activity', priceTable);
+}
+
+// AC2: session_id -> skill_name, built from jig's own skill-usage.jsonl
+// telemetry (`{session_id, event:'skill_invoked', skill_name}`, written by
+// jig-skill-trace.sh). Only `skill_invoked` entries with a non-empty
+// `skill_name` count as a signal; other event kinds (e.g. `task_spawned`)
+// and empty names are skipped. First signal per session wins — a session
+// commonly invokes one skill; where several fire, the first is the one that
+// framed the work.
+export function buildSkillBySession(skillUsageRecords) {
+  const bySession = new Map();
+  for (const rec of skillUsageRecords || []) {
+    if (rec?.event !== 'skill_invoked') continue;
+    const sessionId = rec?.session_id;
+    const skillName = rec?.skill_name;
+    if (!sessionId || !skillName) continue;
+    if (!bySession.has(sessionId)) bySession.set(sessionId, skillName);
+  }
+  return bySession;
+}
+
+// AC2/AC4/AC5 (LOAD-BEARING): same dedup-once-then-partition-then-reprice
+// shape as costByActivity, joined on session id instead of a stateful
+// in-session tag. `skillBySession` is a Map (buildSkillBySession's shape);
+// a session absent from the map — no skill signal available — falls to
+// `unattributed` (AC5).
+export function costBySkill(records, skillBySession, priceTable = DEFAULT_PRICE_TABLE) {
+  const deduped = dedupeRecords(records);
+  const recordsByBucket = new Map();
+  for (const record of deduped) {
+    if (!record?.message?.model || !record?.message?.usage) continue;
+    const skill = skillBySession?.get?.(record?.sessionId ?? null) ?? UNATTRIBUTED;
+    if (!recordsByBucket.has(skill)) recordsByBucket.set(skill, []);
+    recordsByBucket.get(skill).push(record);
+  }
+  return finalizeBuckets(recordsByBucket, 'skill', priceTable);
+}
+
+// AC2: the write location jig-skill-trace.sh/jig-telemetry.sh actually use
+// — a project-local log under the SOURCE project's own `.claude/` dir, never
+// under the Claude Code transcripts root. Exposed so the default location
+// (production) and an overridden fixture path (tests) share one rule.
+export function skillUsagePathForProject(projectPath) {
+  return path.join(projectPath, '.claude', 'skill-usage.jsonl');
+}
+
+// Thin I/O wrapper (AC2), mirroring readTranscriptRecords: JSONL, tolerant
+// of a missing file or a malformed line — jig telemetry being absent (most
+// projects) or partially corrupt must never take down cost detail, it just
+// yields no skill signal (AC5's `unattributed`, never a crash).
+export function readSkillUsageRecords(filePath) {
+  let raw;
+  try {
+    raw = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return [];
+  }
+  const records = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      records.push(JSON.parse(trimmed));
+    } catch {
+      continue;
+    }
+  }
+  return records;
+}
+
+// Per-project I/O + pure-fold combinators (AC1/AC4), mirroring
+// projectTokenCost: enumerate + read a project's session transcripts (same
+// files 012-03 reads), then fold through the pure costByActivity/
+// costBySkill. A project with no mapped session transcripts returns null
+// (honest unknown, never an empty array masquerading as "measured zero").
+export function projectCostByActivity(projectPath, projectsRoot = DEFAULT_TRANSCRIPTS_ROOT, priceTable = DEFAULT_PRICE_TABLE) {
+  const files = sessionFilesForProject(projectsRoot, projectPath);
+  if (files.length === 0) return null;
+  const records = files.flatMap(readTranscriptRecords);
+  return costByActivity(records, priceTable);
+}
+
+// `skillUsagePath` defaults to the project's own real skill-usage.jsonl
+// location; tests override it to point at a fixture file (a fake project
+// path like `/Users/fake/delta` has no real `.claude/` dir to read).
+export function projectCostBySkill(
+  projectPath,
+  projectsRoot = DEFAULT_TRANSCRIPTS_ROOT,
+  priceTable = DEFAULT_PRICE_TABLE,
+  skillUsagePath = skillUsagePathForProject(projectPath),
+) {
+  const files = sessionFilesForProject(projectsRoot, projectPath);
+  if (files.length === 0) return null;
+  const records = files.flatMap(readTranscriptRecords);
+  const skillBySession = buildSkillBySession(readSkillUsageRecords(skillUsagePath));
+  return costBySkill(records, skillBySession, priceTable);
+}
+
+// Reconciliation fix (012-04 review): projectTokenCost + projectCostByActivity
+// + projectCostBySkill each independently re-enumerate, re-read/parse, and
+// re-dedupe the SAME project's transcripts — 3x the I/O per project per
+// `/api/data` request for bytes that don't change between the three calls.
+// This is the single combinator production code (src/server.mjs) should
+// call: it reads the session files and dedupes ONCE, then fans the one
+// deduped record set out to all three pure folds (costFromRecords,
+// costByActivity, costBySkill) plus one skill-usage read. The pure folds
+// themselves are untouched — costFromRecords/costByActivity/costBySkill
+// still call dedupeRecords internally, but on an already-deduped array
+// that's a cheap no-op set-membership pass, not a second read+parse. The
+// three single-purpose combinators above stay exported (still directly unit-
+// tested, still valid utilities), but production wiring now uses this one.
+export function projectCostBundle(
+  projectPath,
+  projectsRoot = DEFAULT_TRANSCRIPTS_ROOT,
+  priceTable = DEFAULT_PRICE_TABLE,
+  skillUsagePath = skillUsagePathForProject(projectPath),
+) {
+  const files = sessionFilesForProject(projectsRoot, projectPath);
+  if (files.length === 0) return null;
+  const deduped = dedupeRecords(files.flatMap(readTranscriptRecords));
+  const skillBySession = buildSkillBySession(readSkillUsageRecords(skillUsagePath));
+  return {
+    tokenCost: costFromRecords(deduped, priceTable),
+    tokenCostBreakdown: {
+      byActivity: costByActivity(deduped, priceTable),
+      bySkill: costBySkill(deduped, skillBySession, priceTable),
+    },
+  };
+}
+
+// AC3: the read-layer join the server calls to attach the detail-tier
+// breakdown, mirroring attachTokenCost. A project absent from the map (or
+// one whose combinators resolved to null) attaches explicit `null`.
+export function attachCostBreakdown(data, breakdownByProjectId) {
+  return {
+    ...data,
+    projects: data.projects.map((entry) => ({
+      ...entry,
+      tokenCostBreakdown: breakdownByProjectId?.[entry.project.id] ?? null,
+    })),
+  };
+}

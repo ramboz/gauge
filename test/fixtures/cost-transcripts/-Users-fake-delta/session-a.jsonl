@@ -1,0 +1,5 @@
+{"sessionId":"sess-d1","message":{"id":"u1","role":"user","content":"[jig:phase=impl] please implement"}}
+{"requestId":"req_d1","sessionId":"sess-d1","message":{"id":"m_d1","model":"illustrative-model-a","usage":{"input_tokens":1000,"output_tokens":500,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+{"sessionId":"sess-d1","message":{"id":"u2","role":"user","content":"[jig:phase=compliance] please review"}}
+{"requestId":"req_d2","sessionId":"sess-d1","message":{"id":"m_d2","model":"illustrative-model-a","usage":{"input_tokens":2000,"output_tokens":300,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+{"requestId":"req_d3","sessionId":"sess-d1","message":{"id":"m_d3","model":"illustrative-model-a","usage":{"input_tokens":500,"output_tokens":100,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
