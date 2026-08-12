@@ -2,7 +2,8 @@
 
 ## Status
 
-`candidate`
+`committed` — committed 2026-08-12 by explicit owner decision, following the
+close-out of the [local-data release](manager-dashboard-local-data.md).
 
 Allowed statuses: `candidate`, `committed`, `shipping`, `shipped`, `dropped`.
 Do not move a plan from `candidate` to `committed` without an explicit user decision.

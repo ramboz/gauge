@@ -2,7 +2,12 @@
 
 ## Status
 
-`committed`
+`shipped` — closed out 2026-08-12. All in-scope work DONE (spec 011: 5/5,
+spec 012: 6/6); 431/431 tests green; `shaper:release-check` reviewed. The
+Risks-section rabbit holes (RAG reads `unknown` on thin history, token
+overcount) were resolved or accepted as designed cutlines, not open blockers:
+real RAG values are the next release's deferred scope, and per-request token
+dedup shipped in 012-03/04.
 
 Allowed statuses: `candidate`, `committed`, `shipping`, `shipped`, `dropped`.
 Do not move a plan from `candidate` to `committed` without an explicit user decision.
