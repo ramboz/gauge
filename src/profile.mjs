@@ -14,12 +14,15 @@ export const PROFILE_SCHEMA = JSON.parse(
 // `entries` (spec 007-02, ADR-0009 D2) is array-typed, not a scalar override
 // field, so it is excluded from the scalar defaults map. `goal`/`deadline`
 // (spec 009-01, ADR-0011) are object-typed with no schema default (they are
-// either authored or absent, never defaulted), so they are excluded too. A
-// profile with none of these normalizes to exactly the same five scalar
-// defaults as before (007-01/008-01 identity); PROFILE_DEFAULTS.entries/
-// .goal/.deadline are intentionally absent.
+// either authored or absent, never defaulted), so they are excluded too.
+// `appetiteWindow` (spec 013-03, ADR-0018 tier 2) is the same object-typed,
+// no-default shape as `deadline` (mechanically identical field), so it is
+// excluded for the same reason. A profile with none of these normalizes to
+// exactly the same five scalar defaults as before (007-01/008-01 identity);
+// PROFILE_DEFAULTS.entries/.goal/.deadline/.appetiteWindow are intentionally
+// absent.
 const SCALAR_FIELDS = Object.keys(PROFILE_SCHEMA.properties)
-  .filter((field) => field !== 'entries' && field !== 'goal' && field !== 'deadline');
+  .filter((field) => field !== 'entries' && field !== 'goal' && field !== 'deadline' && field !== 'appetiteWindow');
 
 export const PROFILE_DEFAULTS = Object.fromEntries(
   SCALAR_FIELDS.map((field) => [field, PROFILE_SCHEMA.properties[field].default]),
@@ -43,7 +46,11 @@ const SPEC_LAYOUT_ERROR = `must be one of: ${SPEC_LAYOUTS.join(', ')}`;
 // Single-sourced in the schema's $defs.goal/$defs.deadline (slice 010-01, AC1)
 // and $ref'd from both the top-level profile.goal/deadline and each
 // entries[] item's goal/deadline, so both call sites read the same
-// definition here too.
+// definition here too. appetiteWindow (ADR-0018 tier 2, slice 013-03) $refs
+// the SAME $defs.deadline definition (mechanically identical shape — an
+// absolute ISO date or the literal "unknown", curated the same way), so it
+// reuses DEADLINE_PROVENANCE/DEADLINE_VALUE_PATTERN below rather than
+// declaring its own.
 const GOAL_PROVENANCE = PROFILE_SCHEMA.$defs.goal.properties.provenance.enum;
 const DEADLINE_PROVENANCE = PROFILE_SCHEMA.$defs.deadline.properties.provenance.enum;
 const DEADLINE_VALUE_PATTERN = new RegExp(PROFILE_SCHEMA.$defs.deadline.properties.value.pattern);
@@ -83,6 +90,10 @@ function validateEntry(entry, index, errors) {
     }
     if (key === 'deadline') {
       validateGoalOrDeadline(`entries[${index}].deadline`, value, DEADLINE_PROVENANCE, DEADLINE_VALUE_PATTERN, errors);
+      continue;
+    }
+    if (key === 'appetiteWindow') {
+      validateGoalOrDeadline(`entries[${index}].appetiteWindow`, value, DEADLINE_PROVENANCE, DEADLINE_VALUE_PATTERN, errors);
       continue;
     }
     if (typeof value !== 'string' || !value.trim()) {
@@ -148,6 +159,10 @@ export function validateProfile(value) {
     }
     if (key === 'deadline') {
       validateGoalOrDeadline('deadline', entry, DEADLINE_PROVENANCE, DEADLINE_VALUE_PATTERN, errors);
+      continue;
+    }
+    if (key === 'appetiteWindow') {
+      validateGoalOrDeadline('appetiteWindow', entry, DEADLINE_PROVENANCE, DEADLINE_VALUE_PATTERN, errors);
       continue;
     }
     if (typeof entry !== 'string' || !entry.trim()) {

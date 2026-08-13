@@ -82,7 +82,16 @@ This is an index. Durable detail lives in `docs/`; update it through
   +3.73 in-window pace), signal computable on 31–71% of observations. **Lesson:**
   any target/forecast inference must be **author-time curated, never runtime-derived
   from prose** (ADR-0011) — this killed an interim appetite-prose-parsing draft.
-  Implementation is a follow-up slice sequenced with the git-backfill seed.
+  **Implemented by [spec 013](docs/specs/013-date-independent-forecast/spec.md)
+  (DONE):** 013-01 git-backfill seed (`src/backfill.mjs`, `npm run backfill` —
+  reconstructs `progress(t)` from git so tier-1 deadline RAG lights on real
+  history); 013-02 neutral date-free pace (`advancing`/`stalled`, gray, no
+  attention re-tiering); 013-03 curated soft appetite-window (a distinct
+  `appetiteWindow` profile field `$ref`'d to `deadline`; `within-appetite`→green /
+  `over-appetite`→amber cutline-due at attention tier 2, never red). All in
+  `deriveForecast(observations, deadline, appetiteWindow)` — one pure fold, gates
+  run before the target discriminator. Owner action to light tier-2: curate an
+  `appetiteWindow` date in the gitignored config; run `npm run backfill` for history.
 - **Committed local-pull MVP** — the prior loop; see
   [local-portfolio-loop](docs/releases/local-portfolio-loop.md) (largely shipped).
 - **Landed runtime** —

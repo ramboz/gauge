@@ -433,3 +433,90 @@ test('entry-level goal/deadline never hit the generic non-empty-string check (AC
   });
   assert.ok(errors.every((message) => !message.includes('.deadline must be a non-empty string')), errors.join('; '));
 });
+
+// --- 013-03: curated soft appetite-window (ADR-0018 tier 2) ---
+// appetiteWindow $refs the SAME $defs.deadline definition as `deadline`
+// (mechanically identical shape — an absolute ISO date or "unknown", tagged
+// with a provenance), so its validation mirrors the deadline tests above.
+
+test('appetiteWindow is additive and $refs the same $defs.deadline definition as deadline (AC1)', () => {
+  const schema = loadSchema();
+  assert.ok(schema.properties.appetiteWindow, 'schema must declare appetiteWindow');
+  assert.deepEqual(schema.properties.appetiteWindow.$ref, '#/$defs/deadline');
+  assert.equal(schema.properties.entries.items.properties.appetiteWindow.$ref, '#/$defs/deadline');
+  // Additive: PROFILE_DEFAULTS carries no appetiteWindow key.
+  assert.equal(PROFILE_DEFAULTS.appetiteWindow, undefined);
+});
+
+test('a valid appetiteWindow validates, including the literal "unknown" value (AC1)', () => {
+  assert.deepEqual(validateProfile({ appetiteWindow: { value: '2026-09-01', provenance: 'user' } }), []);
+  assert.deepEqual(validateProfile({ appetiteWindow: { value: 'unknown', provenance: 'user' } }), []);
+});
+
+test('appetiteWindow shares the deadline provenance enum (AC1)', () => {
+  const schema = loadSchema();
+  for (const provenance of schema.$defs.deadline.properties.provenance.enum) {
+    assert.deepEqual(
+      validateProfile({ appetiteWindow: { value: 'unknown', provenance } }), [],
+      `appetiteWindow provenance ${provenance}`,
+    );
+  }
+});
+
+test('a bad appetiteWindow value (not a date, not "unknown") is rejected (AC1)', () => {
+  const errors = validateProfile({ appetiteWindow: { value: 'two weeks', provenance: 'release' } });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /profile\.appetiteWindow\.value must be an ISO date/);
+});
+
+test('appetiteWindow requires both value and provenance, and rejects unrecognized sub-fields (AC1)', () => {
+  assert.notDeepEqual(validateProfile({ appetiteWindow: { value: '2026-09-01' } }), []);
+  assert.notDeepEqual(validateProfile({ appetiteWindow: { provenance: 'user' } }), []);
+  assert.notDeepEqual(validateProfile({ appetiteWindow: '2026-09-01' }), []);
+  assert.notDeepEqual(
+    validateProfile({ appetiteWindow: { value: '2026-09-01', provenance: 'user', extra: true } }), [],
+  );
+});
+
+test('a valid entry-level appetiteWindow is accepted, including "unknown" (AC2)', () => {
+  const errors = validateProfile({
+    entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', appetiteWindow: { value: '2026-09-01', provenance: 'release' } }],
+  });
+  assert.deepEqual(errors, []);
+  const errors2 = validateProfile({
+    entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', appetiteWindow: { value: 'unknown', provenance: 'user' } }],
+  });
+  assert.deepEqual(errors2, []);
+});
+
+test('entry-level appetiteWindow malformed-value matrix mirrors the top-level one (AC2)', () => {
+  const cases = [
+    {
+      name: 'entry appetiteWindow not an object',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', appetiteWindow: '2026-09-01' }] },
+      expected: /profile\.entries\[0\]\.appetiteWindow must be an object/,
+    },
+    {
+      name: 'entry appetiteWindow bad provenance',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', appetiteWindow: { value: '2026-09-01', provenance: 'github-milestone' } }] },
+      expected: /profile\.entries\[0\]\.appetiteWindow\.provenance must be one of: product-vision, release, readme, user/,
+    },
+    {
+      name: 'entry appetiteWindow bad value pattern',
+      value: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', appetiteWindow: { value: 'two weeks', provenance: 'release' } }] },
+      expected: /profile\.entries\[0\]\.appetiteWindow\.value must be an ISO date/,
+    },
+  ];
+  for (const { name, value, expected } of cases) {
+    const errors = validateProfile(value);
+    assert.equal(errors.length, 1, name);
+    assert.match(errors[0], expected, name);
+  }
+});
+
+test('entry-level appetiteWindow never hits the generic non-empty-string check (AC2)', () => {
+  const errors = validateProfile({
+    entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a', goal: { value: 'x', provenance: 'user' }, appetiteWindow: 42 }],
+  });
+  assert.ok(errors.every((message) => !message.includes('.appetiteWindow must be a non-empty string')), errors.join('; '));
+});

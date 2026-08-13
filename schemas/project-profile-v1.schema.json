@@ -80,6 +80,10 @@
     "deadline": {
       "$ref": "#/$defs/deadline"
     },
+    "appetiteWindow": {
+      "$ref": "#/$defs/deadline",
+      "description": "Optional soft appetite-window (ADR-0018 tier 2, slice 013-03): a user-authored ABSOLUTE ISO date curated at onboarding exactly like `deadline` (same shape, same $defs/deadline definition — mechanically identical, since ADR-0018 requires the runtime never parse relative appetite prose, only read a committed absolute date). Unlike `deadline`, over-running this date forecasts to a SOFT amber `over-appetite` read, never a hard red. Additive; a profile with no appetiteWindow validates exactly as the pre-013-03 identity. Single-sourced (mirrors goal/deadline): referenced from both the top-level profile and each entries[] item so the two shapes cannot drift."
+    },
     "entries": {
       "type": "array",
       "minItems": 1,
@@ -131,6 +135,10 @@
           "deadline": {
             "$ref": "#/$defs/deadline",
             "description": "Optional per-entry deadline (slice 010-01), same shape as the top-level profile's deadline. Defaults to the profile's deadline, then absent."
+          },
+          "appetiteWindow": {
+            "$ref": "#/$defs/deadline",
+            "description": "Optional per-entry soft appetite-window (slice 013-03), same shape as the top-level profile's appetiteWindow. Defaults to the profile's appetiteWindow, then absent."
           }
         }
       }

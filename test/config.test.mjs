@@ -187,6 +187,52 @@ test('a malformed goal/deadline is rejected with one actionable error (AC1)', ()
   }
 });
 
+// --- 013-03: curated soft appetite-window (ADR-0018 tier 2) — same threading
+// rules as deadline (mechanically identical field). ---
+
+test('a profile with no appetiteWindow normalizes with the 007 identity (no extra key) (AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{ id: 'alpha', path: '/tmp/alpha', adapters: ['jig'] }],
+  }, '/tmp/gauge.config.json');
+  assert.ok(!('appetiteWindow' in config.projects[0].profile));
+});
+
+test('an authored appetiteWindow threads verbatim onto the normalized project profile (AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'alpha', path: '/tmp/alpha', adapters: ['jig'],
+      profile: { appetiteWindow: { value: '2026-09-01', provenance: 'user' } },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile.appetiteWindow, { value: '2026-09-01', provenance: 'user' });
+});
+
+test('appetiteWindow: "unknown" threads verbatim, never coerced (AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'alpha', path: '/tmp/alpha', adapters: ['jig'],
+      profile: { appetiteWindow: { value: 'unknown', provenance: 'user' } },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile.appetiteWindow, { value: 'unknown', provenance: 'user' });
+});
+
+test('a malformed appetiteWindow is rejected with one actionable error (AC1)', () => {
+  assert.throws(
+    () => normalizeConfig({
+      version: 1,
+      projects: [{
+        id: 'alpha', path: '/tmp/alpha', adapters: ['jig'],
+        profile: { appetiteWindow: { value: 'two weeks', provenance: 'release' } },
+      }],
+    }, '/tmp/gauge.config.json'),
+    /invalid configuration: project alpha profile:/,
+  );
+});
+
 test('malformed project profile is rejected with one actionable error (007-01 AC2)', () => {
   const cases = [
     ['profile not an object', { profile: 'docs' }],
@@ -490,6 +536,55 @@ test('entries: a malformed entry-level goal/deadline is rejected with one action
       name,
     );
   }
+});
+
+// --- 013-03: entry-level appetiteWindow (same entry→profile fallback shape
+// as deadline) ---
+
+test('entries: an entry-declared appetiteWindow threads verbatim onto the expanded project profile (AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: {
+        entries: [{
+          id: 'a', label: 'A', artifactRoot: 'tracks/a',
+          appetiteWindow: { value: '2026-09-01', provenance: 'user' },
+        }],
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.deepEqual(config.projects[0].profile.appetiteWindow, { value: '2026-09-01', provenance: 'user' });
+});
+
+test('entries: an entry with no appetiteWindow inherits the parent profile\'s appetiteWindow, and an entry-declared value wins over it (AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: {
+        appetiteWindow: { value: '2026-10-01', provenance: 'release' },
+        entries: [
+          { id: 'a', label: 'A', artifactRoot: 'tracks/a' },
+          { id: 'b', label: 'B', artifactRoot: 'tracks/b', appetiteWindow: { value: '2026-11-01', provenance: 'user' } },
+        ],
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  const [a, b] = config.projects;
+  assert.deepEqual(a.profile.appetiteWindow, { value: '2026-10-01', provenance: 'release' });
+  assert.deepEqual(b.profile.appetiteWindow, { value: '2026-11-01', provenance: 'user' });
+});
+
+test('entries: neither entry nor parent declares appetiteWindow — no own-property (AC1)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'umbrella', path: '/tmp/umbrella', adapters: ['jig'],
+      profile: { entries: [{ id: 'a', label: 'A', artifactRoot: 'tracks/a' }] },
+    }],
+  }, '/tmp/gauge.config.json');
+  assert.ok(!('appetiteWindow' in config.projects[0].profile));
 });
 
 test('entries: a composite id colliding with another project id is rejected', () => {

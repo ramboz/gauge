@@ -18,6 +18,18 @@ function candidateNote(field, candidate) {
     : `  ${field} candidate: none`;
 }
 
+// appetiteWindow candidate note (ADR-0018 tier 2, slice 013-03): the soft
+// appetite-window is curated the SAME way as a deadline (ADR-0011: runtime
+// never parses prose), so it reuses the exact same candidate pointer the
+// deadline note already surfaces — the release doc (or README fallback) is
+// where an author-time reader resolves the appetite hint into a committed
+// absolute date. This is still only a path+provenance pointer, never a
+// parsed value; the owner (optionally Claude-assisted) reads that doc and
+// hand-commits `profile.appetiteWindow` — the collector/runtime never does.
+function appetiteWindowNote(deadlineCandidate) {
+  return candidateNote('appetiteWindow', deadlineCandidate);
+}
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i++) {
@@ -63,6 +75,7 @@ if (result.profile === null) {
   for (const note of result.notes) console.error(`  note: ${note}`);
   console.error(candidateNote('goal', candidates.goal));
   console.error(candidateNote('deadline', candidates.deadline));
+  console.error(appetiteWindowNote(candidates.deadline));
   process.exit(1);
 }
 
@@ -75,5 +88,6 @@ console.error(`onboard: source=${result.source}`);
 for (const note of result.notes) console.error(`  note: ${note}`);
 console.error(candidateNote('goal', candidates.goal));
 console.error(candidateNote('deadline', candidates.deadline));
+console.error(appetiteWindowNote(candidates.deadline));
 console.log(JSON.stringify(result.profile, null, 2));
 process.exit(0);

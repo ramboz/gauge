@@ -72,24 +72,34 @@ function fractionOf(progress) {
 }
 
 // ADR-0012's four-gate minimum-evidence rule, extended by ADR-0018 (tier 3,
-// slice 013-02) to a dateless project: `observations` is the project's
-// history (ascending by collectedAt); `deadline` is the caller-supplied
-// profile deadline value (an ISO date string, the literal "unknown", or
-// absent). Whether or not a deadline is present, Gates 2-4.5 below run
-// unconditionally and observedPace is computed over the same trailing
-// stable-scope window — ADR-0018's "every tier reuses the existing evidence
-// gates" rule. `deadlineAt` is only consulted once every gate has passed, to
-// choose between ADR-0012's hard colour (tier 1) and ADR-0018's neutral
-// motion read (tier 3); a project with no deadline that fails an evidence
-// gate gets that gate's own reason, never a `deadline-unknown` placeholder —
-// "below any gate the forecast is unchanged unknown with its existing
-// reason" (ADR-0018).
-export function deriveForecast(observations, deadline) {
+// slice 013-02; tier 2, slice 013-03) to a dateless/soft-target project:
+// `observations` is the project's history (ascending by collectedAt);
+// `deadline` is the caller-supplied profile deadline value (an ISO date
+// string, the literal "unknown", or absent); `appetiteWindow` is the
+// caller-supplied profile soft appetite-window value, same shape as
+// `deadline` (mechanically identical field, ADR-0018) — an absolute ISO date
+// the owner curated at onboarding, or absent/"unknown". Whether or not
+// either target is present, Gates 2-4.5 below run unconditionally and
+// observedPace is computed over the same trailing stable-scope window —
+// ADR-0018's "every tier reuses the existing evidence gates" rule.
+// `deadlineAt`/`appetiteAt` are only consulted once every gate has passed, to
+// choose between ADR-0012's hard colour (tier 1), ADR-0018's soft colour
+// (tier 2), and ADR-0018's neutral motion read (tier 3); a project with
+// neither target that fails an evidence gate gets that gate's own reason,
+// never a `deadline-unknown` placeholder — "below any gate the forecast is
+// unchanged unknown with its existing reason" (ADR-0018).
+export function deriveForecast(observations, deadline, appetiteWindow) {
   const history = observations || [];
 
-  // Deadline lookup — a tier discriminator now, not an early gate: consulted
+  // Target lookup — a tier discriminator now, not an early gate: consulted
   // only after every evidence gate below has passed (see comment above).
+  // Precedence (ADR-0018): hard deadline > soft appetite-window > neutral.
+  // `appetiteAt` is deliberately only resolved when there is no hard
+  // deadline — a committed deadline makes the appetite-window irrelevant to
+  // the tier decision (AC5's "deadline wins" — never both consulted for a
+  // colour at once).
   const deadlineAt = deadlineMs(deadline);
+  const appetiteAt = deadlineAt === null ? deadlineMs(appetiteWindow) : null;
 
   // Gate 2 — fresh, supported latest execution reading.
   if (!history.length) return unknown('execution-unknown');
@@ -151,17 +161,36 @@ export function deriveForecast(observations, deadline) {
   const earliestFraction = fractionOf(earliest.execution.value.progress);
   const observedPace = (latestFraction - earliestFraction) / spanDays;
 
-  // ADR-0018 tier 3 — no committed target of any kind: a neutral motion
-  // read only. Never a hard colour (on_track/at_risk) and never a reason
-  // that implies a target exists; `remaining <= 0` was already handled
-  // above, identically for both tiers.
-  if (deadlineAt === null) {
+  // ADR-0018 tier 3 — no committed target of any kind (neither a hard
+  // deadline nor a soft appetite-window): a neutral motion read only. Never
+  // a hard colour (on_track/at_risk) and never a reason that implies a
+  // target exists; `remaining <= 0` was already handled above, identically
+  // for every tier.
+  if (deadlineAt === null && appetiteAt === null) {
     return observedPace > 0
       ? { state: 'advancing', reason: 'progressing-no-deadline' }
       : { state: 'stalled', reason: 'stalled-no-deadline' };
   }
 
-  // ADR-0012 tier 1 (unchanged): committed hard deadline.
+  // ADR-0018 tier 2 — committed soft appetite-window, no hard deadline: the
+  // SAME pace-vs-target machinery as tier 1 below, run against the authored
+  // appetite date instead of a deadline, but collapsed to exactly the two
+  // soft reasons the slice ACs name (`within-appetite`/`over-appetite`) —
+  // never the tier-1 hard reasons (`deadline-passed`/`no-forward-progress`/
+  // `pace-behind-required`), and never a hard `at_risk` painted red by
+  // forecastToRag: `over-appetite` is amber cutline-due, not a miss.
+  if (deadlineAt === null) {
+    const daysToAppetite = (appetiteAt - Date.parse(latest.collectedAt)) / DAY_MS;
+    if (daysToAppetite <= 0) return { state: 'at_risk', reason: 'over-appetite' };
+    if (observedPace <= 0) return { state: 'at_risk', reason: 'over-appetite' };
+    const requiredAppetitePace = remaining / daysToAppetite;
+    return observedPace >= requiredAppetitePace
+      ? { state: 'on_track', reason: 'within-appetite' }
+      : { state: 'at_risk', reason: 'over-appetite' };
+  }
+
+  // ADR-0012 tier 1 (unchanged): committed hard deadline — the sole source
+  // of a hard on_track/at_risk (AC5).
   const daysToDeadline = (deadlineAt - Date.parse(latest.collectedAt)) / DAY_MS;
 
   if (daysToDeadline <= 0) return { state: 'at_risk', reason: 'deadline-passed' };
@@ -189,6 +218,10 @@ export function attachForecasts(data, historiesByProjectId) {
       forecast: deriveForecast(
         historiesByProjectId?.[entry.project.id] || [],
         entry.project.deadline?.value,
+        // ADR-0018 tier 2 (slice 013-03): the joined-in soft appetite-window
+        // (joinProjectProfileFields), passed alongside the deadline —
+        // deriveForecast itself decides precedence (deadline > appetite).
+        entry.project.appetiteWindow?.value,
       ),
     })),
   };
@@ -218,6 +251,14 @@ function narrativeBlockerPresent(entry) {
 // unplaced. Order of checks IS the precedence rule.
 function tierOf(entry) {
   const forecast = entry.forecast || {};
+  // 013-03 fix (ADR-0018 kill criterion): a SOFT `over-appetite` at_risk
+  // (tier 2 of the forecast model — a curated appetite-window, not a hard
+  // deadline) must NOT land in the same top-urgency tier as a hard at_risk
+  // miss — that would smuggle the soft "cutline due" read into a hard alarm,
+  // exactly the outcome ADR-0018's kill criteria forbid. Checked BEFORE the
+  // generic `at_risk → 1` rule below (reason-based, not state-based), so it
+  // sits in tier 2 alongside the other "needs review" triggers instead.
+  if (forecast.state === 'at_risk' && forecast.reason === 'over-appetite') return 2;
   if (forecast.state === 'at_risk') return 1;
   if (forecast.reason === 'stale-evidence' || narrativeBlockerPresent(entry)) return 2;
   // ADR-0018 tier 3: a dateless project's neutral motion read (`advancing`/
@@ -271,6 +312,11 @@ function tierReason(entry, tier, deadlineAt, nowMs) {
     case 1:
       return `at risk · ${deadlinePhrase(deadlineAt, nowMs)}`;
     case 2:
+      // 013-03 fix: a soft `over-appetite` read gets its own honest cutline
+      // phrase — never the deadline-proximity text (case 1's phrase) and
+      // never "deadline unknown" (there IS a committed target here, just not
+      // a hard one; the project deliberately isn't tracking a deadline).
+      if (forecast.reason === 'over-appetite') return 'over appetite — cutline due';
       return narrativeBlockerPresent(entry) ? 'blocked — verify' : 'stale — verify';
     case 3:
       // `deadline-unknown` means no committed deadline (forecast Gate 1) — the

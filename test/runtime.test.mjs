@@ -1313,6 +1313,21 @@ test('forecastToRag: advancing/stalled (ADR-0018 tier 3 neutral motion) map to g
   assert.equal(context.forecastToRag({ state: 'stalled', reason: 'stalled-no-deadline' }), 'gray');
 });
 
+// --- 013-03 (ADR-0018 tier 2): curated soft appetite-window — within-appetite
+// reads green (an on_track state, same as the hard tier); over-appetite
+// reads AMBER (yellow), never red, even though it is an at_risk state. ---
+
+test('forecastToRag: within-appetite maps to green, same as a hard on_track (013-03 AC4)', () => {
+  const context = cardContext();
+  assert.equal(context.forecastToRag({ state: 'on_track', reason: 'within-appetite' }), 'green');
+});
+
+test('forecastToRag: over-appetite maps to yellow (amber), never red (013-03 AC4)', () => {
+  const context = cardContext();
+  assert.equal(context.forecastToRag({ state: 'at_risk', reason: 'over-appetite' }), 'yellow');
+  assert.notEqual(context.forecastToRag({ state: 'at_risk', reason: 'over-appetite' }), 'red');
+});
+
 test('forecastToRag: absent/malformed forecast is never coerced to green — it reads gray (never-green-default guard)', () => {
   const context = cardContext();
   assert.equal(context.forecastToRag(undefined), 'gray');
@@ -1383,6 +1398,32 @@ test('card RAG callout on a non-green (yellow/red/gray) card DOES show the ⚠ +
     assert.match(callout, /class="rag-flag" tabindex="0" role="img"/, band);
     assert.match(callout, /⚠/, band);
   }
+});
+
+// 013-03 (ADR-0018 tier 2): within-appetite reads green with no ⚠, exactly
+// like a hard on_track (mirrors the green test above); over-appetite reads
+// yellow WITH the ⚠ + tooltip (cutline-due — an at_risk state genuinely
+// needing attention), never rag-red.
+test('card RAG callout for within-appetite (013-03 tier 2) is green with no ⚠, same treatment as a hard on_track (013-03 AC3/AC4)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'on_track', reason: 'within-appetite' } };
+  const html = context.card(project);
+  const callout = ragCalloutMarkup(html);
+  assert.match(html, /class="card rag-green"/);
+  assert.match(callout, /rag-callout rag-green/);
+  assert.doesNotMatch(callout, /rag-flag/);
+  assert.doesNotMatch(callout, /⚠/);
+});
+
+test('card RAG callout for over-appetite (013-03 tier 2) is yellow (amber) with the ⚠ tooltip, never rag-red (013-03 AC4)', () => {
+  const context = cardContext();
+  const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'at_risk', reason: 'over-appetite' } };
+  const html = context.card(project);
+  const callout = ragCalloutMarkup(html);
+  assert.match(html, /class="card rag-yellow"/);
+  assert.match(callout, /rag-callout rag-yellow/);
+  assert.match(callout, /class="rag-flag" tabindex="0" role="img"/);
+  assert.doesNotMatch(html, /rag-red/);
 });
 
 // 013-02 (ADR-0018 tier 3): advancing/stalled are gray like the other

@@ -382,7 +382,10 @@ function costDetailBlock(p) {
 // `unknown`, and any absent/malformed forecast, reads gray — AC2's
 // "never green-by-default" guard (a missing/broken forecast must never read
 // as healthy).
-const RAG_YELLOW_REASONS = new Set(['pace-behind-required']);
+// 013-03 (ADR-0018 tier 2): `over-appetite` is a SOFT at_risk read against a
+// curated appetite-window, never a hard deadline miss — amber cutline-due,
+// never red, exactly like `pace-behind-required`'s "not yet failed" band.
+const RAG_YELLOW_REASONS = new Set(['pace-behind-required', 'over-appetite']);
 function forecastToRag(forecast) {
   const state = forecast && forecast.state;
   if (state === 'on_track') return 'green';
@@ -417,6 +420,10 @@ const RAG_REASON_TEXT = {
   // motion read, informational only. Never phrased as risk/urgency.
   'progressing-no-deadline': 'advancing — no deadline set',
   'stalled-no-deadline': 'stalled — no deadline set',
+  // ADR-0018 tier 2 (013-03): committed soft appetite-window, no hard
+  // deadline. `over-appetite` reads amber "cutline due", never "will miss".
+  'within-appetite': 'on pace for the appetite window',
+  'over-appetite': 'cutline due — over the appetite window',
 };
 function ragReasonText(forecast) {
   if (!forecast || !forecast.reason) return 'no forecast available';

@@ -285,6 +285,30 @@ test('onboard CLI still surfaces goal/deadline candidates for a plain (non-jig) 
   assert.match(run.stderr, /deadline candidate:.*README\.md.*readme/);
 });
 
+// --- 013-03 (ADR-0018 tier 2): the onboard CLI surfaces an appetiteWindow
+// candidate note too — the same existence-based pointer already surfaced for
+// deadline (the appetite hint lives in the same release doc), never a parsed
+// prose value. The owner (optionally Claude-assisted) reads that doc
+// author-time and hand-commits `profile.appetiteWindow`; the CLI itself only
+// points at the file. ---
+
+test('onboard CLI surfaces an appetiteWindow candidate pointer on stderr, reusing the deadline candidate\'s release-doc pointer (013-03 AC2)', () => {
+  const run = onboard('--path', fixture('proj-umbrella'));
+  assert.equal(run.status, 0);
+  assert.match(run.stderr, /appetiteWindow candidate:/);
+  // The proposed profile itself never carries an appetiteWindow VALUE — only
+  // the pointer note does; the field is authored by the human, never emitted
+  // by discovery.
+  const profile = JSON.parse(run.stdout);
+  assert.ok(!('appetiteWindow' in profile));
+});
+
+test('onboard CLI still surfaces an appetiteWindow candidate for a plain (non-jig) source (013-03 AC2)', () => {
+  const run = onboard('--path', fixture('proj-plain'));
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /appetiteWindow candidate:.*README\.md.*readme/);
+});
+
 test('onboard CLI never writes anything to the source, even when goal/deadline candidates exist (AC4/AC5 no-source-write)', () => {
   // proj-vision-release has no specs/decisions dirs (jig-shape discovery
   // fails), so it takes the same "no jig artifacts" exit path as the plain

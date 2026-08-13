@@ -71,6 +71,56 @@ test('attention order is unchanged for a stalled dateless project vs a deadline-
   assert.deepEqual(mixed.map((r) => r.id), ['aaa-unknown', 'zzz-stalled']);
 });
 
+// --- 013-03 fix (ADR-0018 kill criterion): a soft `over-appetite` at_risk  ---
+// --- must NOT smuggle into tier 1 (the hard-alarm tier) — it lands tier 2, ---
+// --- below a hard at_risk miss and above the tier-3 neutral read.         ---
+
+test('tier 2: at_risk/over-appetite (soft cutline-due) maps to tier 2, NOT tier 1 (013-03 kill-criterion fix)', () => {
+  const [ranked] = queueOf([entry('alpha', { state: 'at_risk', reason: 'over-appetite' })]);
+  assert.equal(ranked.tier, 2);
+});
+
+test('over-appetite sorts BELOW a hard at_risk/deadline-passed (tier 1) and ABOVE a neutral tier-3 project (013-03 kill-criterion fix)', () => {
+  const ranked = queueOf([
+    entry('soft-appetite', { state: 'at_risk', reason: 'over-appetite' }),
+    entry('hard-miss', { state: 'at_risk', reason: 'deadline-passed' }, { deadline: '2026-08-01' }),
+    entry('neutral', { state: 'stalled', reason: 'stalled-no-deadline' }),
+  ]);
+  assert.deepEqual(ranked.map((r) => r.id), ['hard-miss', 'soft-appetite', 'neutral']);
+  assert.deepEqual(ranked.map((r) => r.tier), [1, 2, 3]);
+});
+
+test('over-appetite queue reason is the soft cutline phrase, never "deadline unknown" or a deadline-proximity phrase (013-03 kill-criterion fix)', () => {
+  const [ranked] = queueOf([entry('alpha', { state: 'at_risk', reason: 'over-appetite' })]);
+  assert.equal(ranked.reason, 'over appetite — cutline due');
+  assert.notEqual(ranked.reason, 'needs a deadline set');
+  assert.doesNotMatch(ranked.reason, /deadline unknown/);
+  assert.doesNotMatch(ranked.reason, /^at risk ·/);
+});
+
+// --- Regression: hard at_risk still tier 1; within-appetite (on_track)    ---
+// --- still low-urgency tier 5 — the fix must not touch either.            ---
+
+test('regression: a hard at_risk (any non-over-appetite reason) still lands tier 1, unaffected by the over-appetite carve-out (013-03 kill-criterion fix)', () => {
+  const cases = ['pace-behind-required', 'deadline-passed', 'no-forward-progress'];
+  for (const reason of cases) {
+    const [ranked] = queueOf([entry('alpha', { state: 'at_risk', reason }, { deadline: '2026-09-01' })]);
+    assert.equal(ranked.tier, 1, reason);
+  }
+});
+
+test('regression: within-appetite (on_track) still lands tier 5, unaffected by the over-appetite carve-out (013-03 kill-criterion fix)', () => {
+  const [ranked] = queueOf([entry('alpha', { state: 'on_track', reason: 'within-appetite' })]);
+  assert.equal(ranked.tier, 5);
+});
+
+test('most-urgent-tier-wins: over-appetite + narrative blocker present stays tier 2 (both are tier-2 triggers, no re-tiering) (013-03 kill-criterion fix)', () => {
+  const [ranked] = queueOf([
+    entry('alpha', { state: 'at_risk', reason: 'over-appetite' }, { blockers: ['stuck'] }),
+  ]);
+  assert.equal(ranked.tier, 2);
+});
+
 test('tier 4: unknown/insufficient-history maps to tier 4 (AC2)', () => {
   const [ranked] = queueOf([entry('alpha', { state: 'unknown', reason: 'insufficient-history' }, { deadline: '2026-09-01' })]);
   assert.equal(ranked.tier, 4);

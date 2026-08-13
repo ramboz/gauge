@@ -58,7 +58,9 @@ function resolveFrom(base, value) {
 // DEFAULTS carries neither key — see src/profile.mjs), so they thread through
 // only when the author actually set them; a profile with neither preserves
 // the exact pre-009-01 shape (no extra keys) rather than adding `goal:
-// undefined` / `deadline: undefined` own-properties.
+// undefined` / `deadline: undefined` own-properties. appetiteWindow
+// (ADR-0018 tier 2, slice 013-03) is the same no-default, thread-only-if-set
+// shape as deadline (mechanically identical field).
 function resolvedSingleProfile(merged, projectRoot) {
   const resolved = {
     artifactRoot: resolveFrom(projectRoot, merged.artifactRoot),
@@ -69,6 +71,7 @@ function resolvedSingleProfile(merged, projectRoot) {
   };
   if (merged.goal !== undefined) resolved.goal = merged.goal;
   if (merged.deadline !== undefined) resolved.deadline = merged.deadline;
+  if (merged.appetiteWindow !== undefined) resolved.appetiteWindow = merged.appetiteWindow;
   return resolved;
 }
 
@@ -120,6 +123,10 @@ function expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinn
     else if (profileValue.goal !== undefined) merged.goal = profileValue.goal;
     if (entry.deadline !== undefined) merged.deadline = entry.deadline;
     else if (profileValue.deadline !== undefined) merged.deadline = profileValue.deadline;
+    // appetiteWindow (slice 013-03, ADR-0018 tier 2): same entry→profile
+    // fallback shape as deadline directly above (mechanically identical field).
+    if (entry.appetiteWindow !== undefined) merged.appetiteWindow = entry.appetiteWindow;
+    else if (profileValue.appetiteWindow !== undefined) merged.appetiteWindow = profileValue.appetiteWindow;
     return {
       id: composite,
       label: entry.label,

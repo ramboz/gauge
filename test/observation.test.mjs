@@ -778,6 +778,40 @@ test('joinProjectProfileFields echoes deadline "unknown" verbatim — never fabr
   assert.equal(joined.projects[0].project.goal, undefined);
 });
 
+// --- 013-03: appetiteWindow read/render-layer join (ADR-0018 tier 2) — same
+// literal-passthrough shape as goal/deadline (mechanically identical field). ---
+
+test('joinProjectProfileFields attaches the profile\'s literal appetiteWindow onto the matching project, alongside goal/deadline (013-03)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{
+      id: 'alpha', path: '/tmp/alpha', adapters: [],
+      profile: {
+        goal: { value: 'Ship the MVP', provenance: 'product-vision' },
+        appetiteWindow: { value: '2026-09-01', provenance: 'user' },
+      },
+    }],
+  }, '/tmp/gauge.config.json');
+  const data = observeAll(config, { now: '2026-08-05T00:00:00.000Z' });
+  const joined = joinProjectProfileFields(data, config);
+  assert.deepEqual(joined.projects[0].project.appetiteWindow, { value: '2026-09-01', provenance: 'user' });
+  assert.deepEqual(joined.projects[0].project.goal, { value: 'Ship the MVP', provenance: 'product-vision' });
+  assert.equal(joined.projects[0].project.deadline, undefined);
+  // The observation record itself stays untouched by the join.
+  assert.deepEqual(validateObservation(data.projects[0]), []);
+  assert.equal(data.projects[0].project.appetiteWindow, undefined);
+});
+
+test('joinProjectProfileFields is a no-op passthrough when a project carries only an appetiteWindow-absent profile (013-03)', () => {
+  const config = normalizeConfig({
+    version: 1,
+    projects: [{ id: 'alpha', path: '/tmp/alpha', adapters: [] }],
+  }, '/tmp/gauge.config.json');
+  const data = observeAll(config, { now: '2026-08-05T00:00:00.000Z' });
+  const joined = joinProjectProfileFields(data, config);
+  assert.deepEqual(joined, data);
+});
+
 test('joinProjectProfileFields performs no file I/O — a pure structural merge (AC3/AC5)', () => {
   const src = fs.readFileSync(path.join(HERE, '..', 'src', 'observation.mjs'), 'utf8');
   const fnStart = src.indexOf('export function joinProjectProfileFields');

@@ -735,20 +735,26 @@ export function observeAll(config, options = {}) {
 // whatever literal value the profile already carries, with no file I/O and
 // no prose parsing (AC3/AC5). Deliberately NOT folded into observeProject/
 // observeAll: the observation-v1 contract (and anything npm run collect
-// persists) stays exactly as it was before this slice.
+// persists) stays exactly as it was before this slice. appetiteWindow
+// (ADR-0018 tier 2, slice 013-03) is joined the same way, alongside goal/
+// deadline — a literal echo of the profile's committed field, never
+// runtime-derived from source prose.
 export function joinProjectProfileFields(data, config) {
   const profileById = new Map(config.projects.map((project) => [project.id, project.profile || {}]));
   return {
     ...data,
     projects: data.projects.map((observation) => {
       const profile = profileById.get(observation.project.id) || {};
-      if (profile.goal === undefined && profile.deadline === undefined) return observation;
+      if (profile.goal === undefined && profile.deadline === undefined && profile.appetiteWindow === undefined) {
+        return observation;
+      }
       return {
         ...observation,
         project: {
           ...observation.project,
           ...(profile.goal !== undefined ? { goal: profile.goal } : {}),
           ...(profile.deadline !== undefined ? { deadline: profile.deadline } : {}),
+          ...(profile.appetiteWindow !== undefined ? { appetiteWindow: profile.appetiteWindow } : {}),
         },
       };
     }),

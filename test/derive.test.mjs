@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deriveForecast, attachForecasts, attentionQueue } from '../src/derive.mjs';
@@ -299,6 +300,124 @@ test('gated to unknown scope-changed (013-02 AC5): denom moved at the latest ste
   assert.deepEqual(deriveForecast(history, undefined), { state: 'unknown', reason: 'scope-changed' });
 });
 
+// --- 013-03 (ADR-0018 tier 2): curated soft appetite-window ----------------
+// deriveForecast(observations, deadline, appetiteWindow): with NO hard
+// deadline and a committed appetiteWindow, the SAME evidence gates/pace
+// machinery runs against the authored appetite date, but the reasons are the
+// two soft ones the slice names — `within-appetite` (on pace, green) and
+// `over-appetite` (behind or window passed, amber — never red).
+
+test('on_track within-appetite: pace meets what the appetite window requires, no hard deadline set (AC3)', () => {
+  // steadyHistory: pace 0.1/day, remaining 0.4 at latest (2026-08-05). An
+  // appetite window far enough out (2026-09-14, 40 days) requires only
+  // 0.01/day — comfortably met.
+  const result = deriveForecast(steadyHistory(), undefined, '2026-09-14');
+  assert.deepEqual(result, { state: 'on_track', reason: 'within-appetite' });
+});
+
+test('at_risk over-appetite: observed pace behind what the appetite window requires — amber, not red (AC3/AC4)', () => {
+  // steadyHistory: pace 0.1/day, remaining 0.4 at latest. An appetite window
+  // just 2 days out requires 0.2/day — faster than observed.
+  const result = deriveForecast(steadyHistory(), undefined, '2026-08-07');
+  assert.deepEqual(result, { state: 'at_risk', reason: 'over-appetite' });
+});
+
+test('at_risk over-appetite: the appetite window has already passed with work remaining — still amber, never the hard deadline-passed reason (AC3/AC4)', () => {
+  const result = deriveForecast(steadyHistory(), undefined, '2026-08-05');
+  assert.deepEqual(result, { state: 'at_risk', reason: 'over-appetite' });
+  assert.notEqual(result.reason, 'deadline-passed');
+});
+
+test('at_risk over-appetite: zero/negative observed pace against a committed appetite window — still amber, never the hard no-forward-progress reason (AC3/AC4)', () => {
+  const history = [
+    obsSupported('2026-08-01T00:00:00Z', { done: 6, denom: 10 }),
+    obsSupported('2026-08-05T00:00:00Z', { done: 6, denom: 10 }),
+  ];
+  const result = deriveForecast(history, undefined, '2026-09-01');
+  assert.deepEqual(result, { state: 'at_risk', reason: 'over-appetite' });
+  assert.notEqual(result.reason, 'no-forward-progress');
+});
+
+test('appetiteWindow "unknown" or absent behaves exactly like an absent deadline — falls through to tier 3 neutral (AC1)', () => {
+  assert.deepEqual(deriveForecast(steadyHistory(), undefined, undefined), { state: 'advancing', reason: 'progressing-no-deadline' });
+  assert.deepEqual(deriveForecast(steadyHistory(), undefined, 'unknown'), { state: 'advancing', reason: 'progressing-no-deadline' });
+  assert.deepEqual(deriveForecast(steadyHistory(), undefined, '2026-13-40'), { state: 'advancing', reason: 'progressing-no-deadline' });
+});
+
+test('already-complete stays on_track/already-complete with a committed appetite window and no remaining work — never within-appetite (AC3)', () => {
+  const history = [
+    obsSupported('2026-08-01T00:00:00Z', { done: 8, denom: 10 }),
+    obsSupported('2026-08-05T00:00:00Z', { done: 10, denom: 10 }),
+  ];
+  assert.deepEqual(deriveForecast(history, undefined, '2026-09-01'), { state: 'on_track', reason: 'already-complete' });
+});
+
+test('a committed appetite window below any evidence gate keeps that gate\'s own reason, never a soft colour (AC3, gates-first)', () => {
+  assert.deepEqual(deriveForecast([], undefined, '2026-09-01'), { state: 'unknown', reason: 'execution-unknown' });
+  assert.deepEqual(
+    deriveForecast([obsSupported('2026-08-05T00:00:00Z', { done: 6, denom: 10 })], undefined, '2026-09-01'),
+    { state: 'unknown', reason: 'insufficient-history' },
+  );
+});
+
+// --- AC5: precedence — hard deadline > soft appetite-window > neutral ------
+
+test('precedence: a committed hard deadline still wins over a committed appetite window — hard on_track/at_risk unchanged (AC5)', () => {
+  // The deadline (2026-08-07) requires 0.2/day — faster than the observed
+  // 0.1/day pace, so the hard tier reads at_risk/pace-behind-required, even
+  // though a generous appetite window (2026-09-14) is ALSO committed and
+  // would, on its own, read on_track/within-appetite.
+  const result = deriveForecast(steadyHistory(), '2026-08-07', '2026-09-14');
+  assert.deepEqual(result, { state: 'at_risk', reason: 'pace-behind-required' });
+  assert.notEqual(result.reason, 'within-appetite');
+  assert.notEqual(result.reason, 'over-appetite');
+});
+
+test('precedence: a committed hard deadline that is itself on pace wins over a tight appetite window that would otherwise read over-appetite (AC5)', () => {
+  // Deadline 2026-09-14 (40 days out) is comfortably met by the observed
+  // pace; the appetite window 2026-08-07 (tight, would read over-appetite on
+  // its own) must have zero effect once a hard deadline is present.
+  const result = deriveForecast(steadyHistory(), '2026-09-14', '2026-08-07');
+  assert.deepEqual(result, { state: 'on_track', reason: 'pace-meets-required' });
+});
+
+test('precedence: neither deadline nor appetite window committed falls to tier-3 neutral (013-02, unchanged) (AC5)', () => {
+  assert.deepEqual(deriveForecast(steadyHistory(), undefined, undefined), { state: 'advancing', reason: 'progressing-no-deadline' });
+});
+
+// --- AC6: no runtime prose parse guard --------------------------------------
+// deriveForecast/attachForecasts take the appetite-window value as an
+// explicit parameter, exactly like deadline (AC1's existing test above) —
+// never a hidden read of docs/releases/*.md or any other source prose. The
+// zero-import assertion at the top of this file already makes that
+// structurally impossible (derive.mjs cannot open any file); this test adds
+// a behavioural check over the real read/join layers: a project with a REAL,
+// human-legible appetite hint sitting in its docs/releases/*.md on disk
+// still reads tier-3 neutral (never a soft colour) until the owner commits
+// `profile.appetiteWindow` — proving nothing downstream inferred a value
+// from that file.
+test('no committed appetiteWindow field means no soft colour, even when a real appetite-shaped release doc sits on disk (AC6 guard)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-appetite-guard-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'docs', 'releases'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'docs', 'releases', 'plan.md'),
+      '# Plan\n\nAppetite: two weeks, fixed effort. Target: ship by end of month.\n',
+    );
+    const config = normalizeConfig({
+      version: 1,
+      projects: [{ id: 'alpha', path: dir, adapters: [] }], // no profile.appetiteWindow committed
+    }, path.join(dir, 'gauge.config.json'));
+    const data = { generatedAt: '2026-08-05T00:00:00Z', projects: [{ project: { id: 'alpha', label: 'Alpha' }, collection: { status: 'ok' } }] };
+    const joined = joinProjectProfileFields(data, config);
+    assert.equal(joined.projects[0].project.appetiteWindow, undefined, 'no appetiteWindow value must be joined from the uncommitted profile');
+    const withForecasts = attachForecasts(joined, { alpha: steadyHistory() });
+    assert.deepEqual(withForecasts.projects[0].forecast, { state: 'advancing', reason: 'progressing-no-deadline' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // --- AC3: explained, deterministic read ----------------------------------
 
 test('every result — colour or unknown — carries a reason from the ADR-0012 set (AC3)', () => {
@@ -366,6 +485,17 @@ test('attachForecasts derives from an empty history when a project id has no ent
   const data = { projects: [{ project: { id: 'gamma', deadline: { value: '2026-09-14', provenance: 'user' } }, collection: { status: 'ok' } }] };
   assert.doesNotThrow(() => attachForecasts(data, {}));
   assert.deepEqual(attachForecasts(data, {}).projects[0].forecast, { state: 'unknown', reason: 'execution-unknown' });
+});
+
+test('attachForecasts joins a project\'s appetiteWindow (no deadline) into a soft forecast (013-03 AC3/AC5)', () => {
+  const data = {
+    generatedAt: '2026-08-05T00:00:00Z',
+    projects: [
+      { project: { id: 'alpha', label: 'Alpha', appetiteWindow: { value: '2026-09-14', provenance: 'user' } }, collection: { status: 'ok' } },
+    ],
+  };
+  const attached = attachForecasts(data, { alpha: steadyHistory() });
+  assert.deepEqual(attached.projects[0].forecast, { state: 'on_track', reason: 'within-appetite' });
 });
 
 // --- 010-01 AC4: entry-declared goal/deadline reaches the read layer and
