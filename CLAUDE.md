@@ -65,8 +65,24 @@ This is an index. Durable detail lives in `docs/`; update it through
   `design/manager-dashboard-mockup.html`. **History is reconstructable from git
   (past) + captured on session-stop (future)** — the forecast "history gate" is a
   code limit, not a data one. Blockers count is approximate pending jig#195.
-  **Remaining owner action (out of code):** set a real deadline on Gauge in the
-  gitignored onboarding config to light the RAG chip green (spike 012-01 dogfood).
+  Gauge's own deadline is now set (2026-08-28) in the gitignored config; RAG reads
+  honest `unknown (insufficient-history)` until the git-backfill seed accrues ≥2
+  spaced observations (spike 012-01 dogfood done). Releases:
+  manager-dashboard-local-data is **shipped**; thin-client-and-central-collection
+  is **committed** (2026-08-28).
+- **Dateless forecast —
+  [ADR-0018](docs/decisions/adr-0018-date-independent-forecast.md) (Accepted
+  2026-08-13):** the portfolio is appetite-shaped, not date-driven, so ADR-0012's
+  deadline gate collapses every card to grey. ADR-0018 adds a **tiered** model:
+  committed hard deadline → green/red; committed **soft appetite-window** →
+  green/amber (`over-appetite`=cutline-due; **curated at onboarding** per ADR-0011,
+  runtime never parses prose); no committed target → **neutral** `advancing`/
+  `stalled` (no colour, no attention re-tiering); else `unknown`. Grounded in a git
+  reconstruction: history gate dissolves, Gate 4 vindicated (gauge −0.60 naive vs
+  +3.73 in-window pace), signal computable on 31–71% of observations. **Lesson:**
+  any target/forecast inference must be **author-time curated, never runtime-derived
+  from prose** (ADR-0011) — this killed an interim appetite-prose-parsing draft.
+  Implementation is a follow-up slice sequenced with the git-backfill seed.
 - **Committed local-pull MVP** — the prior loop; see
   [local-portfolio-loop](docs/releases/local-portfolio-loop.md) (largely shipped).
 - **Landed runtime** —

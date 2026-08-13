@@ -24,6 +24,7 @@
 - [ADR-0015: Worktree lifecycle state via a local push-proxy](adr-0015-worktree-lifecycle-state-local-pr-proxy.md) — ADR-0014 made worktree hygiene report the docs that live only in a worktree and are genuinely at risk. (2026-08-06, Accepted)
 - [ADR-0016: Optional GitHub PR resolution over the push-proxy](adr-0016-optional-github-pr-resolution.md) — ADR-0015 classifies worktrees with a fully-local **push-proxy**: a worktree whose HEAD is on a non-mainline remote ref is treated as "likely an open PR". (2026-08-06, Accepted)
 - [ADR-0017: Reframe onto the manager/portfolio lens: analytics scope and reconstructable/captured history](adr-0017-reframe-onto-manager-lens.md) — ADR-0003 reframed the inherited project-dashboard POC onto the **Gauge portfolio product** — a private, read-only, cross-project delivery view. (2026-08-07, Accepted)
+- [ADR-0018: Date-independent forecast for appetite-shaped work](adr-0018-date-independent-forecast.md) — [ADR-0012](adr-0012-forecast-confidence-minimum-evidence.md) makes a **concrete deadline the first gate** of every forecast: `deriveForecast` (`src/derive.mjs`) returns `unknown('deadline-unknown')` the moment the profile `deadline` is absent or the literal `unknown`, before any pace is computed. (2026-08-13, Accepted)
 
 ## Format
 
