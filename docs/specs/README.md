@@ -49,7 +49,7 @@
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-04 — token cost: by-activity + by-skill | **DONE** |  |
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-05 — team signals: human-vs-agent split + contributors | **DONE** |  |
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-06 — RAG health chip (deadline-gated) | **DONE** |  |
-| [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-01 — git-backfill seed lights the deadline forecast | DRAFT |  |
+| [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-01 — git-backfill seed lights the deadline forecast | **DONE** |  |
 | [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-02 — neutral date-free pace (advancing/stalled) | DRAFT |  |
 | [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-03 — curated soft appetite-window (green/amber) | DRAFT |  |
 
@@ -81,5 +81,5 @@
 Advisory (ADR-0040 auditability — never blocks). Regenerated from `reviews/slice-*.md` `substrate:` fields.
 
 - **0** pass(es) recorded `not-shown` (selection step did not run — the kill-criterion-1 defect signal).
-- **10** pass(es) recorded `non-interactive` (declared no-orchestrator / CI).
+- **11** pass(es) recorded `non-interactive` (declared no-orchestrator / CI).
 - **0** shown-and-declined anomaly(ies) (a high-confidence richer skill was shown and not applied):

@@ -1,11 +1,10 @@
 ---
-status: RECONCILED
+status: DONE
 dependencies: [adr-0018]
 last_verified: 2026-08-13
 # arch_review: true  # candidate — this slice adds a history-producing path
 #                    # (git → observations in the state dir); flip on if the
 #                    # write path touches the observation/state boundary.
-claimed_by: claude/jig-orient-efb5dd
 ---
 
 <!-- jig grounding (spec 064-02 / ADR-0020): probe runnable claims or mark them
