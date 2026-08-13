@@ -49,6 +49,9 @@
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-04 — token cost: by-activity + by-skill | **DONE** |  |
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-05 — team signals: human-vs-agent split + contributors | **DONE** |  |
 | [012-portfolio-manager-analytics](012-portfolio-manager-analytics/spec.md) | 012-06 — RAG health chip (deadline-gated) | **DONE** |  |
+| [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-01 — git-backfill seed lights the deadline forecast | DRAFT |  |
+| [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-02 — neutral date-free pace (advancing/stalled) | DRAFT |  |
+| [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-03 — curated soft appetite-window (green/amber) | DRAFT |  |
 
 ## Deferred slices
 
