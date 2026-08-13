@@ -1,8 +1,7 @@
 ---
-status: RECONCILED
+status: DONE
 dependencies: [013-01, adr-0018]
 last_verified: 2026-08-13
-claimed_by: claude/jig-orient-efb5dd
 ---
 
 <!-- jig grounding (spec 064-02 / ADR-0020): probe runnable claims or mark them
