@@ -413,6 +413,10 @@ const RAG_REASON_TEXT = {
   'pace-behind-required': 'behind pace — deadline not yet missed',
   'deadline-passed': 'deadline has passed',
   'no-forward-progress': 'no forward progress',
+  // ADR-0018 tier 3 (013-02): no committed target of any kind — a neutral
+  // motion read, informational only. Never phrased as risk/urgency.
+  'progressing-no-deadline': 'advancing — no deadline set',
+  'stalled-no-deadline': 'stalled — no deadline set',
 };
 function ragReasonText(forecast) {
   if (!forecast || !forecast.reason) return 'no forecast available';
@@ -432,9 +436,16 @@ function ragReasonText(forecast) {
 // like 011-04's warn-icon (tabindex + role="img" + aria-label + title) so
 // the reason is legible without hover. Green loses nothing: the colored
 // border + headline already carry the healthy state.
+// 013-02 (ADR-0018 tier 3): `advancing`/`stalled` also drop the ⚠ even
+// though their band is gray — they are a neutral, informational motion read
+// with nothing unresolved to act on (unlike the other gray reasons, which
+// all name a gate the owner can clear), so wrapping them in a warning glyph
+// would misread as an alarm. The colored headline chip already carries the
+// neutral state on its own, exactly like green.
 function forecastCallout(p, band) {
   const reasonText = ragReasonText(p.forecast);
-  const flag = band === 'green' ? '' : `<span class="rag-flag" tabindex="0" role="img" aria-label="${esc('Forecast: ' + reasonText)}" title="${esc(reasonText)}">⚠</span>`;
+  const neutralState = p.forecast?.state === 'advancing' || p.forecast?.state === 'stalled';
+  const flag = band === 'green' || neutralState ? '' : `<span class="rag-flag" tabindex="0" role="img" aria-label="${esc('Forecast: ' + reasonText)}" title="${esc(reasonText)}">⚠</span>`;
   return `<div class="rag-callout rag-${band}"><span class="rag-headline">${esc(reasonText)}</span>${flag}</div>`;
 }
 function warningItems(p) {
@@ -490,6 +501,11 @@ function card(p) {
   // Forecast/risk (spec 009-02, ADR-0006/ADR-0012): attached by the server
   // read layer as {state, reason}. `unknown` is an explicit, legible state —
   // rendered the same way as a colour, never blank and never a green default.
+  // 013-02 (ADR-0018 tier 3): `advancing`/`stalled` (a dateless project's
+  // neutral motion read) are deliberately absent from this table — the `||
+  // ''` fallback below renders them as a plain, uncoloured chip, same as the
+  // base `.chip` style with no `.ok`/`.error`/`.partial` class layered on,
+  // never a RAG colour.
   const forecast=p.forecast;
   const FORECAST_CLASS={on_track:'ok',at_risk:'error',unknown:'partial'};
   const forecastBlock=forecast?`<div class="meta"><span class="chip ${esc(FORECAST_CLASS[forecast.state]||'')}">forecast: ${esc(forecast.state)}</span> ${esc(forecast.reason)}</div>`:'';

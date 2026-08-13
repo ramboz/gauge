@@ -14,6 +14,8 @@ const ADR0012_REASONS = new Set([
   'deadline-unknown', 'execution-unknown', 'stale-evidence', 'insufficient-history',
   'scope-changed', 'pace-behind-required', 'pace-meets-required', 'deadline-passed',
   'no-forward-progress', 'already-complete',
+  // ADR-0018 tier 3 (013-02): the neutral date-free pace reasons.
+  'progressing-no-deadline', 'stalled-no-deadline',
 ]);
 
 // --- fixture builders --------------------------------------------------
@@ -63,26 +65,38 @@ test('deriveForecast takes the deadline as an explicit parameter, not a hidden c
   const history = steadyHistory();
   const withDeadline = deriveForecast(history, '2026-09-01');
   const withoutDeadline = deriveForecast(history, undefined);
-  assert.notEqual(withDeadline.state, 'unknown');
-  assert.equal(withoutDeadline.state, 'unknown');
-  assert.equal(withoutDeadline.reason, 'deadline-unknown');
+  // 013-02 (ADR-0018 tier 3): a project WITH evidence-sufficient history but
+  // no deadline no longer collapses to `unknown` — it gets a neutral motion
+  // read instead. The two calls must still visibly diverge (the deadline
+  // parameter is not ignored): one hits ADR-0012's hard-colour tier 1, the
+  // other ADR-0018's tier-3 neutral read.
+  assert.equal(withDeadline.state, 'on_track');
+  assert.equal(withoutDeadline.state, 'advancing');
+  assert.notEqual(withDeadline.state, withoutDeadline.state);
 });
 
 // --- AC2/AC2a: evidence-gated three-state output, every unknown trigger ---
 
-test('unknown deadline-unknown: deadline absent (AC2)', () => {
-  assert.deepEqual(deriveForecast(steadyHistory(), undefined), { state: 'unknown', reason: 'deadline-unknown' });
+// 013-02 (ADR-0018 tier 3): a dateless project with evidence clearing every
+// gate no longer reads `unknown('deadline-unknown')` — that reason is
+// retired for deriveForecast's own output (it survives only as a hand-built
+// attention-queue fixture — see attention-queue.test.mjs). A literal
+// "unknown" deadline and a calendar-invalid one are still treated exactly
+// like an absent deadline for gating purposes, so all three now converge on
+// the SAME tier-3 `advancing` read (steadyHistory's pace is positive).
+test('advancing (ADR-0018 tier 3): deadline absent, with evidence-sufficient history (013-02 AC1)', () => {
+  assert.deepEqual(deriveForecast(steadyHistory(), undefined), { state: 'advancing', reason: 'progressing-no-deadline' });
 });
 
-test('unknown deadline-unknown: deadline literal "unknown" (AC2)', () => {
-  assert.deepEqual(deriveForecast(steadyHistory(), 'unknown'), { state: 'unknown', reason: 'deadline-unknown' });
+test('advancing (ADR-0018 tier 3): deadline literal "unknown" is treated identically to absent (013-02 AC1)', () => {
+  assert.deepEqual(deriveForecast(steadyHistory(), 'unknown'), { state: 'advancing', reason: 'progressing-no-deadline' });
 });
 
-test('unknown deadline-unknown: calendar-invalid deadline is rejected by real date arithmetic, not regex alone (AC2, DoR)', () => {
+test('advancing (ADR-0018 tier 3): a calendar-invalid deadline is rejected by real date arithmetic and treated as absent, not regex alone (013-02 AC1, DoR)', () => {
   // Syntactically matches YYYY-MM-DD but month 13 / day 40 do not exist.
-  assert.deepEqual(deriveForecast(steadyHistory(), '2026-13-40'), { state: 'unknown', reason: 'deadline-unknown' });
+  assert.deepEqual(deriveForecast(steadyHistory(), '2026-13-40'), { state: 'advancing', reason: 'progressing-no-deadline' });
   // February 30th does not exist either (naive Date arithmetic rolls it to March 2nd).
-  assert.deepEqual(deriveForecast(steadyHistory(), '2026-02-30'), { state: 'unknown', reason: 'deadline-unknown' });
+  assert.deepEqual(deriveForecast(steadyHistory(), '2026-02-30'), { state: 'advancing', reason: 'progressing-no-deadline' });
 });
 
 test('unknown execution-unknown: latest execution signal is not supported (AC2)', () => {
@@ -228,6 +242,63 @@ test('on_track pace-meets-required: observed pace meets or exceeds what the dead
   assert.deepEqual(deriveForecast(steadyHistory(), '2026-09-14'), { state: 'on_track', reason: 'pace-meets-required' });
 });
 
+// --- 013-02 (ADR-0018 tier 3): neutral date-free pace ----------------------
+// deriveForecast(observations, deadline) with `deadline` absent/invalid: the
+// SAME Gates 2/3/4/4.5 as the deadline path run first; only once every gate
+// passes does the dateless branch resolve to a neutral motion read instead
+// of ADR-0012's hard colour. Below any gate, the result is unchanged
+// `unknown` with that gate's own reason — never `deadline-unknown`, and
+// never a motion state coerced without a real within-window pace (AC5).
+
+test('stalled (013-02 AC1): deadline absent, evidence-sufficient history with exactly zero pace', () => {
+  const history = [
+    obsSupported('2026-08-01T00:00:00Z', { done: 6, denom: 10 }),
+    obsSupported('2026-08-05T00:00:00Z', { done: 6, denom: 10 }),
+  ];
+  assert.deepEqual(deriveForecast(history, undefined), { state: 'stalled', reason: 'stalled-no-deadline' });
+});
+
+test('stalled (013-02 AC1): a real regression (negative pace), not just flat, without a deadline', () => {
+  const history = [
+    obsSupported('2026-08-01T00:00:00Z', { done: 6, denom: 10 }),
+    obsSupported('2026-08-05T00:00:00Z', { done: 5, denom: 10 }),
+  ];
+  assert.deepEqual(deriveForecast(history, undefined), { state: 'stalled', reason: 'stalled-no-deadline' });
+});
+
+test('already-complete (013-02 AC1): remaining <= 0 stays on_track/already-complete even with no deadline — never a motion state', () => {
+  const history = [
+    obsSupported('2026-08-01T00:00:00Z', { done: 8, denom: 10 }),
+    obsSupported('2026-08-05T00:00:00Z', { done: 10, denom: 10 }),
+  ];
+  assert.deepEqual(deriveForecast(history, undefined), { state: 'on_track', reason: 'already-complete' });
+});
+
+test('gated to unknown (013-02 AC5): a dateless project below the execution/history/staleness gates keeps that gate\'s own reason, never deadline-unknown', () => {
+  assert.deepEqual(deriveForecast([], undefined), { state: 'unknown', reason: 'execution-unknown' });
+  assert.deepEqual(
+    deriveForecast([obsSupported('2026-08-05T00:00:00Z', { done: 6, denom: 10 })], undefined),
+    { state: 'unknown', reason: 'insufficient-history' },
+  );
+  const staleHistory = [
+    obsSupported('2026-08-01T00:00:00Z', { done: 2, denom: 10 }),
+    obsSupported('2026-08-05T00:00:00Z', {
+      done: 6, denom: 10, freshness: { state: 'stale', reason: 'source-last-committed-30d-ago' },
+    }),
+  ];
+  assert.deepEqual(deriveForecast(staleHistory, undefined), { state: 'unknown', reason: 'stale-evidence' });
+});
+
+test('gated to unknown scope-changed (013-02 AC5): denom moved at the latest step for a dateless project — Gate 4 is not relaxed, no coerced motion state', () => {
+  const history = [
+    obsSupported('2026-08-01T00:00:00Z', { done: 2, denom: 10 }),
+    obsSupported('2026-08-05T00:00:00Z', { done: 3, denom: 10 }),
+    // A spec was shaped/deferred at the latest step: denom moved 10 → 12.
+    obsSupported('2026-08-06T00:00:00Z', { done: 3, denom: 12 }),
+  ];
+  assert.deepEqual(deriveForecast(history, undefined), { state: 'unknown', reason: 'scope-changed' });
+});
+
 // --- AC3: explained, deterministic read ----------------------------------
 
 test('every result — colour or unknown — carries a reason from the ADR-0012 set (AC3)', () => {
@@ -242,7 +313,10 @@ test('every result — colour or unknown — carries a reason from the ADR-0012 
   ];
   for (const result of cases) {
     assert.ok(ADR0012_REASONS.has(result.reason), `unexpected reason: ${result.reason}`);
-    assert.ok(['on_track', 'at_risk', 'unknown'].includes(result.state));
+    // 013-02: the dateless cases above now resolve to ADR-0018's tier-3
+    // `advancing` state instead of `unknown` — still a well-formed,
+    // explained state, just not one of the original three.
+    assert.ok(['on_track', 'at_risk', 'unknown', 'advancing', 'stalled'].includes(result.state));
   }
 });
 
@@ -277,7 +351,12 @@ test('attachForecasts attaches {state, reason} per project from its own history 
   const historiesByProjectId = { alpha: steadyHistory() };
   const attached = attachForecasts(data, historiesByProjectId);
   assert.deepEqual(attached.projects[0].forecast, { state: 'on_track', reason: 'pace-meets-required' });
-  assert.deepEqual(attached.projects[1].forecast, { state: 'unknown', reason: 'deadline-unknown' });
+  // Beta has no history entry at all (empty history), so Gate 2 (fresh
+  // supported latest execution) fails BEFORE the deadline is ever consulted
+  // — 013-02 (ADR-0018): the evidence gates run unconditionally, so an
+  // evidence-gate failure reads as that gate's own reason, never a
+  // `deadline-unknown` placeholder, even for a dateless project.
+  assert.deepEqual(attached.projects[1].forecast, { state: 'unknown', reason: 'execution-unknown' });
   // Untouched fields survive the attach.
   assert.equal(attached.projects[0].project.label, 'Alpha');
   assert.equal(attached.generatedAt, data.generatedAt);
@@ -294,7 +373,7 @@ test('attachForecasts derives from an empty history when a project id has no ent
 // with no read/derive-layer change. Uses a fixed far-future deadline
 // (2099-12-31) so the test is not time-fragile. ---
 
-test('a multi-entry project\'s entry-level deadline reaches joinProjectProfileFields → attachForecasts → attentionQueue and lifts it off tier 3, while an undated sibling stays deadline-unknown/tier 3 (AC4)', () => {
+test('a multi-entry project\'s entry-level deadline reaches joinProjectProfileFields → attachForecasts → attentionQueue and lifts it off tier 3, while an undated sibling with the same evidence stays tier 3 as a neutral motion read (AC4; updated 013-02 for ADR-0018 tier 3)', () => {
   const config = normalizeConfig({
     version: 1,
     projects: [{
@@ -331,15 +410,23 @@ test('a multi-entry project\'s entry-level deadline reaches joinProjectProfileFi
   assert.deepEqual(joined.projects[0].project.deadline, { value: '2099-12-31', provenance: 'release' });
   assert.equal(joined.projects[1].project.deadline, undefined);
 
-  const historiesByProjectId = { [dated.id]: steadyHistory() };
+  // 013-02: both siblings get the SAME evidence-sufficient history, so the
+  // undated sibling clears every ADR-0012 evidence gate and reaches
+  // ADR-0018's tier-3 neutral read (`advancing`), not a bare
+  // `deadline-unknown` (that reason is retired for deriveForecast's own
+  // output once evidence is sufficient — see derive.test.mjs's dedicated
+  // 013-02 tests above).
+  const historiesByProjectId = { [dated.id]: steadyHistory(), [sibling.id]: steadyHistory() };
   const withForecasts = attachForecasts(joined, historiesByProjectId);
   assert.notEqual(withForecasts.projects[0].forecast.reason, 'deadline-unknown');
-  assert.equal(withForecasts.projects[1].forecast.reason, 'deadline-unknown');
+  assert.deepEqual(withForecasts.projects[1].forecast, { state: 'advancing', reason: 'progressing-no-deadline' });
 
   const attention = attentionQueue(withForecasts);
   const datedEntry = attention.find((entry) => entry.id === dated.id);
   const siblingEntry = attention.find((entry) => entry.id === sibling.id);
   assert.notEqual(datedEntry.tier, 3);
+  // The dateless sibling's neutral `advancing` read sits in the SAME tier a
+  // `deadline-unknown` project would have (AC3) — no re-tiering.
   assert.equal(siblingEntry.tier, 3);
-  assert.equal(siblingEntry.forecast.reason, 'deadline-unknown');
+  assert.equal(siblingEntry.forecast.reason, 'progressing-no-deadline');
 });

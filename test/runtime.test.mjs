@@ -775,6 +775,22 @@ test('card renders unknown forecast as an explicit, legible state — never blan
   assert.doesNotMatch(html, /chip ok">forecast: unknown/);
 });
 
+// 013-02 (ADR-0018 tier 3): the secondary forecast chip renders advancing/
+// stalled as plain, uncoloured chips — none of the existing on_track/
+// at_risk/unknown colour classes apply.
+test('card renders advancing/stalled forecast states in a neutral, uncoloured chip — no RAG colour class (013-02 AC2/AC4)', () => {
+  const context = cardContext();
+  for (const forecast of [
+    { state: 'advancing', reason: 'progressing-no-deadline' },
+    { state: 'stalled', reason: 'stalled-no-deadline' },
+  ]) {
+    const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast };
+    const html = context.card(project);
+    assert.match(html, new RegExp(`forecast: ${forecast.state}`), forecast.state);
+    assert.doesNotMatch(html, new RegExp(`chip (ok|error|partial)">forecast: ${forecast.state}`), forecast.state);
+  }
+});
+
 test('card render does not regress when forecast is entirely absent (pre-009-02 identity)', () => {
   const context = cardContext();
   const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
@@ -1288,6 +1304,15 @@ test('forecastToRag: every unknown reason (including deadline-unknown) maps to g
   }
 });
 
+// 013-02 (ADR-0018 tier 3): the neutral date-free pace states hit
+// forecastToRag's existing default branch — no dedicated case, so no
+// accidental colour is possible for them.
+test('forecastToRag: advancing/stalled (ADR-0018 tier 3 neutral motion) map to gray, never a RAG colour (013-02 AC2)', () => {
+  const context = cardContext();
+  assert.equal(context.forecastToRag({ state: 'advancing', reason: 'progressing-no-deadline' }), 'gray');
+  assert.equal(context.forecastToRag({ state: 'stalled', reason: 'stalled-no-deadline' }), 'gray');
+});
+
 test('forecastToRag: absent/malformed forecast is never coerced to green — it reads gray (never-green-default guard)', () => {
   const context = cardContext();
   assert.equal(context.forecastToRag(undefined), 'gray');
@@ -1357,6 +1382,29 @@ test('card RAG callout on a non-green (yellow/red/gray) card DOES show the ⚠ +
     assert.match(callout, new RegExp(`rag-callout rag-${band}`), band);
     assert.match(callout, /class="rag-flag" tabindex="0" role="img"/, band);
     assert.match(callout, /⚠/, band);
+  }
+});
+
+// 013-02 (ADR-0018 tier 3): advancing/stalled are gray like the other
+// `unknown` reasons, but — unlike them — carry nothing actionable to
+// resolve, so they must read as a neutral, informational label, not an
+// alarm: gray band, friendly copy, but NO ⚠ (mirrors green's treatment).
+test('card RAG callout for advancing/stalled (ADR-0018 tier 3) is gray with neutral copy and NO ⚠ — informational, not an alarm (013-02 AC4)', () => {
+  const context = cardContext();
+  const cases = [
+    { forecast: { state: 'advancing', reason: 'progressing-no-deadline' }, copy: 'advancing — no deadline set' },
+    { forecast: { state: 'stalled', reason: 'stalled-no-deadline' }, copy: 'stalled — no deadline set' },
+  ];
+  for (const { forecast, copy } of cases) {
+    const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast };
+    const html = context.card(project);
+    const callout = ragCalloutMarkup(html);
+    assert.match(html, /class="card rag-gray"/, forecast.state);
+    assert.match(callout, /rag-callout rag-gray/, forecast.state);
+    assert.match(callout, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), forecast.state);
+    assert.doesNotMatch(callout, /rag-flag/, forecast.state);
+    assert.doesNotMatch(callout, /⚠/, forecast.state);
+    assert.doesNotMatch(html, /rag-green|rag-yellow|rag-red/, forecast.state);
   }
 });
 

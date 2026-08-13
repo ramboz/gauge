@@ -71,16 +71,25 @@ function fractionOf(progress) {
   return 1;
 }
 
-// ADR-0012's four-gate minimum-evidence rule. `observations` is the
-// project's history (ascending by collectedAt); `deadline` is the caller-
-// supplied profile deadline value (an ISO date string, the literal
-// "unknown", or absent).
+// ADR-0012's four-gate minimum-evidence rule, extended by ADR-0018 (tier 3,
+// slice 013-02) to a dateless project: `observations` is the project's
+// history (ascending by collectedAt); `deadline` is the caller-supplied
+// profile deadline value (an ISO date string, the literal "unknown", or
+// absent). Whether or not a deadline is present, Gates 2-4.5 below run
+// unconditionally and observedPace is computed over the same trailing
+// stable-scope window — ADR-0018's "every tier reuses the existing evidence
+// gates" rule. `deadlineAt` is only consulted once every gate has passed, to
+// choose between ADR-0012's hard colour (tier 1) and ADR-0018's neutral
+// motion read (tier 3); a project with no deadline that fails an evidence
+// gate gets that gate's own reason, never a `deadline-unknown` placeholder —
+// "below any gate the forecast is unchanged unknown with its existing
+// reason" (ADR-0018).
 export function deriveForecast(observations, deadline) {
   const history = observations || [];
 
-  // Gate 1 — known concrete deadline.
+  // Deadline lookup — a tier discriminator now, not an early gate: consulted
+  // only after every evidence gate below has passed (see comment above).
   const deadlineAt = deadlineMs(deadline);
-  if (deadlineAt === null) return unknown('deadline-unknown');
 
   // Gate 2 — fresh, supported latest execution reading.
   if (!history.length) return unknown('execution-unknown');
@@ -132,14 +141,27 @@ export function deriveForecast(observations, deadline) {
   // ADR-0012 refinement.
   if (latestDenom === 0) return unknown('execution-unknown');
 
-  // All four gates passed: deterministic colour computation (ADR-0012),
-  // over the trailing stable-scope window just established.
+  // All gates passed: deterministic pace/remaining computation over the
+  // trailing stable-scope window, shared by every tier below (ADR-0012 tier
+  // 1 and ADR-0018 tier 3 alike).
   const latestFraction = fractionOf(latestExecution.value.progress);
   const remaining = 1 - latestFraction;
   if (remaining <= 0) return { state: 'on_track', reason: 'already-complete' };
 
   const earliestFraction = fractionOf(earliest.execution.value.progress);
   const observedPace = (latestFraction - earliestFraction) / spanDays;
+
+  // ADR-0018 tier 3 — no committed target of any kind: a neutral motion
+  // read only. Never a hard colour (on_track/at_risk) and never a reason
+  // that implies a target exists; `remaining <= 0` was already handled
+  // above, identically for both tiers.
+  if (deadlineAt === null) {
+    return observedPace > 0
+      ? { state: 'advancing', reason: 'progressing-no-deadline' }
+      : { state: 'stalled', reason: 'stalled-no-deadline' };
+  }
+
+  // ADR-0012 tier 1 (unchanged): committed hard deadline.
   const daysToDeadline = (deadlineAt - Date.parse(latest.collectedAt)) / DAY_MS;
 
   if (daysToDeadline <= 0) return { state: 'at_risk', reason: 'deadline-passed' };
@@ -198,7 +220,22 @@ function tierOf(entry) {
   const forecast = entry.forecast || {};
   if (forecast.state === 'at_risk') return 1;
   if (forecast.reason === 'stale-evidence' || narrativeBlockerPresent(entry)) return 2;
-  if (forecast.reason === 'deadline-unknown' || forecast.reason === 'scope-changed') return 3;
+  // ADR-0018 tier 3: a dateless project's neutral motion read (`advancing`/
+  // `stalled`) sits in the SAME tier as `deadline-unknown` — never re-tiered
+  // above it by `stalled`, never below it by `advancing` (the round-3
+  // urgency-laundering option ADR-0018 rejected).
+  // NOTE: since 013-02, `deriveForecast` no longer emits `deadline-unknown`
+  // (the evidence gates run before the deadline branch, so a dateless project
+  // resolves to advancing/stalled or a gate-specific unknown). The
+  // `deadline-unknown` case here is retained only for standalone `attentionQueue`
+  // callers/fixtures that hand-build a forecast; the composed
+  // `attachForecasts → attentionQueue` pipeline never reaches it.
+  if (
+    forecast.reason === 'deadline-unknown' ||
+    forecast.reason === 'scope-changed' ||
+    forecast.state === 'advancing' ||
+    forecast.state === 'stalled'
+  ) return 3;
   if (forecast.reason === 'insufficient-history' || forecast.reason === 'execution-unknown') return 4;
   if (forecast.state === 'on_track') return 5;
   // Defensive: a malformed/unrecognized forecast must NOT be coerced to the
@@ -240,6 +277,11 @@ function tierReason(entry, tier, deadlineAt, nowMs) {
       // owner input needed is a DEADLINE, independent of whether a goal is set.
       // (Earlier copy said "needs a goal set", which mis-read for a project that
       // had authored a goal but no deadline — found running the real corpus.)
+      // ADR-0018 tier 3: `advancing`/`stalled` are a dateless project's own
+      // neutral motion read — informational, not a call to action like the
+      // other tier-3 reasons, and never phrased as an alarm.
+      if (forecast.state === 'advancing') return 'advancing — no deadline set';
+      if (forecast.state === 'stalled') return 'stalled — no deadline set';
       return forecast.reason === 'deadline-unknown' ? 'needs a deadline set' : 'scope changed — needs review';
     case 4:
       return forecast.reason === 'insufficient-history' ? 'awaiting more history' : 'no delivery status yet';

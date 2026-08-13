@@ -39,6 +39,38 @@ test('tier 3: unknown/scope-changed maps to tier 3 (AC2)', () => {
   assert.equal(ranked.tier, 3);
 });
 
+// --- 013-02 AC3 (ADR-0018 tier 3): a dateless project's neutral motion   ---
+// --- read sits in the SAME tier as `deadline-unknown` — never re-tiered.  ---
+// --- Guards the round-3 urgency-laundering option ADR-0018 rejected       ---
+// --- (ranking `stalled` above `advancing`/`unknown` by smuggling urgency  ---
+// --- through queue position instead of colour).                          ---
+
+test('tier 3: advancing (dateless neutral motion) maps to tier 3, same as deadline-unknown (013-02 AC3)', () => {
+  const [ranked] = queueOf([entry('alpha', { state: 'advancing', reason: 'progressing-no-deadline' })]);
+  assert.equal(ranked.tier, 3);
+});
+
+test('tier 3: stalled (dateless neutral motion) maps to tier 3, NOT above advancing/unknown (013-02 AC3)', () => {
+  const [ranked] = queueOf([entry('alpha', { state: 'stalled', reason: 'stalled-no-deadline' })]);
+  assert.equal(ranked.tier, 3);
+});
+
+test('attention order is unchanged for a stalled dateless project vs a deadline-unknown one — same tier, same within-tier position (013-02 AC3)', () => {
+  const stalledRanked = queueOf([entry('proj', { state: 'stalled', reason: 'stalled-no-deadline' })]);
+  const deadlineUnknownRanked = queueOf([entry('proj', { state: 'unknown', reason: 'deadline-unknown' })]);
+  assert.equal(stalledRanked[0].tier, deadlineUnknownRanked[0].tier);
+  // Mixed alongside a deadline-unknown sibling, `stalled` must NOT sort
+  // ahead of it (no urgency laundering through queue position) — with no
+  // deadline on either and identical tiers, id is the only tie-break, so
+  // whichever id sorts first wins regardless of stalled vs advancing/unknown.
+  const mixed = queueOf([
+    entry('zzz-stalled', { state: 'stalled', reason: 'stalled-no-deadline' }),
+    entry('aaa-unknown', { state: 'unknown', reason: 'deadline-unknown' }),
+  ]);
+  assert.deepEqual(mixed.map((r) => r.tier), [3, 3]);
+  assert.deepEqual(mixed.map((r) => r.id), ['aaa-unknown', 'zzz-stalled']);
+});
+
 test('tier 4: unknown/insufficient-history maps to tier 4 (AC2)', () => {
   const [ranked] = queueOf([entry('alpha', { state: 'unknown', reason: 'insufficient-history' }, { deadline: '2026-09-01' })]);
   assert.equal(ranked.tier, 4);
@@ -186,6 +218,13 @@ test('tier 2-4 reason strings are the exact user-facing dashboard copy (AC1)', (
   assert.equal(dlReason, 'needs a deadline set');
   assert.equal(histReason, 'awaiting more history');
   assert.equal(execReason, 'no delivery status yet');
+});
+
+test('tier 3 neutral-motion copy is informational, not phrased as an alarm (013-02 AC3/AC4)', () => {
+  const advancingReason = queueOf([entry('a', { state: 'advancing', reason: 'progressing-no-deadline' })])[0].reason;
+  const stalledReason = queueOf([entry('a', { state: 'stalled', reason: 'stalled-no-deadline' })])[0].reason;
+  assert.equal(advancingReason, 'advancing — no deadline set');
+  assert.equal(stalledReason, 'stalled — no deadline set');
 });
 
 // --- honesty: a malformed forecast must not be coerced to the healthiest tier ---
