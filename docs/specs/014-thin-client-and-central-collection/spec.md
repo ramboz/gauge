@@ -67,23 +67,36 @@ scheduled/daemon collection, or add source-repo writes (release No-Gos).
   `deriveForecast` already folds it and lights real RAG once the series clears
   ADR-0012's gate — so 014-02 is chiefly a *capture-quality* rule plus
   verification, not a new derivation.
-- **The hook mechanism exists.** Claude Code hooks fire in this environment
-  (SessionStart, UserPromptSubmit observed). The specific `Stop`/`SessionEnd`
-  payload — whether it hands the hook the session's working directory — is an
-  **external contract** not verifiable from this repo; see `## Assumptions` A1.
+- **The hook contract is verified (A1 resolved 2026-08-18).** Per the Claude
+  Code hooks docs (`code.claude.com/docs/en/hooks.md`, `hooks-guide.md`) plus a
+  local probe of `~/.claude/settings.json`: a **`SessionEnd`** hook receives a
+  JSON payload on **stdin** carrying `cwd`, `session_id`, `transcript_path`,
+  `hook_event_name`, and `exit_reason` — so cwd → project mapping is reliable. It
+  runs an **arbitrary command** (`node scripts/…`), registered under
+  `hooks.SessionEnd[].hooks[]` (`{type:"command", command, timeout?}`) in
+  `~/.claude/settings.json`. **`SessionEnd` (once per session), not `Stop`**
+  (fires every turn), is the correct trigger. Constraint: SessionEnd hooks share
+  a **~1.5s budget** (raise via per-hook `timeout`, max 60s); failure is
+  **non-blocking** (never disrupts session exit). Local grounding: the user's
+  `settings.json` **already has a populated `SessionEnd` group** (+8 other
+  events) → the installer must **merge**, never create-or-clobber (slice 014-01
+  AC4). See `## Assumptions` A1 for the resolved record.
 
 ## Assumptions
 
 Load-bearing claims about surfaces this repo **cannot** probe (external Claude
 Code contracts). Each is marked; slices that depend on one carry `frame_review`.
 
-- **A1 — Stop/SessionEnd hook payload exposes the session working directory.**
-  Slice 014-01 maps a finished session to a configured Gauge project by matching
-  the session's cwd against `project.path`. This assumes the `Stop`/`SessionEnd`
-  hook provides the cwd (or a resolvable project path) and can invoke a Node
-  script. If it does not, 014-01's mapping needs an alternate key (env var,
-  explicit per-project hook arg) — the slice's first task **verifies the payload
-  before building on it** (grounding-by-probe against the real hook).
+- **A1 — RESOLVED (verified 2026-08-18), not an open assumption.** The
+  `SessionEnd` hook payload **does** expose the session cwd on stdin, so
+  014-01's cwd → `project.path` mapping is sound; the hook runs a Node script and
+  registers in `~/.claude/settings.json` under `hooks.SessionEnd`. Trigger is
+  **`SessionEnd`** (once per session), **not `Stop`** (per-turn). Verified via
+  the Claude Code hooks docs + a local `settings.json` probe (see `## Current
+  state`). The only residual: exact field names / the ~1.5s timeout budget can
+  drift by Claude Code version, so 014-01's first task **re-confirms them against
+  the installed version** before writing the hook — a cheap re-probe, not an open
+  design risk.
 - **A2 — Session end is a reasonable capture trigger cadence.** We assume
   real usage produces session ends spaced enough that the 014-02 spacing rule
   yields a useful `progress(t)` series (not all clustered in one burst). The
