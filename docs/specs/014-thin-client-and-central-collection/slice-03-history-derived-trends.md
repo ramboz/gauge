@@ -20,27 +20,35 @@ rising / flat).
 - ✅ Slice 014-02 landed: a spaced observation series accrues per project.
 - ✅ Probe-confirmed: velocity (`src/velocity.mjs`) and cost (`src/cost.mjs`) are
    read-time joins, **not** persisted in snapshots (schema carries only
-   repository/execution/workstreams/hygiene/narrative) — so a trend needs an
-   explicit source decision (below), resolved as this slice's first task.
-- ✅ Open decision resolved and recorded before implementation (see AC1).
+   repository/execution/workstreams/hygiene/narrative).
+- ✅ Assumption **A3** (cost is bucketable by time window from timestamped
+   transcripts) verified as this slice's first task — velocity from `git log` is
+   already known-reconstructable, so only the cost half needs the probe.
 
-**Open decision (resolve first, record in the deviation log):** *recompute* each
-metric historically vs. *persist* it into each snapshot going forward.
-- **Recompute** (preferred if A3 holds): velocity from `git log` windows, cost
-  from timestamped transcripts (`src/cost.mjs`), bucketed by time. No schema
-  change; works retroactively over backfilled history.
-- **Persist forward**: write the metric into each new snapshot. Only for a metric
-  that genuinely cannot be reconstructed. **A change to the observation schema is
-  load-bearing and requires an ADR** (amends the observation-v1 contract) before
-  this slice can adopt it.
+**Source decision (settled 2026-08-18 — owner):** **recompute both metrics** on
+every read; do **not** persist either into snapshots in this slice.
+- **Velocity** → recomputed from `git log` windows over the accrued/backfilled
+  observation timeline. Git is the durable source of truth; a persisted value
+  could disagree with git after a rebase, so velocity stays recompute-only —
+  **never persisted** (owner call).
+- **Cost** → recomputed from timestamped transcripts (`src/cost.mjs`) for the
+  visible trend. Works retroactively over backfilled history **while transcripts
+  survive**.
+- **No schema change, no ADR in this slice.** Cost *durability* once transcripts
+  age out is a separate, triggered follow-up (`docs/refinement-todo.md` — "Cost
+  trend durability: persist cost into snapshots when transcripts rotate"), not
+  committed here. When that trigger fires, the read layer prefers a persisted
+  value and falls back to recompute — an additive, ADR-gated schema change then,
+  not now.
 
 **Acceptance Criteria:**
 
-1. **Source decision grounded.** The recompute-vs-persist decision is made by
-   probing A3 (can velocity and cost each be bucketed by time window from git /
-   transcripts?) and recorded in the deviation log with the evidence. If
-   *persist* is chosen for either metric, the ADR amending the observation
-   contract is written and linked before the schema changes.
+1. **Cost reconstructability grounded (A3).** Before building the cost trend, a
+   probe confirms cost is bucketable by time window from the timestamped
+   transcripts `src/cost.mjs` already reads, recorded in the deviation log with
+   evidence. If A3 fails for cost, the cost trend degrades to explicit `unknown`
+   over the un-reconstructable window (never a fabricated series) and the
+   durability follow-up is re-scoped — velocity is unaffected.
 2. **Velocity trend renders.** The card shows a velocity **trend** across the
    accrued window (a multi-point series over observation time, distinct from the
    existing single-window git sparkline). A pure fold produces the trend series
@@ -75,8 +83,8 @@ recompute chosen).
 - [ ] Deviation log produced under this slice heading.
 - [ ] Reconciliation sweep produced under this slice heading.
 - [ ] Reconciliation review passed.
-- [ ] `docs/refinement-todo.md` updated if any decisions were deferred; ADR
-      written if the schema was amended.
+- [ ] `docs/refinement-todo.md` carries the cost-durability follow-up (persist
+      cost when transcripts rotate) with its resolution trigger.
 
 **Anti-horizontal-phasing check:** After this slice the owner sees, on each card,
 whether velocity and spend are trending up or down over the accrued window — a

@@ -169,6 +169,26 @@ self-clearing once history is seeded. Verified against the real corpus: 5 of 9
 projects hinted, the 2 stale-evidence and 2 execution-unknown cards correctly
 excluded.
 
+### Cost trend durability: persist cost into snapshots when transcripts rotate (from spec 014-03)
+
+**Decision needed:** whether to persist the per-observation cost figure into each
+snapshot going forward, so a project's cost **trend** survives the underlying
+Claude Code transcripts being rotated/deleted. Spec 014-03 ships both the velocity
+and cost trends by **recompute** (owner decision 2026-08-18): velocity from
+`git log` (durable — never persisted), cost from timestamped transcripts
+(`src/cost.mjs`). Velocity needs no persistence ever. Cost recompute is honest
+**while transcripts survive**; once they age out of `GAUGE_TRANSCRIPTS_ROOT` the
+historical cost trend loses its source. The fix is additive: the SessionEnd
+capture (014-01) also embeds the computed cost in the snapshot, and the read layer
+**prefers a persisted value, falls back to recompute**. This amends the
+observation-v1 contract → **load-bearing, requires an ADR** before the schema
+changes.
+
+**Resolution trigger:** when transcripts begin aging out such that a cost trend
+reads `unknown` over a window that was real, or when the owner pulls cost
+durability into a committed release. (Deferred on leanness grounds — YAGNI until
+transcript rotation actually threatens the recompute source.)
+
 ### Hosted small-team access
 
 **Decision needed:** GitHub App registration, server-side session model,

@@ -101,11 +101,13 @@ Code contracts). Each is marked; slices that depend on one carry `frame_review`.
   real usage produces session ends spaced enough that the 014-02 spacing rule
   yields a useful `progress(t)` series (not all clustered in one burst). The
   git-backfill seed (013-01) is the complement for sparse forward history.
-- **A3 — Historical velocity/cost are reconstructable at read time.** Velocity
-  derives from `git log` (fully historical) and cost from timestamped Claude Code
-  transcripts (`src/cost.mjs`, per-request timestamps). We assume both can be
-  bucketed by time window without a persisted per-snapshot value — making the
-  014-03 "recompute" option viable. To be confirmed as 014-03's first task.
+- **A3 — Historical cost is reconstructable at read time.** Velocity from
+  `git log` is known-reconstructable (fully historical); the open half is cost —
+  we assume it can be bucketed by time window from the timestamped transcripts
+  `src/cost.mjs` already reads, without a persisted per-snapshot value. This is
+  what makes 014-03's settled "recompute both" viable; confirmed as 014-03's
+  first task. (Cost *durability* after transcripts rotate is out of 014-03 — a
+  triggered follow-up in `docs/refinement-todo.md`.)
 - **A4 — A live-session signal source exists and is optional.** Slice 014-04
   assumes some local, read-only source reports which Gauge projects have an
   **active** Claude Code session right now (e.g. a session registry / lock /
@@ -132,11 +134,12 @@ ships the hook, so it is not horizontal phasing.
 - **014-03 — History-derived velocity + cost trends** (Data: a new time-series
   view over the accrued series, vs. today's point-in-time value). A velocity
   trend and a cost trend on the card, read from the accrued observation window.
-  **Open decision** (resolve as the slice's first task): *recompute* each metric
-  historically (A3) vs. *persist* it into each snapshot going forward. Prefer
-  recompute if A3 holds (no schema change, works over backfilled history too);
-  fall back to forward-persist only for a metric that cannot be reconstructed. A
-  schema change to the observation contract would be load-bearing → ADR.
+  **Source decision settled (owner, 2026-08-18): recompute both**, persist
+  neither in this slice — velocity from `git log` (durable source; never
+  persisted, so it can't disagree with git after a rebase), cost from timestamped
+  transcripts (works while transcripts survive). No schema change, no ADR. Cost
+  *durability* once transcripts age out is a triggered follow-up in
+  `docs/refinement-todo.md`, not committed here.
 - **014-04 — Live-session "running now" enrichment (optional)** (Interface: an
   optional extra signal channel that degrades cleanly). A "running now" indicator
   and an in-flight enrichment sourced from live-session data (A4), present when
