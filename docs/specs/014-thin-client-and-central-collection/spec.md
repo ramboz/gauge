@@ -166,20 +166,21 @@ ships the hook, so it is not horizontal phasing.
 
 - **014-01 — Session-stop capture hook + auto-installer** (Path: the automated
   capture path, alongside the existing manual `npm run collect`). The thin
-  client: a `SessionEnd` hook that maps session cwd → project (matching only —
-  it observes `project.path`), **skips no-change captures** (the non-regression
-  guard, so it never floods a false stall into the RAG chip), and writes one
-  genuine-change snapshot; an installer that auto-registers it in
-  `~/.claude/settings.json` (idempotent, backs up, reversible — owner chose
-  auto-write).
-- **014-02 — Capture-validity hardening → honest RAG** (Rules: harden the
-  captured series so RAG reads truthfully). Keep-latest storage hygiene, honest
-  `scope-changed` where `denom` churns, **stall-not-masked** (a quiet project
-  reads stale, not a frozen `on_track`), and backfill+capture compose. The
-  primary no-change dedup lives in 014-01; the worktree-exclusion premise was
-  dropped as architecturally precluded (captures read `project.path`, main tree).
-  Payoff: a stable-scope worked project goes gray → green/amber on **captured**
-  history, verified by a dogfood probe.
+  client: a `SessionEnd` hook that maps session cwd → project (matching only — it
+  observes `project.path`) and writes one snapshot **unconditionally** (no
+  content-dedup — owner decision: pace is endpoint-based/density-invariant, and a
+  flat-progress-near-deadline `at_risk` is honest, so dedup would only mask real
+  stalls); an installer that auto-registers it in `~/.claude/settings.json`
+  (idempotent, backs up, reversible — owner chose auto-write).
+- **014-02 — Capture-validity hardening → honest RAG** (Rules: harden the captured
+  series so RAG reads truthfully). (1) storage hygiene — coalesce byte-identical
+  consecutive captures while **advancing** the timestamp (no bloat, no masked
+  stall); (2) forecast **currency** — a read-layer live-tail splice so `latest`
+  reflects "now", making a stalled project honestly decay to `at_risk`; plus honest
+  `scope-changed` where `denom` churns, and backfill+capture compose. The
+  worktree-exclusion premise was dropped as architecturally precluded (captures
+  read `project.path`, main tree). Payoff: a stable-scope worked project goes gray
+  → green/amber on **captured** history, verified by a dogfood probe.
 - **014-03 — History-derived velocity + cost trends** (Data: a new time-series
   view over the accrued series, vs. today's point-in-time value). A velocity
   trend and a cost trend on the card, read from the accrued observation window.

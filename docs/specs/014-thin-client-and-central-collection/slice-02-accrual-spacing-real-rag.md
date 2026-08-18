@@ -11,68 +11,69 @@ arch_review: true
 
 ## Slice 014-02 — capture-validity hardening: honest RAG on captured history
 
-**Goal:** Harden the captured `progress(t)` series into an **honest** one so that
-the RAG chip reads truthfully on real captured history: dense genuine-change
-captures don't bloat storage, a genuinely **stalled** project surfaces as stale
-(not a frozen `on_track`), a **scope-churning** project reads honest
-`scope-changed`, and backfilled + captured records compose as one series. This is
-the capture-validity hardening layer on top of 014-01's minimal no-change guard —
-it *lets* real RAG light **where scope is stable and a target is committed**; it
-does not, and cannot, force RAG green.
+**Goal:** Make the RAG chip read truthfully on real captured history by hardening
+two things on top of 014-01's unconditional capture: (1) **storage hygiene** —
+coalesce byte-identical consecutive captures while *advancing* the timestamp (no
+bloat, no masked stalls); (2) **forecast currency** — a read-layer live-tail splice
+so the forecast's `latest` reflects "now", making a stalled project honestly decay
+to `at_risk` as its deadline nears. Plus honest `scope-changed` where `denom`
+churns, and backfill+capture compose. It *lets* real RAG light **where scope is
+stable and a target is committed**; it does not, and cannot, force RAG green.
 
-**Frame (corrected across 2 frame-critique rounds — read `src/derive.mjs` and
-`src/observation.mjs` before implementing):**
-- **The no-change guard lives in 014-01, not here.** Round 2 established that the
-  hook must be non-regressive *standalone*, so the primary no-change content-dedup
-  (skip a capture whose git HEAD + `{done,denom}` equals the latest) shipped in
-  **014-01 AC2**. This slice hardens the *rest*.
-- **Pace uses two endpoints only** (`window[0]` earliest same-denom, and `latest`,
-  `src/derive.mjs:~157`), so clustered captures do **not** distort pace — the value
-  of coalescing is **storage/span hygiene**, not pace fidelity.
+**Frame (corrected across 3 frame-critique rounds + owner decision 2026-08-18 —
+read `src/derive.mjs`, `src/observation.mjs`, `src/server.mjs` before implementing):**
+- **014-01 captures unconditionally — no content-dedup (owner decision).** Round 3
+  established (against `src/derive.mjs:162`) that pace is **endpoint-based and
+  density-invariant**, so deduping flat points changes no forecast; and that a
+  flat-progress-near-deadline `at_risk` is **honest**, not a false alarm — while
+  content-dedup would *freeze the latest timestamp and mask real stalls*. So the
+  earlier "no-change guard" was **removed** from 014-01. This slice owns the two
+  concerns that remain.
+- **Storage hygiene that ADVANCES the timestamp (AC1).** Unconditional capture
+  bloats storage with byte-identical consecutive records. Coalesce a run of
+  identical-`{HEAD,done,denom}` captures to **one record whose timestamp is the
+  newest** — pure storage hygiene, **forecast-neutral** (the retained latest
+  timestamp still advances, so a stall is *not* masked; freezing the timestamp is
+  exactly what we must not do). Density-invariance (pace is 2-endpoint) is what
+  makes this safe.
+- **Forecast currency via a read-layer live-tail (AC4).** The real lever on the
+  RAG chip is the **latest timestamp**: `deriveForecast` reads `daysToDeadline =
+  deadline − latest.collectedAt` and `spanDays` from `latest.collectedAt`
+  (`derive.mjs:194,162`). A stalled project (no new captures) keeps an old stored
+  `latest` → a stale-but-`on_track` reading. Fix in the **read layer**: splice the
+  server's live `observeAll` observation (current state, `now` timestamp, current
+  freshness) as the series **tail** before the pure fold, so `latest` always
+  reflects now — a flat-progress project then decays to `at_risk` as its deadline
+  nears, honestly, whether it is being worked or fully quiet. Keeps
+  `deriveForecast` I/O-free and `now`-free (ADR-0006); the clock lives in the read
+  layer that already runs `observeAll`.
 - **The binding gate is scope stability, not density.** Gate 4 walks back only
   while `denom` is *exactly* equal to the latest (`DENOM_TOLERANCE = 0`,
   `src/derive.mjs:~120`); a churning `denom` collapses the window → honest
-  `unknown('scope-changed')`, which this slice **must not** paper over.
-- **Worktree captures are a non-issue (round-2 grounding):** the hook observes the
-  matched project's `project.path` (main tree) via `observeProject`
-  (`gitInfo(project.path)`, `observation.mjs:671`), **not** the session cwd. So a
-  worktree/feature-branch session captures the unchanged main tree → a no-change
-  capture skipped by 014-01 AC2. Unmerged branch state can never enter
-  `progress(t)`; there is **no** worktree-exclusion rule to write (an earlier draft
-  AC4 was dropped as architecturally precluded — it would only drop legitimate
-  mainline points).
-- **New hazard this slice owns — a READ-LAYER fix (rounds 2–3):** because
-  no-change captures are skipped, a genuinely **stalled** project stops accruing
-  records, so its latest *stored* record keeps a capture-time `freshness: fresh`
-  forever; `deriveForecast` Gate 2 (`derive.mjs:109`) folds
-  `readObservationHistory` (the stored series) and reads that frozen value, so it
-  would keep reporting `on_track`. The fix **cannot** live in the capture layer
-  (there is no event to dedup, and *keeping* no-change captures would contradict
-  014-01 AC2). It lives in the **read layer**: re-evaluate freshness against
-  read-time `now` from the source's last-commit date — the server already runs a
-  live `observeAll` scan whose freshness *is* current, so splice/reconcile that
-  live reading as the series tail before the pure fold, keeping `deriveForecast`
-  I/O-free and `now`-free (ADR-0006). Keys on **source-commit age vs read-time
-  now** (`gitFreshness(lastCommit, now)`, `lib.mjs:351`), not capture/`collectedAt`
-  age. Owned by AC4.
+  `unknown('scope-changed')`, which this slice **must not** paper over (AC2).
+- **Worktree captures are a non-issue:** the hook observes `project.path` (main
+  tree, `observation.mjs:671`), not the session cwd — no worktree-exclusion rule
+  exists to write.
 
 **DoR:**
-- ✅ Slice 014-01 landed: session-end captures accrue under `stateDir`, already
-  no-change-deduped (014-01 AC2) — genuine-change points only.
-- ✅ Probe-confirmed: `collectObservation` appends per call (`src/state.mjs:245`);
-  dense genuine-change captures still motivate keep-latest hygiene (AC1).
-- ✅ Grounded read of `deriveForecast` (Gate 4 `DENOM_TOLERANCE=0`; 2-endpoint
-  pace; Gate 2 frozen freshness) and `observation.mjs` (captures read
-  `project.path`) recorded above — the ACs target the real gate, not density, and
-  claim no worktree hazard.
+- ✅ Slice 014-01 landed: session-end captures accrue **unconditionally** under
+  `stateDir` (no content-dedup — owner decision) — honest forward history.
+- ✅ Grounded read recorded above: pace is endpoint-based/density-invariant
+  (`derive.mjs:162`); the latest **timestamp** is the RAG lever; the server runs a
+  live `observeAll` scan (`server.mjs`) whose freshness/timestamp are current and
+  can be spliced as the series tail.
+- ✅ Gate 4 `DENOM_TOLERANCE=0` and `project.path` observation confirmed — the ACs
+  target the real gate, claim no worktree hazard, and never freeze a timestamp.
 
 **Acceptance Criteria:**
 
-1. **Storage hygiene, keep-latest within a window.** Dense genuine-change captures
-   within a documented minimum interval (`MIN_CAPTURE_INTERVAL`, a named constant)
-   are coalesced to **keep the newest** reading (never drop fresher progress for a
-   stale one — resolving skip-vs-coalesce in favour of freshness). Framed as
-   storage/span hygiene, **not** pace fidelity (pace is 2-endpoint).
+1. **Storage hygiene that advances the timestamp (never freezes).** A run of
+   consecutive captures with identical `{HEAD, done, denom}` is coalesced to **one
+   retained record whose `collectedAt` is the newest** of the run — so storage
+   doesn't bloat, but the retained latest timestamp still **advances** (a stall is
+   never masked by a frozen timestamp). Forecast-neutral by density-invariance
+   (pace is 2-endpoint). Observable: N identical consecutive captures leave one
+   record; its `collectedAt` equals the newest capture's, not the oldest.
 2. **Real RAG only where scope is stable — honest `scope-changed` otherwise.**
    Two end-to-end assertions through the read layer on **captured** (not
    backfilled) records: (a) a **stable-denom** series spanning ≥ the ADR-0012
@@ -82,33 +83,32 @@ does not, and cannot, force RAG green.
 3. **Backfill + capture compose.** Hygiene treats git-backfilled seed records
    (013-01) and session-end captures as one ascending series (same directory, same
    `readObservationHistory` read) without double-counting or ordering errors.
-4. **A stall is never masked by frozen freshness (read-layer re-evaluation).**
-   Because no-change captures are skipped (014-01 AC2), a stalled project's latest
-   stored record keeps its capture-time `freshness: fresh`; `deriveForecast` Gate 2
-   reads that stored value and would keep reporting `on_track`. This slice
-   re-evaluates freshness **at read time** — recomputing `gitFreshness(lastCommit,
-   now)` from the source's last-commit date against the current clock (splice the
-   read layer's live `observeAll` freshness as the series tail before the fold;
-   `deriveForecast` stays I/O-free and `now`-free). Keys on **source-commit age vs
-   read-time now**, not capture age. **Observable that bites when the re-eval is
-   removed:** a project whose stored record was `fresh` at capture but whose
-   `lastCommit` is now older than `STALE_AFTER_DAYS` reads a **non-`on_track`**
-   state end-to-end — whereas trusting the frozen record reads a false `on_track`
-   (so removing the feature flips the test red; a pre-stale fixture does not
-   vacuously pass).
+4. **Forecast currency via a read-layer live-tail splice (stalls surface).** The
+   read layer splices the server's live `observeAll` observation — current state,
+   `now` `collectedAt`, current freshness — as the **tail** of the series handed to
+   `deriveForecast`, so `latest` always reflects now (`deriveForecast` stays
+   I/O-free and `now`-free; ADR-0006). Effect: a flat-progress project decays to
+   `at_risk` as its deadline nears — whether it is still being worked (dense
+   captures) or fully quiet (no captures) — because the spliced `now` latest grows
+   `spanDays` and shrinks `daysToDeadline`. **Observable that bites when the splice
+   is removed:** a project whose newest *stored* record is old but whose milestone
+   is unfinished reads a stale `on_track` off that frozen latest; with the splice it
+   reads `at_risk`/stale end-to-end (remove the feature → test flips red; a
+   pre-aged fixture does not vacuously pass).
 5. **Honest below the gate.** A project still short of the minimum-history bar
    reads explicit `unknown (insufficient-history)` and still shows the
    013-shipped first-run hint — validity never fabricates a band it has not
    earned.
 
-**Edge cases to cover explicitly:** dense genuine-change captures within the
-interval (keep-latest, AC1); **`denom` changes across retained captures** (forecast
-reads `scope-changed`, not a fabricated band — AC2b); a stalled project whose stored
-record was `fresh` at capture but whose `lastCommit` is now older than
-`STALE_AFTER_DAYS` (read-time re-eval reads stale, not a frozen `on_track` — AC4); a capture
-whose `collectedAt` is *older* than the latest record (clock skew — never
-reorders/dedups incorrectly); a same-day backfill seed then a fresh capture
-(compose, keep-latest, AC3).
+**Edge cases to cover explicitly:** a run of byte-identical consecutive captures
+(coalesced to one record at the newest `collectedAt` — AC1); **`denom` changes
+across retained captures** (forecast reads `scope-changed`, not a fabricated band —
+AC2b); a stalled project whose newest stored record is old but whose milestone is
+unfinished (live-tail splice → `at_risk`/stale, not a frozen `on_track` — AC4); the
+live-tail splice must not double-count when the live observation equals the newest
+stored record (idempotent tail); a capture whose `collectedAt` is *older* than the
+latest record (clock skew — never reorders incorrectly); a same-day backfill seed
+then a fresh capture (compose, AC3).
 
 **DoD:**
 - [ ] All ACs pass; full test suite green (no regressions).
