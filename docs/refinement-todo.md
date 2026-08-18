@@ -138,7 +138,7 @@ mainline-only.
 **Resolution trigger:** when a corpus project's genuinely-recent work sits on a
 branch/worktree and the stale reading misleads.
 
-### First-run board is all-`unknown` (from spec 009 corpus run)
+### ~~First-run board is all-`unknown`~~ — RESOLVED 2026-08-18 (first-run hint shipped)
 
 **Decision needed:** whether to add a first-run affordance. Forecast colours
 (`on_track`/`at_risk`) require ≥2 observations spanning ≥1 day (ADR-0012), so a
@@ -157,6 +157,17 @@ accrual.
 
 **Resolution trigger:** before onboarding a new user, or with the next dashboard
 polish pass.
+
+**Resolved 2026-08-18 — both halves now shipped.** The git-backfill seed landed as
+slice 013-01 (`src/backfill.mjs`, `npm run backfill`); the remaining first-run hint
+ships here as a board-level affordance in `public/index.html` (`firstRunHint`). It
+keys strictly on the *remediable* gray reason — `insufficient-history` (deriveForecast
+Gate 3/4) — and points at `npm run backfill`, the ADR-0017 remedy; it is deliberately
+NOT shown for `deadline-unknown` / `execution-unknown` / `stale-evidence`, which
+backfill would not resolve. Pure presentation (no derivation change) and
+self-clearing once history is seeded. Verified against the real corpus: 5 of 9
+projects hinted, the 2 stale-evidence and 2 execution-unknown cards correctly
+excluded.
 
 ### Hosted small-team access
 

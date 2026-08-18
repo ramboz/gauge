@@ -25,6 +25,12 @@
   .warn-icon { cursor:help; color:var(--warn); font-weight:700 }.warn-icon:focus { outline:2px solid var(--accent); outline-offset:2px }
   .unknown { color:var(--muted) }.spark { letter-spacing:1px }
   ul { margin:6px 0; padding-left:20px } button { color:inherit; background:var(--card); border:1px solid var(--border); border-radius:7px; padding:4px 10px; cursor:pointer }
+  /* First-run hint (refinement-todo, reframed by ADR-0017): a calm, board-level
+     affordance shown only while some forecast is gray for lack of history —
+     accent-tinted, never a RAG colour (it is not a risk, it is a one-time
+     "you can light these up" nudge). Self-clears once backfill seeds history. */
+  .hint { max-width:1200px; margin:0 auto 18px; padding:10px 14px; border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:8px; background:var(--inset); color:var(--text); font-size:13px }
+  .hint code { background:var(--card); border:1px solid var(--border); border-radius:5px; padding:1px 6px; font-size:12px }
   .queue-section { max-width:1200px; margin:0 auto 20px }.queue-section h2 { font-size:14px; margin:0 0 8px }
   .queue { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px }
   .queue-row { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:8px 12px }
@@ -34,6 +40,7 @@
 </head>
 <body>
 <header><h1>Gauge</h1><div class="meta"><span id="scanned"></span> <button onclick="load()">refresh</button></div></header>
+<div id="hint"></div>
 <div class="queue-section"><h2>Attention queue</h2><ol class="queue" id="queue"><li class="meta">ranking portfolio attention…</li></ol></div>
 <div class="grid" id="grid"><div class="meta">collecting current observations…</div></div>
 <script>
@@ -570,7 +577,23 @@ function safeQueueRow(item) { try { return queueRow(item); } catch(error) { retu
 // green) — the grid-level application of ragSortKey; a stable sort (Array's
 // native sort, guaranteed stable since ES2019) so same-band projects keep
 // their /api/data order rather than reshuffling on every refresh.
-async function load() { try { const response=await fetch('/api/data'); const data=await response.json(); if(data.error) throw new Error(data.error); const scanned=document.getElementById('scanned'); const observedAt=new Date(data.generatedAt); scanned.textContent='observed '+relativeTime(observedAt); scanned.title=observedAt.toLocaleString(); data.projects=[...data.projects].sort((a,b)=>ragSortKey(a.forecast)-ragSortKey(b.forecast)); document.getElementById('grid').innerHTML=data.projects.map(safeCard).join(''); document.getElementById('queue').innerHTML=(data.attention||[]).map(safeQueueRow).join('')||'<li class="meta">no projects to rank yet</li>'; } catch(error) { document.getElementById('grid').innerHTML=`<p class="err">${esc(error.message)}</p>`; } }
+// First-run hint (refinement-todo "First-run board is all-`unknown`", reframed
+// 2026-08-07 by ADR-0017): the cold-start remedy is no longer "collect daily and
+// wait" — the full progress(t) series already lives in git, so a one-time
+// `npm run backfill` reconstructs history and lights the forecasts on day one.
+// This hint keys on the *remediable* signal only: a forecast whose reason is
+// `insufficient-history` (deriveForecast Gate 3/4 — <2 supported observations,
+// or too short a span — the exact case backfill fixes). It is deliberately NOT
+// shown for `deadline-unknown`/`execution-unknown`/`stale-evidence` grays, which
+// backfill would not resolve. Pure presentation over the same /api/data the
+// cards read — no derivation change; it self-clears once history is seeded.
+function firstRunHint(projects) {
+  const thin=(projects||[]).filter((p)=>p.forecast&&p.forecast.reason==='insufficient-history').length;
+  if(!thin) return '';
+  const noun=thin===1?'project':'projects';
+  return `<div class="hint">History is thin on ${thin} ${noun} — run <code>npm run backfill</code> to reconstruct forecasts from git, or let observations accrue over time.</div>`;
+}
+async function load() { try { const response=await fetch('/api/data'); const data=await response.json(); if(data.error) throw new Error(data.error); const scanned=document.getElementById('scanned'); const observedAt=new Date(data.generatedAt); scanned.textContent='observed '+relativeTime(observedAt); scanned.title=observedAt.toLocaleString(); data.projects=[...data.projects].sort((a,b)=>ragSortKey(a.forecast)-ragSortKey(b.forecast)); document.getElementById('hint').innerHTML=firstRunHint(data.projects); document.getElementById('grid').innerHTML=data.projects.map(safeCard).join(''); document.getElementById('queue').innerHTML=(data.attention||[]).map(safeQueueRow).join('')||'<li class="meta">no projects to rank yet</li>'; } catch(error) { document.getElementById('grid').innerHTML=`<p class="err">${esc(error.message)}</p>`; } }
 load(); setInterval(load,120000);
 </script>
 </body>

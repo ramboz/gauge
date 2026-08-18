@@ -1520,3 +1520,52 @@ test('card RAG callout escapes forecast reason text — no raw markup injected (
   const html = context.card(project);
   assert.doesNotMatch(html, /<img/);
 });
+
+// --- First-run hint (refinement-todo, reframed by ADR-0017) ----------------
+// A calm board-level affordance that keys on the ONE remediable gray reason —
+// `insufficient-history` (deriveForecast Gate 3/4) — and points the owner at
+// `npm run backfill`. Pure presentation over /api/data; self-clears once
+// history is seeded. Driven with REAL deriveForecast output, not hand-mocked
+// reasons, so the trigger stays honest if the gate reasons ever move.
+function insufficientHistoryForecast() {
+  // One supported, fresh observation → Gate 3 (<2 supported) → insufficient-history.
+  const execution = { type: 'execution', version: 1, status: 'supported',
+    freshness: { state: 'fresh' }, value: { progress: { done: 1, denom: 4, pct: 25 } } };
+  const forecast = deriveForecast(
+    [{ collectedAt: '2026-08-18T00:00:00Z', signals: [execution] }],
+    '2026-09-30');
+  assert.equal(forecast.reason, 'insufficient-history'); // guard: fixture still hits the gate
+  return forecast;
+}
+
+test('firstRunHint: fires on an insufficient-history forecast and names `npm run backfill`', () => {
+  const context = cardContext();
+  const html = context.firstRunHint([{ forecast: insufficientHistoryForecast() }]);
+  assert.match(html, /class="hint"/);
+  assert.match(html, /npm run backfill/);
+  assert.match(html, /1 project\b/); // singular, one thin project
+});
+
+test('firstRunHint: counts thin projects and pluralizes', () => {
+  const context = cardContext();
+  const f = insufficientHistoryForecast();
+  const html = context.firstRunHint([{ forecast: f }, { forecast: f }, { forecast: f }]);
+  assert.match(html, /3 projects\b/);
+});
+
+test('firstRunHint: silent when no forecast is history-thin (empty string, self-clears)', () => {
+  const context = cardContext();
+  // deadline-unknown / on_track / absent forecasts are NOT the backfill-remediable
+  // case — the hint must not appear for them.
+  assert.equal(context.firstRunHint([{ forecast: { state: 'unknown', reason: 'deadline-unknown' } }]), '');
+  assert.equal(context.firstRunHint([{ forecast: { state: 'on_track', reason: 'pace-meets-required' } }]), '');
+  assert.equal(context.firstRunHint([{ forecast: null }, {}]), '');
+  assert.equal(context.firstRunHint([]), '');
+  assert.equal(context.firstRunHint(undefined), '');
+});
+
+test('firstRunHint: is wired into load() and has a DOM mount', () => {
+  const html = read('public/index.html');
+  assert.match(html, /id="hint"/); // mount point exists
+  assert.match(html, /getElementById\('hint'\)\.innerHTML=firstRunHint\(/); // wired in load()
+});
