@@ -106,10 +106,16 @@ read `src/derive.mjs`, `src/observation.mjs`, `src/server.mjs` before implementi
    off that frozen latest; with the splice it reads `at_risk` (fresh-but-flat
    fixture) or `unknown('stale-evidence')` (quiet fixture) end-to-end — removing
    the splice flips both tests. Two fixtures required (the bands differ).
-5. **Honest below the gate.** A project still short of the minimum-history bar
-   reads explicit `unknown (insufficient-history)` and still shows the
-   013-shipped first-run hint — validity never fabricates a band it has not
-   earned.
+5. **Honest below the gate (bar measured post-splice).** ADR-0012's ≥2-supported /
+   ≥1-day-span bar is measured on the series **after** the live tail is spliced
+   (the tail is a `supported` execution, so Gate 3 counts it, `derive.mjs:112-115`).
+   So `insufficient-history` is the honest read only when there are **0 stored
+   supported records** or the spliced span is `< 1 day` — i.e. one genuinely
+   time-separated stored capture plus the live `now` tail can legitimately light a
+   real band (two real, time-separated readings, per ADR-0012's letter). Such a
+   project still shows the 013 first-run hint until it clears; validity never
+   fabricates a band it has not earned. (Fixture: 0 stored supported records → the
+   spliced tail alone stays `insufficient-history`.)
 
 **Edge cases to cover explicitly:** a run of byte-identical consecutive captures
 (coalesced to one record at the newest `collectedAt` — AC1); **`denom` changes
@@ -117,11 +123,12 @@ across retained captures** (forecast reads `scope-changed`, not a fabricated ban
 AC2b); a **fresh-but-flat** project (recent commits, flat progress → live-tail splice →
 `at_risk` — AC4); a **quiet** project (git stale > `STALE_AFTER_DAYS` → live-tail
 splice → `unknown('stale-evidence')`, never a frozen `on_track` and never coerced
-to `at_risk` — AC4); the
-live-tail splice must not double-count when the live observation equals the newest
-stored record (idempotent tail); a capture whose `collectedAt` is *older* than the
-latest record (clock skew — never reorders incorrectly); a same-day backfill seed
-then a fresh capture (compose, AC3).
+to `at_risk` — AC4); the live tail when its `{HEAD,done,denom}` **equals** the
+newest stored record — it is **always appended** (extends `spanDays` with a `now`
+timestamp, adds no distinct progress step; a literal "skip when equal" is wrong and
+would reintroduce the frozen-latest false `on_track`); a capture whose `collectedAt`
+is *older* than the latest record (clock skew — never reorders incorrectly); a
+same-day backfill seed then a fresh capture (compose, AC3).
 
 **DoD:**
 - [ ] All ACs pass; full test suite green (no regressions).
