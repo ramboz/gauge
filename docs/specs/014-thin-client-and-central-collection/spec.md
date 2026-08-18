@@ -132,30 +132,28 @@ Code contracts). Each is marked; slices that depend on one carry `frame_review`.
   `SessionEnd` hook **clears it by `session_id`**. The set of live markers **is**
   "running now" — a signal the thin client creates via the start/end bracket, not
   one it hopes to find.
-  **Liveness (2nd frame-critique round): a window over write-once `startedAt`
-  cannot separate "crashed long ago" from "running for hours"** — `startedAt` is
-  session *birth*, not liveness, and Claude Code sessions are routinely
-  long-lived, so any window short enough to catch a crash false-negatives a real
-  long session, and any wide enough to keep it reintroduces the crash false
-  positive. The marker therefore carries **`lastActivityAt`, refreshed on every
-  `Stop` hook** (a verified hook event), and the **staleness window keys on
-  `lastActivityAt`**, not `startedAt`.
-  **Honest residual (3rd frame-critique round):** `Stop` fires at *turn end*, not
-  continuously — so `lastActivityAt` proves the session was **alive as of its last
-  completed turn**, not "alive this instant." Agentic turns (long tool loops,
-  builds, test runs) can run minutes, so the window **must be bounded below by the
-  longest plausible single turn** or an actively-crunching long turn goes stale
-  mid-turn. That leaves an **irreducible crash-detection lag ≈ the window
-  length** (a crashed session reads "running" until the window elapses) that no
-  constant can close. This is an **accepted trade**, safe precisely because the
-  signal is **optional / additive / absent-safe**: a briefly-stale "running" or a
-  briefly-late crash-clear degrades softly and never produces a wrong *hard*
-  status (the derived in-flight signal remains the base). So the thin client
-  installs **three** hooks: `SessionStart` (create marker), `Stop` (refresh
-  `lastActivityAt`), and 014-01's `SessionEnd` (capture snapshot + remove marker).
-  Still optional and absent-safe: no markers directory → today's
-  branch/worktree/draft-PR in-flight derivation, no regression (release Risk:
-  thin-client coupling).
+  **Liveness — a window over write-once `startedAt` can't separate "crashed long
+  ago" from "running for hours" (`startedAt` is birth, not liveness); and refreshing
+  it with a per-turn `Stop` hook (rounds 2–3) imposes a real write-side tax on the
+  engineer's session (`Stop` fires every turn, runs mid-conversation, and
+  participates in the block/continue protocol — a different, unverified execution
+  model from `SessionEnd`) for a signal that "must never hard-depend" on that tool
+  (round 4).** Resolved at the design level: **liveness is the transcript file's
+  mtime**, which Claude Code advances continuously as it writes the JSONL
+  transcript — a **free, hook-less** activity signal, finer than turn-end. So the
+  thin client installs **two** hooks: `SessionStart` (write a marker
+  `{session_id, cwd, transcriptPath, startedAt}` under `stateDir`) and 014-01's
+  `SessionEnd` (capture snapshot + remove the marker). At read time a marker is
+  "running now" iff its `transcriptPath` **mtime is within the staleness window**;
+  a crashed session (no `SessionEnd`) stops advancing its transcript → correctly
+  goes stale. **Owned residual:** mtime is an activity proxy — an *open-but-idle*
+  session (no writes for the window) reads "not running", which is treated as
+  correct (idle ≠ actively running); and this rests on `transcriptPath` being
+  available at `SessionStart` and its mtime tracking activity, **re-confirmed as
+  the first task** (A4 was verified for `SessionEnd`; `SessionStart`'s payload is
+  the cheap re-probe). Still optional and absent-safe: no markers directory →
+  today's branch/worktree/draft-PR in-flight derivation, no regression, and the
+  read layer only `stat`s the transcript (never reads its content — privacy).
 
 ## Decomposition
 
@@ -193,11 +191,11 @@ ships the hook, so it is not horizontal phasing.
 - **014-04 — Live-session "running now" enrichment (optional)** (Interface: an
   optional extra signal channel that degrades cleanly). A "running now" indicator
   sourced from a **thin-client-owned active-session marker** (SessionStart writes
-  it, a `Stop` hook refreshes its `lastActivityAt` liveness, 014-01's SessionEnd
-  clears it — A4 reframed + liveness-corrected), enriching in-flight additively,
-  absent-safe when no markers exist, stale markers excluded by a window keyed on
-  **`lastActivityAt`** (so long-running sessions stay "running") — the seam to
-  the engineer daily-driver.
+  it recording `transcriptPath`, 014-01's SessionEnd clears it; **liveness = the
+  transcript file's mtime**, hook-less — no per-turn `Stop` tax), enriching
+  in-flight additively, absent-safe when no markers exist, stale/idle markers
+  excluded by an mtime window (a live session writing its transcript stays
+  "running") — the seam to the engineer daily-driver.
 
 Dependency order: 014-01 → 014-02 → 014-03; 014-04 is independent of the trend
 slices (needs only the read layer) and is the natural **cutline candidate** if

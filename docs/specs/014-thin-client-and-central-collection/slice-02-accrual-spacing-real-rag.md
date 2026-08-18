@@ -15,9 +15,10 @@ arch_review: true
 two things on top of 014-01's unconditional capture: (1) **storage hygiene** —
 coalesce byte-identical consecutive captures while *advancing* the timestamp (no
 bloat, no masked stalls); (2) **forecast currency** — a read-layer live-tail splice
-so the forecast's `latest` reflects "now", making a stalled project honestly decay
-to `at_risk` as its deadline nears. Plus honest `scope-changed` where `denom`
-churns, and backfill+capture compose. It *lets* real RAG light **where scope is
+so the forecast's `latest` reflects "now", removing the false `on_track` a frozen
+old record produces (a fresh-but-flat project honestly reads `at_risk`; a quiet
+project honestly reads `unknown('stale-evidence')` — never coerced). Plus honest
+`scope-changed` where `denom` churns, and backfill+capture compose. It *lets* real RAG light **where scope is
 stable and a target is committed**; it does not, and cannot, force RAG green.
 
 **Frame (corrected across 3 frame-critique rounds + owner decision 2026-08-18 —
@@ -40,13 +41,15 @@ read `src/derive.mjs`, `src/observation.mjs`, `src/server.mjs` before implementi
   RAG chip is the **latest timestamp**: `deriveForecast` reads `daysToDeadline =
   deadline − latest.collectedAt` and `spanDays` from `latest.collectedAt`
   (`derive.mjs:194,162`). A stalled project (no new captures) keeps an old stored
-  `latest` → a stale-but-`on_track` reading. Fix in the **read layer**: splice the
+  `latest` → a false-`on_track` reading. Fix in the **read layer**: splice the
   server's live `observeAll` observation (current state, `now` timestamp, current
   freshness) as the series **tail** before the pure fold, so `latest` always
-  reflects now — a flat-progress project then decays to `at_risk` as its deadline
-  nears, honestly, whether it is being worked or fully quiet. Keeps
-  `deriveForecast` I/O-free and `now`-free (ADR-0006); the clock lives in the read
-  layer that already runs `observeAll`.
+  reflects now. **Gate 2 then splits the outcome honestly** (`derive.mjs:109`, runs
+  before the pace fold): a **fresh-but-flat** project → `at_risk
+  (no-forward-progress)`; a **quiet** project (git stale > `STALE_AFTER_DAYS`) →
+  `unknown('stale-evidence')`. We never coerce `fresh` to force `at_risk` (ADR-0006
+  "unknown, never coerce"). The win: **no false `on_track` off a frozen latest.**
+  Keeps `deriveForecast` I/O-free and `now`-free (ADR-0006).
 - **The binding gate is scope stability, not density.** Gate 4 walks back only
   while `denom` is *exactly* equal to the latest (`DENOM_TOLERANCE = 0`,
   `src/derive.mjs:~120`); a churning `denom` collapses the window → honest
@@ -83,18 +86,26 @@ read `src/derive.mjs`, `src/observation.mjs`, `src/server.mjs` before implementi
 3. **Backfill + capture compose.** Hygiene treats git-backfilled seed records
    (013-01) and session-end captures as one ascending series (same directory, same
    `readObservationHistory` read) without double-counting or ordering errors.
-4. **Forecast currency via a read-layer live-tail splice (stalls surface).** The
-   read layer splices the server's live `observeAll` observation — current state,
-   `now` `collectedAt`, current freshness — as the **tail** of the series handed to
-   `deriveForecast`, so `latest` always reflects now (`deriveForecast` stays
-   I/O-free and `now`-free; ADR-0006). Effect: a flat-progress project decays to
-   `at_risk` as its deadline nears — whether it is still being worked (dense
-   captures) or fully quiet (no captures) — because the spliced `now` latest grows
-   `spanDays` and shrinks `daysToDeadline`. **Observable that bites when the splice
-   is removed:** a project whose newest *stored* record is old but whose milestone
-   is unfinished reads a stale `on_track` off that frozen latest; with the splice it
-   reads `at_risk`/stale end-to-end (remove the feature → test flips red; a
-   pre-aged fixture does not vacuously pass).
+4. **Forecast currency via a read-layer live-tail splice (no false `on_track`).**
+   The read layer splices the server's live `observeAll` observation — current
+   state, `now` `collectedAt`, current freshness — as the **tail** of the series
+   handed to `deriveForecast`, so `latest` always reflects now (`deriveForecast`
+   stays I/O-free and `now`-free; ADR-0006). This removes the **false `on_track`**
+   a frozen old stored record produces; the two honest outcomes, split by Gate 2
+   (`derive.mjs:109`, which runs *before* the pace logic), are:
+   - **Fresh-but-flat** (recent commits, milestone `done/denom` flat): passes
+     Gate 2, reaches the pace fold → **`at_risk` (`no-forward-progress`)** as the
+     deadline nears. Honest.
+   - **Quiet** (no commits > `STALE_AFTER_DAYS`): the live tail is `stale` → Gate 2
+     returns **`unknown('stale-evidence')`**. Honest — we do **not** coerce `fresh`
+     to force `at_risk` (that would fabricate evidence, an ADR-0006 violation).
+
+   Either way, **never a false `on_track` off a frozen latest.** **Observable that
+   bites when the splice is removed:** a project whose newest *stored* record was
+   `fresh` at capture but whose `lastCommit` is now old reads a false `on_track`
+   off that frozen latest; with the splice it reads `at_risk` (fresh-but-flat
+   fixture) or `unknown('stale-evidence')` (quiet fixture) end-to-end — removing
+   the splice flips both tests. Two fixtures required (the bands differ).
 5. **Honest below the gate.** A project still short of the minimum-history bar
    reads explicit `unknown (insufficient-history)` and still shows the
    013-shipped first-run hint — validity never fabricates a band it has not
@@ -103,8 +114,10 @@ read `src/derive.mjs`, `src/observation.mjs`, `src/server.mjs` before implementi
 **Edge cases to cover explicitly:** a run of byte-identical consecutive captures
 (coalesced to one record at the newest `collectedAt` — AC1); **`denom` changes
 across retained captures** (forecast reads `scope-changed`, not a fabricated band —
-AC2b); a stalled project whose newest stored record is old but whose milestone is
-unfinished (live-tail splice → `at_risk`/stale, not a frozen `on_track` — AC4); the
+AC2b); a **fresh-but-flat** project (recent commits, flat progress → live-tail splice →
+`at_risk` — AC4); a **quiet** project (git stale > `STALE_AFTER_DAYS` → live-tail
+splice → `unknown('stale-evidence')`, never a frozen `on_track` and never coerced
+to `at_risk` — AC4); the
 live-tail splice must not double-count when the live observation equals the newest
 stored record (idempotent tail); a capture whose `collectedAt` is *older* than the
 latest record (clock skew — never reorders incorrectly); a same-day backfill seed
