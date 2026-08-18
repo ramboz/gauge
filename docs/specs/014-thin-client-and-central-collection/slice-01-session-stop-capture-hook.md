@@ -27,15 +27,22 @@ on **stdin**, runs `node scripts/…`, and registers under
 `SessionEnd` (once/session), **not** `Stop` (per-turn). SessionEnd hooks share a
 **~1.5s budget** (override via per-hook `timeout`); failure is non-blocking.
 
-**Scope boundary (frame-critique):** this slice captures a **raw activity
-sample** — the observed state at session end, written unconditionally. It does
-**not** decide whether that sample is a *valid progress point*. Two hazards the
-frame-critique surfaced — (a) a **no-change** session writing a snapshot
-identical to the prior one (which would read as flat/stalled `progress(t)` → a
-false `at_risk`), and (b) a session run from a **`.claude/worktrees/*` feature
-branch** capturing unmerged branch state — are **explicitly 014-02's charter**
-(capture-validity: skip no-change/duplicate captures, handle branch/worktree
-state), not this slice's. 014-01 writes honestly; 014-02 decides what counts.
+**Scope boundary (frame-critique, 2 rounds):** the hook must be **non-regressive
+when installed alone** — the round-2 critique showed that writing *every* session
+end unconditionally floods `progress(t)` with flat/duplicate points that
+`deriveForecast` reads as a false stall/`at_risk`, degrading the RAG chip specs
+012/013 shipped for the entire window before 014-02 lands. So this slice includes
+the **minimal no-change content-dedup** (AC2 below): skip writing a snapshot whose
+observed state equals the latest retained one. That makes install a safe,
+standalone, non-regressive capability. **Grounded design fact:** the hook
+observes the matched project's configured `project.path` (main working tree) via
+`observeProject` (`gitInfo(project.path)`, `observation.mjs:671`) — **not** the
+session's `cwd` (cwd is used only to *match* the project). So a session run from a
+`.claude/worktrees/*` linked worktree captures the **main tree**, which is
+unchanged → a no-change capture → skipped by AC2. Unmerged branch state can never
+enter `progress(t)`. The *richer* validity/hygiene — keep-latest coalescing,
+honest `scope-changed` verification, stall-not-masked, backfill compose — is
+014-02's charter. 014-01 writes only genuine-change points; 014-02 hardens.
 
 **DoR:**
 - ✅ Assumption **A1 resolved** (verified via docs + local `settings.json`
@@ -66,15 +73,24 @@ state), not this slice's. 014-01 writes honestly; 014-02 decides what counts.
    path. Observable: a new
    `<stateDir>/observations/<projectId>/<stamp>-<recordId>.json` appears after a
    session ends in a configured project's tree.
-2. **Unmatched sessions are a clean no-op.** A session whose cwd is under no
+2. **No-change captures are skipped (non-regression guard).** Before writing, the
+   hook compares the observed state — git HEAD (`sourceRevision`) **and** execution
+   progress `{done, denom}` — against the latest retained observation for that
+   project; if identical, it writes **nothing**. A pure, unit-testable predicate
+   over (latest observation, new observation), separate from I/O. Observable: a
+   no-change session (including the common worktree/feature-branch case, where the
+   observed main tree is unchanged) appends no record; a session that advanced
+   HEAD or progress does. This is what stops the hook flooding `progress(t)` with
+   flat points that would read as a false `at_risk`.
+3. **Unmatched sessions are a clean no-op.** A session whose cwd is under no
    configured project writes nothing, exits `0`, and emits a single diagnostic
    line to stderr (never stdout, never a thrown error that could disrupt Claude
    Code's shutdown). The hook never blocks or delays session exit on failure.
-3. **Read-only-source boundary preserved.** The hook writes only under the
+4. **Read-only-source boundary preserved.** The hook writes only under the
    configured `stateDir`; it performs the same `assertDisjoint` source/state
    isolation `collectObservation` already enforces. A test asserts a hook run
    never writes within any configured `project.path`.
-4. **Installer merges idempotently into existing hooks.** An installer command
+5. **Installer merges idempotently into existing hooks.** An installer command
    (e.g. `npm run install-hook`) adds the Gauge entry into the **existing**
    `hooks.SessionEnd` array (which is already populated on a real machine — see
    DoR): it **backs up** the file first, is **idempotent** (re-running does not
@@ -82,17 +98,17 @@ state), not this slice's. 014-01 writes honestly; 014-02 decides what counts.
    key byte-for-byte. Observable: after two runs, `settings.json` contains
    exactly one Gauge SessionEnd hook and all pre-existing hook events / keys
    intact.
-5. **Hook stays within the SessionEnd time budget.** The snapshot write is fast
+6. **Hook stays within the SessionEnd time budget.** The snapshot write is fast
    and **atomic** (temp-file + rename, mirroring `collectObservation`'s
    `atomicRecord`); the registration sets an explicit `timeout` if the write can
    approach the ~1.5s shared budget. Observable: the hook completes well under
    its configured timeout on a representative project; a slow/failed write is
    non-blocking and never leaves a partial record.
-6. **Uninstall / reversibility.** The installer supports removing the hook entry
+7. **Uninstall / reversibility.** The installer supports removing the hook entry
    (e.g. `--uninstall`), restoring settings to their pre-install shape for the
    Gauge entry (unrelated settings untouched). Observable: install → uninstall
    leaves the Gauge hook entry absent and other keys unchanged.
-7. **Failure is isolated.** A malformed config, an unreadable `stateDir`, or a
+8. **Failure is isolated.** A malformed config, an unreadable `stateDir`, or a
    snapshot-write error surfaces as a stderr diagnostic and a non-disruptive exit
    — it never corrupts `~/.claude/settings.json` and never aborts the session.
 
@@ -117,9 +133,11 @@ is present but not valid JSON (refuse + diagnostic, never silent overwrite).
 - [ ] `docs/refinement-todo.md` updated if any decisions were deferred.
 
 **Anti-horizontal-phasing check:** After this slice a Gauge owner installs one
-hook and their project history then accrues automatically at each session end —
-an end-to-end, owner-visible capability (self-updating history), not scaffolding
-for a later slice.
+hook and their project history accrues **genuine-change** points on its own at
+each session end — an end-to-end, owner-visible capability (self-updating
+history) that is **non-regressive standalone** (the AC2 no-change guard means it
+never floods a false stall into the RAG chip while 014-02 is still pending), not
+scaffolding for a later slice.
 
 ### Close-out (post-DONE)
 

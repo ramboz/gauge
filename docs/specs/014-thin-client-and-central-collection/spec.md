@@ -128,14 +128,25 @@ Code contracts). Each is marked; slices that depend on one carry `frame_review`.
   flagged. The honest, grounded design: a **`SessionStart` hook** (one of the 9
   hook events already present in `~/.claude/settings.json`; same verified
   cwd/session_id stdin payload as A1) writes an **active-session marker**
-  `{session_id, cwd, startedAt}` under `stateDir`, and 014-01's `SessionEnd` hook
-  **clears it by `session_id`**. The set of live markers **is** "running now" — a
-  signal the thin client creates via the start/end bracket, not one it hopes to
-  find. Residual: a crashed session leaves a stale marker → bounded by a
-  documented **staleness window** on `startedAt` (past it → not "running", or
-  explicit `unknown`), never a false "running now". Still optional and
-  absent-safe: no markers directory → today's branch/worktree/draft-PR in-flight
-  derivation, no regression (release Risk: thin-client coupling).
+  `{session_id, cwd, startedAt, lastActivityAt}` under `stateDir`, and 014-01's
+  `SessionEnd` hook **clears it by `session_id`**. The set of live markers **is**
+  "running now" — a signal the thin client creates via the start/end bracket, not
+  one it hopes to find.
+  **Liveness (2nd frame-critique round): a window over write-once `startedAt`
+  cannot separate "crashed long ago" from "running for hours"** — `startedAt` is
+  session *birth*, not liveness, and Claude Code sessions are routinely
+  long-lived, so any window short enough to catch a crash false-negatives a real
+  long session, and any wide enough to keep it reintroduces the crash false
+  positive. The marker therefore carries **`lastActivityAt`, refreshed on every
+  `Stop` hook** (fires per turn = proof the session is alive this moment; a
+  verified hook event), and the **staleness window keys on `lastActivityAt`**, not
+  `startedAt`: a crashed session stops refreshing → correctly goes stale; a
+  long-running active session keeps refreshing → stays "running". So the thin
+  client installs **three** hooks: `SessionStart` (create marker), `Stop` (refresh
+  `lastActivityAt`), and 014-01's `SessionEnd` (capture snapshot + remove marker).
+  Still optional and absent-safe: no markers directory → today's
+  branch/worktree/draft-PR in-flight derivation, no regression (release Risk:
+  thin-client coupling).
 
 ## Decomposition
 
@@ -146,14 +157,20 @@ ships the hook, so it is not horizontal phasing.
 
 - **014-01 — Session-stop capture hook + auto-installer** (Path: the automated
   capture path, alongside the existing manual `npm run collect`). The thin
-  client: a `Stop`/`SessionEnd` hook that maps session cwd → project and writes
-  one snapshot; an installer that auto-registers it in `~/.claude/settings.json`
-  (idempotent, backs up, reversible — owner chose auto-write).
-- **014-02 — Accrual spacing rule → real RAG lights** (Rules: the
-  simple-first rule that turns dense session-stop captures into a valid spaced
-  series). A minimum-interval/dedup rule so N session-ends near in time do not
-  bloat history or distort observed pace; the payoff is a worked project's card
-  going gray → green/amber on **captured** (not just backfilled) history.
+  client: a `SessionEnd` hook that maps session cwd → project (matching only —
+  it observes `project.path`), **skips no-change captures** (the non-regression
+  guard, so it never floods a false stall into the RAG chip), and writes one
+  genuine-change snapshot; an installer that auto-registers it in
+  `~/.claude/settings.json` (idempotent, backs up, reversible — owner chose
+  auto-write).
+- **014-02 — Capture-validity hardening → honest RAG** (Rules: harden the
+  captured series so RAG reads truthfully). Keep-latest storage hygiene, honest
+  `scope-changed` where `denom` churns, **stall-not-masked** (a quiet project
+  reads stale, not a frozen `on_track`), and backfill+capture compose. The
+  primary no-change dedup lives in 014-01; the worktree-exclusion premise was
+  dropped as architecturally precluded (captures read `project.path`, main tree).
+  Payoff: a stable-scope worked project goes gray → green/amber on **captured**
+  history, verified by a dogfood probe.
 - **014-03 — History-derived velocity + cost trends** (Data: a new time-series
   view over the accrued series, vs. today's point-in-time value). A velocity
   trend and a cost trend on the card, read from the accrued observation window.
@@ -166,9 +183,11 @@ ships the hook, so it is not horizontal phasing.
 - **014-04 — Live-session "running now" enrichment (optional)** (Interface: an
   optional extra signal channel that degrades cleanly). A "running now" indicator
   sourced from a **thin-client-owned active-session marker** (SessionStart writes
-  it, 014-01's SessionEnd clears it — A4 reframed), enriching in-flight
-  additively, absent-safe when no markers exist, stale markers excluded by a
-  documented window — the seam to the engineer daily-driver.
+  it, a `Stop` hook refreshes its `lastActivityAt` liveness, 014-01's SessionEnd
+  clears it — A4 reframed + liveness-corrected), enriching in-flight additively,
+  absent-safe when no markers exist, stale markers excluded by a window keyed on
+  **`lastActivityAt`** (so long-running sessions stay "running") — the seam to
+  the engineer daily-driver.
 
 Dependency order: 014-01 → 014-02 → 014-03; 014-04 is independent of the trend
 slices (needs only the read layer) and is the natural **cutline candidate** if
