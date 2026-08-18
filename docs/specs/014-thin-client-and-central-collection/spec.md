@@ -1,5 +1,5 @@
 ---
-status: DRAFT
+status: IN_PROGRESS
 skill:
 use_cases: []
 ---
@@ -146,12 +146,15 @@ Code contracts). Each is marked; slices that depend on one carry `frame_review`.
   `SessionEnd` (capture snapshot + remove the marker). At read time a marker is
   "running now" iff its `transcriptPath` **mtime is within the staleness window**;
   a crashed session (no `SessionEnd`) stops advancing its transcript → correctly
-  goes stale. **Owned residual:** mtime is an activity proxy — an *open-but-idle*
-  session (no writes for the window) reads "not running", which is treated as
-  correct (idle ≠ actively running); and this rests on `transcriptPath` being
-  available at `SessionStart` and its mtime tracking activity, **re-confirmed as
-  the first task** (A4 was verified for `SessionEnd`; `SessionStart`'s payload is
-  the cheap re-probe). Still optional and absent-safe: no markers directory →
+  goes stale. **Owned residual:** mtime advances at **write-event cadence** (per
+  JSONL record append), not continuously, so liveness is a proxy with a bounded
+  cadence gap — both an *open-but-idle* session and a long *active-but-write-silent*
+  operation (a multi-minute tool call between `tool_use` and `tool_result`) can
+  read "not running" once past a window sized ≥ the expected max inter-write gap.
+  Accepted because optional/additive/absent-safe, never a hard status. Rests on
+  `transcriptPath` being available at `SessionStart` and its mtime tracking
+  activity, **re-confirmed as the first task** (A4 was verified for `SessionEnd`;
+  `SessionStart`'s payload is the cheap re-probe). Still optional and absent-safe: no markers directory →
   today's branch/worktree/draft-PR in-flight derivation, no regression, and the
   read layer only `stat`s the transcript (never reads its content — privacy).
 

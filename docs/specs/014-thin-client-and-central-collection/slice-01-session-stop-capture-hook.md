@@ -1,9 +1,10 @@
 ---
-status: DRAFT
+status: IN_PROGRESS
 dependencies: [adr-0017]
 last_verified:
 frame_review: true
 arch_review: true
+claimed_by: claude/jig-orient-4db1fd
 ---
 
 <!-- jig grounding (spec 064-02 / ADR-0020): ground factual claims about

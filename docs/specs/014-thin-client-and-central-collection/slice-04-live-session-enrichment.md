@@ -32,8 +32,12 @@ level: liveness = the transcript file's mtime.** Claude Code writes the JSONL
 transcript continuously, so its mtime is a **free, hook-less, continuous** activity
 signal (finer than turn-end). Two hooks only: `SessionStart` (create marker,
 recording `transcriptPath`) + 014-01's `SessionEnd` (clear). **Owned residual:**
-mtime is an activity proxy — an *open-but-idle* session (no writes for the window)
-reads "not running", treated as correct (idle ≠ running); a crashed session's
+mtime advances at **write-event cadence** (per JSONL append), not continuously, so
+liveness is a proxy with a **bounded** cadence gap — both an *open-but-idle*
+session and a long *active-but-write-silent* operation (a multi-minute tool call
+between `tool_use` and `tool_result`) can read "not running" once past the window.
+Sized ≥ the expected max inter-write gap; accepted because the signal is
+optional/additive/absent-safe and never a hard status. A crashed session's
 transcript stops advancing → correctly stale. See spec `## Assumptions` A4.
 
 **DoR:**
@@ -66,13 +70,21 @@ transcript stops advancing → correctly stale. See spec `## Assumptions` A4.
    with none (or only stale markers) does not. Computed in the read layer as a pure
    fold over `(marker, mtime)` pairs (mirroring `attachVelocity`), one `/api/data`
    join.
-5. **Stale markers never read as "running".** A marker whose transcript mtime is
-   older than a documented staleness window (`RUNNING_STALE_AFTER`, a named
-   constant) — a crashed or idle session — is excluded from "running now". A
-   session actively writing its transcript stays "running" indefinitely (continuous
-   mtime), so there is **no long-session false-negative** (the transcript-mtime
-   design dissolves the `Stop`-cadence gap the heartbeat design had). Both
-   directions tested with fixtures that set the transcript file's mtime.
+5. **Stale markers never read as "running" (bounded residual, honestly owned).** A
+   marker whose transcript mtime is older than a documented staleness window
+   (`RUNNING_STALE_AFTER`, a named constant) is excluded from "running now". Note
+   transcript mtime advances at **write-event cadence** (per JSONL record append:
+   assistant message, `tool_use`, `tool_result`), **not continuously** — so a long
+   **active-but-write-silent** operation (a multi-minute build/bash/generation that
+   writes `tool_use`, runs silently, then writes `tool_result`) can transiently
+   read "not running" during that silent window. The window is therefore sized **≥
+   the expected max inter-write gap**, accepting a **bounded** false-negative on
+   long silent operations. This is the same irreducible cadence residual any
+   hook/filesystem liveness proxy carries (the `Stop`-heartbeat had a turn-end
+   version); it is safe because the signal is **optional/additive/absent-safe** and
+   never a wrong *hard* status. Both directions tested with fixtures that set the
+   transcript file's mtime (fixtures exercise the window arithmetic, not the live
+   write cadence — the residual is owned, not closeable).
 6. **Enriches, never overrides, "in flight".** The live signal augments the
    existing in-flight derivation (branches/worktrees/draft PRs) additively — the
    derived signal remains the base; the marker adds the "active now" fact.
