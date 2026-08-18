@@ -101,18 +101,41 @@ Code contracts). Each is marked; slices that depend on one carry `frame_review`.
   real usage produces session ends spaced enough that the 014-02 spacing rule
   yields a useful `progress(t)` series (not all clustered in one burst). The
   git-backfill seed (013-01) is the complement for sparse forward history.
-- **A3 — Historical cost is reconstructable at read time.** Velocity from
-  `git log` is known-reconstructable (fully historical); the open half is cost —
-  we assume it can be bucketed by time window from the timestamped transcripts
-  `src/cost.mjs` already reads, without a persisted per-snapshot value. This is
-  what makes 014-03's settled "recompute both" viable; confirmed as 014-03's
-  first task. (Cost *durability* after transcripts rotate is out of 014-03 — a
-  triggered follow-up in `docs/refinement-todo.md`.)
-- **A4 — A live-session signal source exists and is optional.** Slice 014-04
-  assumes some local, read-only source reports which Gauge projects have an
-  **active** Claude Code session right now (e.g. a session registry / lock /
-  transcript-open heuristic). It must degrade cleanly to absent — the manager
-  view never hard-depends on it (release Risk: thin-client coupling).
+- **A3 — Historical cost is reconstructable into time windows (sharpened by
+  frame-critique).** Velocity from `git log` is known-reconstructable (fully
+  historical). Cost is subtler than the first draft implied: transcript JSONL
+  records **do** carry a `timestamp` field (verified in fixtures and real
+  `~/.claude/projects`), **but `src/cost.mjs` does not read it today** — it
+  extracts `requestId`/`message.id`, model, usage, text — so time-bucketing is
+  **net-new extraction**, not a light recompute. Two grounded hazards 014-03 must
+  resolve before trusting a cost trend: (1) `dedupeRecords` keeps first-occurrence
+  by **filename sort order** (`sessionFilesForProject().sort()` over session-UUID
+  names — arbitrary w.r.t. chronology), safe for a point-in-time total but not for
+  time-bucketing; (2) resumed sessions **replay** earlier records verbatim — it is
+  unverified whether a replayed duplicate preserves its **original** timestamp or
+  gets a replay-time one. If replays rewrite the timestamp, naive bucketing drops
+  spend into the wrong window (a plausible-but-wrong series). 014-03's first task
+  verifies **replay-stable, chronologically-correct** timestamps survive dedup;
+  if not, the cost trend degrades to explicit `unknown`, never a wrong series.
+  (Cost *durability* after transcripts rotate is a separate follow-up in
+  `docs/refinement-todo.md`.)
+- **A4 — REFRAMED (2026-08-18, frame-critique): the thin client OWNS the
+  active-session signal; it does not assume a passive source.** The original A4
+  assumed some pre-existing source reports which projects are active *now*. The
+  frame-critique correctly rejected that: the verified `SessionEnd` contract
+  proves session *end* is observable, not *active-now*, and the only passive
+  candidate (transcript mtime) is exactly the stale-lock false-positive the slice
+  flagged. The honest, grounded design: a **`SessionStart` hook** (one of the 9
+  hook events already present in `~/.claude/settings.json`; same verified
+  cwd/session_id stdin payload as A1) writes an **active-session marker**
+  `{session_id, cwd, startedAt}` under `stateDir`, and 014-01's `SessionEnd` hook
+  **clears it by `session_id`**. The set of live markers **is** "running now" — a
+  signal the thin client creates via the start/end bracket, not one it hopes to
+  find. Residual: a crashed session leaves a stale marker → bounded by a
+  documented **staleness window** on `startedAt` (past it → not "running", or
+  explicit `unknown`), never a false "running now". Still optional and
+  absent-safe: no markers directory → today's branch/worktree/draft-PR in-flight
+  derivation, no regression (release Risk: thin-client coupling).
 
 ## Decomposition
 
@@ -142,8 +165,10 @@ ships the hook, so it is not horizontal phasing.
   `docs/refinement-todo.md`, not committed here.
 - **014-04 — Live-session "running now" enrichment (optional)** (Interface: an
   optional extra signal channel that degrades cleanly). A "running now" indicator
-  and an in-flight enrichment sourced from live-session data (A4), present when
-  available and absent-safe when not — the seam to the engineer daily-driver.
+  sourced from a **thin-client-owned active-session marker** (SessionStart writes
+  it, 014-01's SessionEnd clears it — A4 reframed), enriching in-flight
+  additively, absent-safe when no markers exist, stale markers excluded by a
+  documented window — the seam to the engineer daily-driver.
 
 Dependency order: 014-01 → 014-02 → 014-03; 014-04 is independent of the trend
 slices (needs only the read layer) and is the natural **cutline candidate** if

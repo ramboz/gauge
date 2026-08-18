@@ -27,11 +27,25 @@ on **stdin**, runs `node scripts/…`, and registers under
 `SessionEnd` (once/session), **not** `Stop` (per-turn). SessionEnd hooks share a
 **~1.5s budget** (override via per-hook `timeout`); failure is non-blocking.
 
+**Scope boundary (frame-critique):** this slice captures a **raw activity
+sample** — the observed state at session end, written unconditionally. It does
+**not** decide whether that sample is a *valid progress point*. Two hazards the
+frame-critique surfaced — (a) a **no-change** session writing a snapshot
+identical to the prior one (which would read as flat/stalled `progress(t)` → a
+false `at_risk`), and (b) a session run from a **`.claude/worktrees/*` feature
+branch** capturing unmerged branch state — are **explicitly 014-02's charter**
+(capture-validity: skip no-change/duplicate captures, handle branch/worktree
+state), not this slice's. 014-01 writes honestly; 014-02 decides what counts.
+
 **DoR:**
 - ✅ Assumption **A1 resolved** (verified via docs + local `settings.json`
   probe). First implementation task is a **cheap re-confirm** of the exact field
   names + timeout budget against the installed Claude Code version (they can
-  drift), not an open investigation.
+  drift), not an open investigation. **The re-confirm also checks cwd *value*
+  semantics** (frame-critique secondary): that the payload `cwd` is the stable
+  session root, so cwd → `project.path` matching is reliable for non-standard
+  launches (session started from a parent that is itself a configured project, or
+  spanning projects), not merely that the field is present.
 - ✅ `collectObservation` (`src/state.mjs`) and `observeProject`
   (`src/observation.mjs`) exist and write validated snapshots — confirmed
   (used by `scripts/snapshot.mjs` today).
