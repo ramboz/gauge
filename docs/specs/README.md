@@ -52,6 +52,10 @@
 | [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-01 — git-backfill seed lights the deadline forecast | **DONE** |  |
 | [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-02 — neutral date-free pace (advancing/stalled) | **DONE** |  |
 | [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-03 — curated soft appetite-window (green/amber) | **DONE** |  |
+| [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-01 — session-stop capture hook + auto-installer | DRAFT |  |
+| [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-02 — accrual spacing rule lights real RAG | DRAFT |  |
+| [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-03 — history-derived velocity + cost trends | DRAFT |  |
+| [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-04 — live-session "running now" enrichment (optional) | DRAFT |  |
 
 ## Deferred slices
 
