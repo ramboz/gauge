@@ -54,12 +54,12 @@ deadline-bearing card (e.g. gauge, deadline 2026-08-28) goes from
    not a per-commit explosion.
 
 **DoD:**
-- [ ] All ACs pass; full suite green (no regressions).
-- [ ] Tests exercise each AC with fixtures — including a churning-`denom` fixture
+- [x] All ACs pass; full suite green (no regressions).
+- [x] Tests exercise each AC with fixtures — including a churning-`denom` fixture
       that must read `scope-changed`, and a stable-window fixture that lights up.
-- [ ] Each new test shown to fail when its feature is removed.
-- [ ] Reviewed by `reviewer` subagent (compliance + craft; arch if flag set).
-- [ ] Deviation log + reconciliation sweep produced under this slice heading.
+- [x] Each new test shown to fail when its feature is removed.
+- [x] Reviewed by `reviewer` subagent (compliance + craft; arch if flag set).
+- [x] Deviation log + reconciliation sweep produced under this slice heading.
 - [x] Reconciliation review passed.
 
 **Anti-horizontal-phasing check:** After this slice, the owner opens the dashboard

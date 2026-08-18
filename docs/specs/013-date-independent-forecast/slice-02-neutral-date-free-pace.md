@@ -41,12 +41,12 @@ branch) and does **not** re-tier the ADR-0013 attention queue. Tier 3 of ADR-001
    into a motion state without a real within-window pace.
 
 **DoD:**
-- [ ] All ACs pass; suite green.
-- [ ] Tests cover advancing / stalled / already-complete / gated-to-unknown, plus
+- [x] All ACs pass; suite green.
+- [x] Tests cover advancing / stalled / already-complete / gated-to-unknown, plus
       an assertion that attention order is unchanged for a stalled dateless project.
-- [ ] Each new test shown to fail when its feature is removed.
-- [ ] Reviewed by `reviewer` subagent (compliance + craft).
-- [ ] Deviation log + reconciliation sweep produced.
+- [x] Each new test shown to fail when its feature is removed.
+- [x] Reviewed by `reviewer` subagent (compliance + craft).
+- [x] Deviation log + reconciliation sweep produced.
 - [x] Reconciliation review passed.
 
 **Anti-horizontal-phasing check:** A dateless project's card gains an honest

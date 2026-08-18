@@ -48,12 +48,12 @@ red). Tier 2 of ADR-0018.
    ADR-0018's kill criterion.
 
 **DoD:**
-- [ ] All ACs pass; suite green.
-- [ ] Tests cover within/over-appetite, amber (not red) rendering, precedence over
+- [x] All ACs pass; suite green.
+- [x] Tests cover within/over-appetite, amber (not red) rendering, precedence over
       the neutral tier, and the no-runtime-prose-parse guard.
-- [ ] Each new test shown to fail when its feature is removed.
-- [ ] Reviewed by `reviewer` subagent (compliance + craft; arch if flag set).
-- [ ] Deviation log + reconciliation sweep produced.
+- [x] Each new test shown to fail when its feature is removed.
+- [x] Reviewed by `reviewer` subagent (compliance + craft; arch if flag set).
+- [x] Deviation log + reconciliation sweep produced.
 - [x] Reconciliation review passed.
 
 **Anti-horizontal-phasing check:** An owner who curates an appetite-window sees the
