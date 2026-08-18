@@ -41,11 +41,20 @@ does not, and cannot, force RAG green.
   `progress(t)`; there is **no** worktree-exclusion rule to write (an earlier draft
   AC4 was dropped as architecturally precluded — it would only drop legitimate
   mainline points).
-- **New hazard this slice owns (round-2 secondary):** because no-change captures
-  are skipped, a genuinely **stalled** project stops accruing records, so its
-  latest record's `freshness` is frozen at the last-change `collectedAt` — Gate 2
-  could keep reading `fresh` and report `on_track` on a project that has since gone
-  quiet. Validity must **not mask a stall** (AC4).
+- **New hazard this slice owns — a READ-LAYER fix (rounds 2–3):** because
+  no-change captures are skipped, a genuinely **stalled** project stops accruing
+  records, so its latest *stored* record keeps a capture-time `freshness: fresh`
+  forever; `deriveForecast` Gate 2 (`derive.mjs:109`) folds
+  `readObservationHistory` (the stored series) and reads that frozen value, so it
+  would keep reporting `on_track`. The fix **cannot** live in the capture layer
+  (there is no event to dedup, and *keeping* no-change captures would contradict
+  014-01 AC2). It lives in the **read layer**: re-evaluate freshness against
+  read-time `now` from the source's last-commit date — the server already runs a
+  live `observeAll` scan whose freshness *is* current, so splice/reconcile that
+  live reading as the series tail before the pure fold, keeping `deriveForecast`
+  I/O-free and `now`-free (ADR-0006). Keys on **source-commit age vs read-time
+  now** (`gitFreshness(lastCommit, now)`, `lib.mjs:351`), not capture/`collectedAt`
+  age. Owned by AC4.
 
 **DoR:**
 - ✅ Slice 014-01 landed: session-end captures accrue under `stateDir`, already
@@ -73,12 +82,20 @@ does not, and cannot, force RAG green.
 3. **Backfill + capture compose.** Hygiene treats git-backfilled seed records
    (013-01) and session-end captures as one ascending series (same directory, same
    `readObservationHistory` read) without double-counting or ordering errors.
-4. **A stall is never masked by dedup.** A project that genuinely stalls (no new
-   commits, no progress → no new captures, by 014-01 AC2) must **not** keep reading
-   `on_track` off a frozen-`fresh` record: its staleness surfaces (e.g. freshness
-   evaluated so the quiet project reads `stale`/`at_risk`, not a stale `on_track`).
-   Observable: a project whose last genuine capture is older than the staleness
-   window reads a non-`on_track` state end-to-end, not a frozen healthy band.
+4. **A stall is never masked by frozen freshness (read-layer re-evaluation).**
+   Because no-change captures are skipped (014-01 AC2), a stalled project's latest
+   stored record keeps its capture-time `freshness: fresh`; `deriveForecast` Gate 2
+   reads that stored value and would keep reporting `on_track`. This slice
+   re-evaluates freshness **at read time** — recomputing `gitFreshness(lastCommit,
+   now)` from the source's last-commit date against the current clock (splice the
+   read layer's live `observeAll` freshness as the series tail before the fold;
+   `deriveForecast` stays I/O-free and `now`-free). Keys on **source-commit age vs
+   read-time now**, not capture age. **Observable that bites when the re-eval is
+   removed:** a project whose stored record was `fresh` at capture but whose
+   `lastCommit` is now older than `STALE_AFTER_DAYS` reads a **non-`on_track`**
+   state end-to-end — whereas trusting the frozen record reads a false `on_track`
+   (so removing the feature flips the test red; a pre-stale fixture does not
+   vacuously pass).
 5. **Honest below the gate.** A project still short of the minimum-history bar
    reads explicit `unknown (insufficient-history)` and still shows the
    013-shipped first-run hint — validity never fabricates a band it has not
@@ -86,8 +103,9 @@ does not, and cannot, force RAG green.
 
 **Edge cases to cover explicitly:** dense genuine-change captures within the
 interval (keep-latest, AC1); **`denom` changes across retained captures** (forecast
-reads `scope-changed`, not a fabricated band — AC2b); a genuinely stalled project
-whose last capture is old (reads stale, not frozen `on_track` — AC4); a capture
+reads `scope-changed`, not a fabricated band — AC2b); a stalled project whose stored
+record was `fresh` at capture but whose `lastCommit` is now older than
+`STALE_AFTER_DAYS` (read-time re-eval reads stale, not a frozen `on_track` — AC4); a capture
 whose `collectedAt` is *older* than the latest record (clock skew — never
 reorders/dedups incorrectly); a same-day backfill seed then a fresh capture
 (compose, keep-latest, AC3).

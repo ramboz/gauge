@@ -25,10 +25,14 @@ engineer daily-driver; the manager view must never hard-depend on it.
 the thin client **creates** the signal via a start/end bracket on the verified
 hook contract. (2) A window over write-once `startedAt` can't tell "crashed long
 ago" from "running for hours" — `startedAt` is birth, not liveness. So the marker
-carries **`lastActivityAt`, refreshed on every `Stop` hook** (fires per turn =
-proof the session is alive), and staleness keys on `lastActivityAt`. Three hooks:
-`SessionStart` (create), `Stop` (refresh liveness), `SessionEnd` (clear). See spec
-`## Assumptions` A4.
+carries **`lastActivityAt`, refreshed on every `Stop` hook**, and staleness keys
+on `lastActivityAt`. Three hooks: `SessionStart` (create), `Stop` (refresh
+liveness), `SessionEnd` (clear). (3) **Honest residual:** `Stop` fires at *turn
+end*, so `lastActivityAt` means "alive as of its **last completed turn**," not
+this instant; the window must exceed the longest plausible single turn, leaving an
+**accepted crash-detection lag ≈ the window** that no constant closes — safe only
+because this signal is optional/additive/absent-safe and never a wrong *hard*
+status. See spec `## Assumptions` A4.
 
 **DoR:**
 - ✅ Assumption **A4 reframed + liveness-grounded** (spec `## Assumptions` A4):
@@ -47,10 +51,11 @@ proof the session is alive), and staleness keys on `lastActivityAt`. Three hooks
    `<stateDir>/active-sessions/` (or equivalent), mapping cwd → project the same
    way 014-01 does (`startedAt = lastActivityAt = now`). Observable: a marker file
    appears when a session starts in a configured project's tree.
-2. **Stop refreshes liveness.** A `Stop` hook updates the matching marker's
-   `lastActivityAt` to now on every turn. Observable: a marker's `lastActivityAt`
-   advances after a `Stop` firing; a session with no recent `Stop` does not
-   advance. This is the liveness signal a start-timestamp cannot provide.
+2. **Stop refreshes liveness (turn-end).** A `Stop` hook updates the matching
+   marker's `lastActivityAt` to now at each turn end. Observable: a marker's
+   `lastActivityAt` advances after a `Stop` firing. `lastActivityAt` means "alive
+   as of the last completed turn" — not a mid-turn heartbeat — which is why the
+   staleness window (AC5) must exceed the longest plausible single turn.
 3. **SessionEnd clears the marker (extends 014-01).** The 014-01 `SessionEnd`
    hook removes the matching marker by `session_id`. Observable: start → end
    leaves no marker; the hooks bracket cleanly.
@@ -63,8 +68,14 @@ proof the session is alive), and staleness keys on `lastActivityAt`. Three hooks
    **`lastActivityAt`** (not `startedAt`) is older than a documented staleness
    window — a crashed session that stopped refreshing — is excluded from "running
    now". A **long-running session that keeps firing `Stop` stays "running"** past
-   the window. The window is a named constant. Both directions tested: a genuinely
-   active long session reads running; a crashed old one reads not-running.
+   the window. The window is a named constant, **bounded below by the longest
+   plausible single turn** (so an actively-crunching long turn is not marked stale
+   mid-turn), with the resulting crash-detection lag (≈ window) documented as an
+   accepted trade. Both **window-arithmetic** directions tested — a recent
+   `lastActivityAt` reads running; an old one reads not-running — with the test
+   comment noting that fixtures set `lastActivityAt` directly and therefore
+   exercise the window math, **not** the `Stop`-cadence gap (which is the accepted
+   residual, not a closeable bug).
 6. **Enriches, never overrides, "in flight".** The live signal augments the
    existing in-flight derivation (branches/worktrees/draft PRs) additively — the
    derived signal remains the base; the marker adds the "active now" fact.

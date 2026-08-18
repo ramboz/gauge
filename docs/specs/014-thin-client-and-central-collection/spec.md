@@ -138,11 +138,20 @@ Code contracts). Each is marked; slices that depend on one carry `frame_review`.
   long-lived, so any window short enough to catch a crash false-negatives a real
   long session, and any wide enough to keep it reintroduces the crash false
   positive. The marker therefore carries **`lastActivityAt`, refreshed on every
-  `Stop` hook** (fires per turn = proof the session is alive this moment; a
-  verified hook event), and the **staleness window keys on `lastActivityAt`**, not
-  `startedAt`: a crashed session stops refreshing → correctly goes stale; a
-  long-running active session keeps refreshing → stays "running". So the thin
-  client installs **three** hooks: `SessionStart` (create marker), `Stop` (refresh
+  `Stop` hook** (a verified hook event), and the **staleness window keys on
+  `lastActivityAt`**, not `startedAt`.
+  **Honest residual (3rd frame-critique round):** `Stop` fires at *turn end*, not
+  continuously — so `lastActivityAt` proves the session was **alive as of its last
+  completed turn**, not "alive this instant." Agentic turns (long tool loops,
+  builds, test runs) can run minutes, so the window **must be bounded below by the
+  longest plausible single turn** or an actively-crunching long turn goes stale
+  mid-turn. That leaves an **irreducible crash-detection lag ≈ the window
+  length** (a crashed session reads "running" until the window elapses) that no
+  constant can close. This is an **accepted trade**, safe precisely because the
+  signal is **optional / additive / absent-safe**: a briefly-stale "running" or a
+  briefly-late crash-clear degrades softly and never produces a wrong *hard*
+  status (the derived in-flight signal remains the base). So the thin client
+  installs **three** hooks: `SessionStart` (create marker), `Stop` (refresh
   `lastActivityAt`), and 014-01's `SessionEnd` (capture snapshot + remove marker).
   Still optional and absent-safe: no markers directory → today's
   branch/worktree/draft-PR in-flight derivation, no regression (release Risk:
