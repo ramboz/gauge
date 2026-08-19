@@ -47,7 +47,7 @@ export function velocityFromTimestamps(commitTimestamps, nowMs, windowWeeks = DE
 // velocityFromTimestamps still does the exact, authoritative filtering.
 // Throws on any git failure (not a repo, no git installed, unreadable
 // history); the caller (gitVelocity) turns that into explicit unknown.
-function gitCommitTimestamps(root, nowMs, windowWeeks) {
+export function gitCommitTimestamps(root, nowMs, windowWeeks) {
   const since = new Date(nowMs - (windowWeeks + 1) * WEEK_MS).toISOString();
   const out = execFileSync('git', ['-C', root, 'log', `--since=${since}`, '--format=%ct'], {
     encoding: 'utf8',

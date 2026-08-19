@@ -105,6 +105,23 @@ function priceTokens(tokens, price) {
 // flags that the total is a floor, not the whole truth. An empty/all-
 // unusable input returns `null` — explicit unknown, never a fabricated $0
 // (mirrors velocity.mjs's null-on-nothing-in-window contract).
+// Per-record USD (014-03 cost trend): price a single record's usage in
+// isolation, so records can be bucketed into trend windows by their timestamp.
+// Returns null when the record carries no model/usage OR its model is unpriced
+// — an un-priceable record's spend is NEVER attributed to a window (honest
+// unknown, mirroring costFromRecords' unknown-model handling), never a
+// fabricated 0. Callers dedupe first; this prices one deduped record.
+export function recordUsd(record, priceTable = DEFAULT_PRICE_TABLE) {
+  const model = record?.message?.model;
+  const usage = record?.message?.usage;
+  if (!model || !usage) return null;
+  const price = priceTable[model];
+  if (!price) return null; // unknown-model: not attributed to a trend window
+  const bucket = emptyTokenBucket();
+  addUsageInto(bucket, usage);
+  return priceTokens(bucket, price);
+}
+
 export function costFromRecords(records, priceTable = DEFAULT_PRICE_TABLE) {
   const deduped = dedupeRecords(records);
   const tokensByModel = new Map();

@@ -823,6 +823,38 @@ test('server /api/data wiring splices the live observation as the history tail b
     'spliceLiveObservation must be wired before attachForecasts');
 });
 
+// --- 014-03: velocity + cost trend wiring + render --------------------------
+test('server /api/data wiring computes velocity + cost trends and attaches them via pure folds (014-03)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /import\s*\{[\s\S]*velocityTrend,\s*costTrend,\s*attachVelocityTrend,\s*attachCostTrend[\s\S]*\}\s*from\s*'\.\/trends\.mjs'/);
+  assert.match(src, /velocityTrend\(/);
+  assert.match(src, /costTrend\(/);
+  assert.match(src, /attachVelocityTrend\(/);
+  assert.match(src, /attachCostTrend\(/);
+});
+
+test('the card renders a velocity trend and a cost trend, with an explicit "not enough history yet" fallback (014-03 AC2/AC3/AC5)', () => {
+  const html = read('public/index.html');
+  assert.match(html, /function trendBlock\(/);
+  assert.match(html, /velocityTrend/);
+  assert.match(html, /costTrend/);
+  assert.match(html, /not enough history yet/);
+  assert.match(html, /\$\{trendBlock\(p\)\}/); // wired into the card
+});
+
+test('trendBlock: renders sparklines for present trends and the unknown fallback for null (014-03)', () => {
+  const context = cardContext();
+  const withTrends = context.trendBlock({
+    velocityTrend: { points: [{ atMs: 1, perWeek: 1 }, { atMs: 2, perWeek: 3 }] },
+    costTrend: { points: [{ atMs: 1, usd: 0.5 }, { atMs: 2, usd: 1.2 }] },
+  });
+  assert.match(withTrends, /velocity trend/);
+  assert.match(withTrends, /cost trend/);
+  assert.doesNotMatch(withTrends, /not enough history yet/); // both present → sparklines
+  const nullTrends = context.trendBlock({ velocityTrend: null, costTrend: null });
+  assert.match(nullTrends, /not enough history yet/); // AC5 honest fallback
+});
+
 // --- 009-01 AC5: runtime never reads/parses product-vision.md, a release doc, ---
 // or a README to derive a goal/deadline — the only reader of those source
 // artifacts (for goal/deadline purposes) is src/discover.mjs (surfacing) and
@@ -859,7 +891,7 @@ test('server /api/data wiring attaches the attention queue via the pure ranking 
 
 test('server /api/data wiring reads each project\'s git history and attaches velocity via the pure fold (AC1/AC5/AC6)', () => {
   const src = read('src/server.mjs');
-  assert.match(src, /import\s*\{\s*gitVelocity,\s*attachVelocity\s*\}\s*from\s*'\.\/velocity\.mjs'/);
+  assert.match(src, /import\s*\{[^}]*\bgitVelocity\b[^}]*\battachVelocity\b[^}]*\}\s*from\s*'\.\/velocity\.mjs'/);
   assert.match(src, /gitVelocity\(/);
   assert.match(src, /attachVelocity\(/);
 });

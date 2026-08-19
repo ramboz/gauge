@@ -10,9 +10,15 @@ import { readObservationHistory } from './state.mjs';
 import { attachForecasts, attentionQueue } from './derive.mjs';
 import { spliceLiveObservation } from './live-tail.mjs';
 import { attachMilestones } from './milestone.mjs';
-import { gitVelocity, attachVelocity } from './velocity.mjs';
+import { gitVelocity, attachVelocity, gitCommitTimestamps } from './velocity.mjs';
 import { gitTeamSignals, attachTeamSignals } from './team.mjs';
-import { projectCostBundle, attachTokenCost, attachCostBreakdown } from './cost.mjs';
+import {
+  projectCostBundle, attachTokenCost, attachCostBreakdown,
+  sessionFilesForProject, readTranscriptRecords, DEFAULT_TRANSCRIPTS_ROOT,
+} from './cost.mjs';
+import {
+  velocityTrend, costTrend, attachVelocityTrend, attachCostTrend, DEFAULT_TREND_WINDOW_WEEKS,
+} from './trends.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -48,13 +54,16 @@ const server = http.createServer((req, res) => {
       const liveByProjectId = Object.fromEntries(
         joined.projects.map((observation) => [observation.project.id, observation]),
       );
+      const storedByProjectId = Object.fromEntries(
+        freshConfig.projects.map((project) => [
+          project.id,
+          readObservationHistory(freshConfig.stateDir, project.id).observations,
+        ]),
+      );
       const historiesByProjectId = Object.fromEntries(
         freshConfig.projects.map((project) => [
           project.id,
-          spliceLiveObservation(
-            readObservationHistory(freshConfig.stateDir, project.id).observations,
-            liveByProjectId[project.id],
-          ),
+          spliceLiveObservation(storedByProjectId[project.id], liveByProjectId[project.id]),
         ]),
       );
       const withForecasts = attachForecasts(joined, historiesByProjectId);
@@ -115,10 +124,42 @@ const server = http.createServer((req, res) => {
         freshConfig.projects.map((project) => [project.id, costBundleByProjectId[project.id]?.tokenCostBreakdown ?? null]),
       );
       const withCostBreakdown = attachCostBreakdown(withTokenCost, breakdownByProjectId);
+      // History-derived velocity + cost TRENDS (spec 014, slice 014-03): each
+      // metric sampled as-of every accrued observation, so the card shows
+      // direction over time. Recompute-only (owner decision): velocity from git,
+      // cost from timestamped transcripts; nothing persisted. The I/O (git log,
+      // transcript reads) happens HERE, at the read layer — mirroring velocity/
+      // cost above — so velocityTrend/costTrend stay pure folds. Sampled at each
+      // observation's TIMESTAMP (never record count), so 014-02 coalescing does
+      // not distort the series. deriveForecast is untouched (ADR-0006).
+      const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+      const velocityTrendById = {};
+      const costTrendById = {};
+      for (const project of freshConfig.projects) {
+        const observationMs = historiesByProjectId[project.id]
+          .map((observation) => Date.parse(observation.collectedAt))
+          .filter(Number.isFinite);
+        const earliest = observationMs.length ? Math.min(...observationMs) : velocityNowMs;
+        // Fetch commits spanning the accrued history plus the trend window, so
+        // the oldest sample's trailing window is fully covered.
+        const spanWeeks = Math.ceil(Math.max(0, velocityNowMs - earliest) / WEEK_MS) + DEFAULT_TREND_WINDOW_WEEKS + 1;
+        let commitTimestamps = [];
+        try {
+          commitTimestamps = gitCommitTimestamps(project.path, velocityNowMs, spanWeeks);
+        } catch {
+          commitTimestamps = []; // no git / unreadable → velocityTrend yields explicit null
+        }
+        velocityTrendById[project.id] = velocityTrend(commitTimestamps, observationMs);
+        const records = sessionFilesForProject(transcriptsRoot || DEFAULT_TRANSCRIPTS_ROOT, project.path)
+          .flatMap(readTranscriptRecords);
+        costTrendById[project.id] = costTrend(records, observationMs);
+      }
+      const withVelocityTrend = attachVelocityTrend(withCostBreakdown, velocityTrendById);
+      const withCostTrend = attachCostTrend(withVelocityTrend, costTrendById);
       // Global attention queue (spec 009-03, ADR-0013): a pure ranking over
       // the forecast/risk read this loop just attached — no additional I/O,
       // no adapter/registry reach from derive.mjs itself (AC4).
-      const data = { ...withCostBreakdown, attention: attentionQueue(withCostBreakdown) };
+      const data = { ...withCostTrend, attention: attentionQueue(withCostTrend) };
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

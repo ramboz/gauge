@@ -282,6 +282,23 @@ function velocityBlock(p) {
   if (!v) return `<div class="counts">velocity <span class="unknown">unknown</span></div>`;
   return `<div class="counts">${velocityHeadline(v.perWeek)} <span class="spark" aria-hidden="true" title="weekly commits, oldest → newest">${esc(sparkline(v.buckets))}</span></div>`;
 }
+// 014-03: history-derived velocity + cost TRENDS — each metric sampled as-of
+// every accrued observation, rendered as a sparkline over observation time
+// (distinct from velocityBlock's fixed trailing-8-week git sparkline). AC5: a
+// null trend (too few observations, or no attributable data) reads an explicit
+// "not enough history yet", never a fabricated flat line. The point-in-time
+// values above stay; this adds the direction-over-time read.
+function trendSpark(trend, key) {
+  if (!trend || !Array.isArray(trend.points) || trend.points.length < 2) {
+    return `<span class="meta">not enough history yet</span>`;
+  }
+  const values = trend.points.map((pt) => Number(pt[key]) || 0);
+  return `<span class="spark" aria-hidden="true" title="over accrued observations, oldest → newest">${esc(sparkline(values))}</span>`;
+}
+function trendBlock(p) {
+  return `<div class="counts">velocity trend ${trendSpark(p.velocityTrend, 'perWeek')}</div>`
+    + `<div class="counts">cost trend ${trendSpark(p.costTrend, 'usd')}</div>`;
+}
 // 012-05: team signals — human-vs-agent split + contributor count, attached
 // by the server read layer (src/team.mjs's attachTeamSignals) as `p.team` —
 // either `{ agentCoauthoredPct, agentCoauthoredCount, commitCount,
@@ -553,6 +570,7 @@ function card(p) {
   return `<article class="card rag-${ragBand}">${forecastCallout(p,ragBand)}<div class="head"><h2>${esc(p.project.label)}</h2>${warnIcon}${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${velocityBlock(p)}
+    ${trendBlock(p)}
     ${teamBlock(p)}
     ${costBlock(p)}
     ${milestoneBlock}${fallbackNote}
