@@ -2,8 +2,19 @@
 
 ## Status
 
-`committed` — committed 2026-08-12 by explicit owner decision, following the
-close-out of the [local-data release](manager-dashboard-local-data.md).
+`shipped` — closed out 2026-08-18. All committed scope delivered by
+[spec 014](../specs/014-thin-client-and-central-collection/spec.md) (4/4 slices
+DONE): session-stop capture hook + auto-installer (014-01), capture-validity +
+read-layer live-tail currency → honest RAG on captured history (014-02),
+history-derived velocity + cost trends (014-03), and the optional live-session
+"running now" enrichment (014-04). 594/594 tests green; each slice cleared the
+full ceremony (frame-critique + compliance + craft + arch + reconciliation).
+Release-check criteria met by dogfood: a worked project lights a real RAG band on
+captured/backfilled history (gauge → `at_risk`), velocity/cost trends render over
+the accrued window (gauge velocity 2.1 → 11.9 commits/wk), and the enrichment is
+absent-safe. Deferred (recorded in `docs/refinement-todo.md`): cost-trend
+durability when transcripts rotate, stale active-session-marker GC, a shared
+hook-io scaffold. Committed 2026-08-12; shipped 2026-08-18.
 
 Allowed statuses: `candidate`, `committed`, `shipping`, `shipped`, `dropped`.
 Do not move a plan from `candidate` to `committed` without an explicit user decision.

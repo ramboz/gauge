@@ -55,7 +55,7 @@
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-01 — session-stop capture hook + auto-installer | **DONE** |  |
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-02 — capture-validity hardening: honest RAG on captured history | **DONE** |  |
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-03 — history-derived velocity + cost trends | **DONE** |  |
-| [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-04 — live-session "running now" enrichment (optional) | DRAFT |  |
+| [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-04 — live-session "running now" enrichment (optional) | **DONE** |  |
 
 ## Deferred slices
 
@@ -84,7 +84,7 @@
 
 Advisory (ADR-0040 auditability — never blocks). Regenerated from `reviews/slice-*.md` `substrate:` fields.
 
-- **4** pass(es) recorded `not-shown` (selection step did not run — the kill-criterion-1 defect signal).
+- **6** pass(es) recorded `not-shown` (selection step did not run — the kill-criterion-1 defect signal).
 - **14** pass(es) recorded `non-interactive` (declared no-orchestrator / CI).
 - **1** shown-and-declined anomaly(ies) (a high-confidence richer skill was shown and not applied):
   - `014-thin-client-and-central-collection/slice-01-craft.md` — applied `pr-review`; declined: scout-pr-review

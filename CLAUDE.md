@@ -44,7 +44,12 @@ This is an index. Durable detail lives in `docs/`; update it through
   [manager-dashboard-local-data](docs/releases/manager-dashboard-local-data.md)
   (committed, 2026-08-14) and
   [thin-client-and-central-collection](docs/releases/thin-client-and-central-collection.md)
-  (candidate, 2026-08-28: event-driven session-stop capture, trends).
+  (**shipped** 2026-08-18 via [spec 014](docs/specs/014-thin-client-and-central-collection/spec.md),
+  4/4 slices DONE: SessionEnd capture hook + auto-installer, capture-validity +
+  read-layer live-tail currency, history-derived velocity/cost trends, and the
+  optional live-session "running now" enrichment — `npm run install-hook`
+  registers the SessionEnd + SessionStart hooks; forecast/trend reads are
+  `/api/data` joins; `deriveForecast` stays a pure now-free fold).
   [Spec 011 — milestone-centric cards](docs/specs/011-milestone-centric-cards/spec.md)
   is **DONE** (all 5 slices landed): the card leads with the active milestone
   (goal = active release title, appetite = timebox, milestone-scoped progress bar),
@@ -68,8 +73,8 @@ This is an index. Durable detail lives in `docs/`; update it through
   Gauge's own deadline is now set (2026-08-28) in the gitignored config; RAG reads
   honest `unknown (insufficient-history)` until the git-backfill seed accrues ≥2
   spaced observations (spike 012-01 dogfood done). Releases:
-  manager-dashboard-local-data is **shipped**; thin-client-and-central-collection
-  is **committed** (2026-08-28).
+  manager-dashboard-local-data and thin-client-and-central-collection are both
+  **shipped**.
 - **Dateless forecast —
   [ADR-0018](docs/decisions/adr-0018-date-independent-forecast.md) (Accepted
   2026-08-13):** the portfolio is appetite-shaped, not date-driven, so ADR-0012's
