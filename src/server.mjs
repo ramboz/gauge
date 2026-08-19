@@ -16,6 +16,7 @@ import { projectCostBundle, attachTokenCost, attachCostBreakdown } from './cost.
 import {
   velocityTrend, costTrend, attachVelocityTrend, attachCostTrend, DEFAULT_TREND_WINDOW_WEEKS,
 } from './trends.mjs';
+import { runningProjectIds, attachRunningNow } from './session-marker.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -153,10 +154,42 @@ const server = http.createServer((req, res) => {
       }
       const withVelocityTrend = attachVelocityTrend(withCostBreakdown, velocityTrendById);
       const withCostTrend = attachCostTrend(withVelocityTrend, costTrendById);
+      // 014-04: live-session "running now" enrichment (optional). Read the
+      // active-session markers the SessionStart hook wrote and `stat` each
+      // marker's transcript mtime (never read content — AC8 privacy) to decide
+      // which projects have a live session now. Absent-safe (AC7): no
+      // active-sessions dir / unreadable markers / missing transcript → nobody
+      // running, today's derivation unchanged. Composes ALONGSIDE the forecast's
+      // live-tail splice (a separate additive join), never duplicating it.
+      let runningIds = new Set();
+      try {
+        const markersDir = path.join(path.resolve(freshConfig.stateDir), 'active-sessions');
+        const markers = [];
+        const mtimeByPath = {};
+        for (const name of fs.readdirSync(markersDir).filter((n) => n.endsWith('.json'))) {
+          try {
+            const marker = JSON.parse(fs.readFileSync(path.join(markersDir, name), 'utf8'));
+            markers.push(marker);
+            if (typeof marker.transcriptPath === 'string' && mtimeByPath[marker.transcriptPath] === undefined) {
+              try {
+                mtimeByPath[marker.transcriptPath] = fs.statSync(marker.transcriptPath).mtimeMs;
+              } catch {
+                mtimeByPath[marker.transcriptPath] = null; // missing/unreadable transcript → not running
+              }
+            }
+          } catch {
+            // skip a malformed marker — never break the read
+          }
+        }
+        runningIds = runningProjectIds(markers, mtimeByPath, velocityNowMs, freshConfig.projects);
+      } catch {
+        // no active-sessions directory → nobody running (absent-safe, AC7)
+      }
+      const withRunningNow = attachRunningNow(withCostTrend, runningIds);
       // Global attention queue (spec 009-03, ADR-0013): a pure ranking over
       // the forecast/risk read this loop just attached — no additional I/O,
       // no adapter/registry reach from derive.mjs itself (AC4).
-      const data = { ...withCostTrend, attention: attentionQueue(withCostTrend) };
+      const data = { ...withRunningNow, attention: attentionQueue(withRunningNow) };
       res.writeHead(200, {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',

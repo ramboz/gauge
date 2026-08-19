@@ -842,6 +842,28 @@ test('the card renders a velocity trend and a cost trend, with an explicit "not 
   assert.match(html, /\$\{trendBlock\(p\)\}/); // wired into the card
 });
 
+// --- 014-04: live-session "running now" enrichment --------------------------
+test('server /api/data wiring computes running-now from active-session markers and attaches it (014-04)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /import\s*\{\s*runningProjectIds,\s*attachRunningNow\s*\}\s*from\s*'\.\/session-marker\.mjs'/);
+  assert.match(src, /active-sessions/);
+  assert.match(src, /runningProjectIds\(/);
+  assert.match(src, /attachRunningNow\(/);
+  // AC8 privacy: the read layer stats the transcript, never reads its content.
+  assert.match(src, /statSync\(/);
+  assert.doesNotMatch(src, /readFileSync\([^)]*transcriptPath/); // never reads transcript content
+});
+
+test('the card renders an additive "running now" badge only when p.runningNow (014-04 AC4/AC6)', () => {
+  const html = read('public/index.html');
+  assert.match(html, /p\.runningNow\?/); // gated on the attached flag
+  assert.match(html, /running now/);
+  assert.match(html, /class="running"/);
+  const context = cardContext();
+  assert.match(context.card({ project: { id: 'x', label: 'X' }, runningNow: true, signals: [], collection: { status: 'ok' } }), /running now/);
+  assert.doesNotMatch(context.card({ project: { id: 'x', label: 'X' }, runningNow: false, signals: [], collection: { status: 'ok' } }), /running now/);
+});
+
 test('trendBlock: renders sparklines for present trends and the unknown fallback for null (014-03)', () => {
   const context = cardContext();
   const withTrends = context.trendBlock({

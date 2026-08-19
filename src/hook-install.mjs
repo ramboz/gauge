@@ -31,10 +31,10 @@ function isSameCommand(hookEntry, command) {
   return Boolean(hookEntry) && hookEntry.type === 'command' && hookEntry.command === command;
 }
 
-export function hasHook(settings, command) {
+export function hasHook(settings, command, event = 'SessionEnd') {
   const hooks = asObject(asObject(settings).hooks);
-  const sessionEnd = Array.isArray(hooks.SessionEnd) ? hooks.SessionEnd : [];
-  return sessionEnd.some((group) => Array.isArray(group?.hooks) && group.hooks.some((entry) => isSameCommand(entry, command)));
+  const group = Array.isArray(hooks[event]) ? hooks[event] : [];
+  return group.some((g) => Array.isArray(g?.hooks) && g.hooks.some((entry) => isSameCommand(entry, command)));
 }
 
 // Adds `hookEntry` as its OWN new group appended to the existing
@@ -43,13 +43,13 @@ export function hasHook(settings, command) {
 // (AC4) — this never mutates or reshapes an existing group, it only appends.
 // Idempotent: if an entry with the same `command` already exists in ANY
 // SessionEnd group, this is a no-op (re-running never duplicates the entry).
-export function installHook(settings, hookEntry) {
+export function installHook(settings, hookEntry, event = 'SessionEnd') {
   const base = asObject(settings);
   const hooks = asObject(base.hooks);
-  const sessionEnd = Array.isArray(hooks.SessionEnd) ? hooks.SessionEnd.map(cloneGroup) : [];
-  const alreadyInstalled = sessionEnd.some((group) => group.hooks.some((entry) => isSameCommand(entry, hookEntry.command)));
-  const nextSessionEnd = alreadyInstalled ? sessionEnd : [...sessionEnd, { hooks: [{ ...hookEntry }] }];
-  return { ...base, hooks: { ...hooks, SessionEnd: nextSessionEnd } };
+  const group = Array.isArray(hooks[event]) ? hooks[event].map(cloneGroup) : [];
+  const alreadyInstalled = group.some((g) => g.hooks.some((entry) => isSameCommand(entry, hookEntry.command)));
+  const nextGroup = alreadyInstalled ? group : [...group, { hooks: [{ ...hookEntry }] }];
+  return { ...base, hooks: { ...hooks, [event]: nextGroup } };
 }
 
 // Inverse of installHook (AC6): removes any hook entry matching `command`
@@ -57,13 +57,21 @@ export function installHook(settings, hookEntry) {
 // keys — exactly the shape installHook creates — is dropped entirely,
 // restoring the pre-install shape. A group that pre-existed with OTHER hooks
 // (or other keys) keeps everything except the matching entry.
-export function uninstallHook(settings, hookEntry) {
+export function uninstallHook(settings, hookEntry, event = 'SessionEnd') {
   const base = asObject(settings);
   const hooks = asObject(base.hooks);
-  if (!Array.isArray(hooks.SessionEnd)) return { ...base, hooks: { ...hooks } };
-  const nextSessionEnd = hooks.SessionEnd
+  if (!Array.isArray(hooks[event])) return { ...base, hooks: { ...hooks } };
+  const nextGroup = hooks[event]
     .map(cloneGroup)
     .map((group) => ({ ...group, hooks: group.hooks.filter((entry) => !isSameCommand(entry, hookEntry.command)) }))
     .filter((group) => group.hooks.length > 0 || Object.keys(group).length > 1);
-  return { ...base, hooks: { ...hooks, SessionEnd: nextSessionEnd } };
+  const nextHooks = { ...hooks };
+  // If removing the Gauge entry empties the whole event group — exactly the
+  // case where installHook itself *created* the event (e.g. a SessionStart that
+  // did not pre-exist) — drop the event key entirely, restoring the precise
+  // pre-install shape (AC6 reversibility). A pre-existing event with other
+  // hooks never empties, so its key is preserved.
+  if (nextGroup.length === 0) delete nextHooks[event];
+  else nextHooks[event] = nextGroup;
+  return { ...base, hooks: nextHooks };
 }

@@ -12,12 +12,14 @@
 // `exit 0`. Read-only-source boundary (AC3) is enforced by the reused
 // `collectObservation`, which already asserts disjointness from every
 // configured `project.path`.
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, resolveConfigPath } from '../src/config.mjs';
 import { observeProject } from '../src/observation.mjs';
 import { collectObservation } from '../src/state.mjs';
 import { parseSessionEndPayload, matchProjectForCwd } from '../src/session-hook.mjs';
+import { markerFilename } from '../src/session-marker.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -72,6 +74,19 @@ export async function run({ rawStdin, root = ROOT } = {}) {
     collectObservation(config, observation, { coalesce: true });
   } catch (error) {
     diagnostic(`failed to capture snapshot for ${project.label}: ${error.message}`);
+  }
+
+  // 014-04 AC2: clear this session's active-session marker (written by the
+  // SessionStart hook). Removal is by session_id; a missing marker (unmatched,
+  // never started, or already cleared) is a clean no-op, never an error.
+  const sessionId = payload.session_id;
+  if (typeof sessionId === 'string' && sessionId) {
+    try {
+      const markerPath = path.join(path.resolve(config.stateDir), 'active-sessions', markerFilename(sessionId));
+      fs.rmSync(markerPath, { force: true });
+    } catch (error) {
+      diagnostic(`failed to clear active-session marker: ${error.message}`);
+    }
   }
 }
 

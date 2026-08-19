@@ -13,6 +13,7 @@ import { installHook, uninstallHook, buildHookEntry, DEFAULT_HOOK_TIMEOUT_MS } f
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOOK_SCRIPT = path.join(ROOT, 'scripts', 'session-stop-hook.mjs');
+const START_HOOK_SCRIPT = path.join(ROOT, 'scripts', 'session-start-hook.mjs');
 const usage = 'usage: node scripts/install-hook.mjs [--settings <path>] [--timeout <ms>] [--uninstall]';
 
 function parseArgs(argv) {
@@ -64,9 +65,14 @@ function main() {
   const settingsPath = settingsPathFor(args);
   // Quote the script path so a home dir with a space (e.g. `/Users/My Name/…`)
   // does not break the shell-executed hook command (craft-review nit).
-  const command = `node ${JSON.stringify(HOOK_SCRIPT)}`;
   const timeout = args.timeout ? Number(args.timeout) : DEFAULT_HOOK_TIMEOUT_MS;
-  const hookEntry = buildHookEntry(command, timeout);
+  // The thin client registers TWO hooks (014-01 + 014-04): the SessionEnd
+  // capture hook and the SessionStart active-session marker hook. Both are
+  // merged/removed via the same event-generic pure core.
+  const registrations = [
+    { event: 'SessionEnd', entry: buildHookEntry(`node ${JSON.stringify(HOOK_SCRIPT)}`, timeout) },
+    { event: 'SessionStart', entry: buildHookEntry(`node ${JSON.stringify(START_HOOK_SCRIPT)}`, timeout) },
+  ];
 
   const { existed, raw, settings } = readSettings(settingsPath);
 
@@ -82,9 +88,12 @@ function main() {
   const backupPath = `${settingsPath}.bak`;
   if (existed && !fs.existsSync(backupPath)) atomicWrite(backupPath, raw);
 
-  const next = args.uninstall ? uninstallHook(settings, hookEntry) : installHook(settings, hookEntry);
+  let next = settings;
+  for (const { event, entry } of registrations) {
+    next = args.uninstall ? uninstallHook(next, entry, event) : installHook(next, entry, event);
+  }
   atomicWrite(settingsPath, `${JSON.stringify(next, null, 2)}\n`);
-  console.log(`Gauge ${args.uninstall ? 'uninstalled' : 'installed'} the SessionEnd hook in ${settingsPath}`);
+  console.log(`Gauge ${args.uninstall ? 'uninstalled' : 'installed'} the SessionEnd + SessionStart hooks in ${settingsPath}`);
 }
 
 try {

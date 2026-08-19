@@ -23,6 +23,8 @@
   .barrow { display:flex; align-items:center; gap:10px; margin-top:10px }.bar { flex:1; height:6px; background:var(--inset); border-radius:4px; overflow:hidden }.bar div { height:100%; background:var(--accent) }.pct { min-width:38px; text-align:right; font-weight:600 }
   .sect { border-top:1px solid var(--border); margin-top:10px; padding-top:8px }.ws { padding:5px 0 }.infobox { background:var(--inset); color:var(--text); padding:7px 9px; border-radius:8px; margin-top:8px }.wtsec { margin-top:7px }.wthdr { font-weight:600; font-size:13px }.stale { opacity:.65 }
   .warn-icon { cursor:help; color:var(--warn); font-weight:700 }.warn-icon:focus { outline:2px solid var(--accent); outline-offset:2px }
+  /* 014-04: optional live-session "running now" enrichment — a small green pulse. */
+  .running { color:var(--good); font-size:11px; font-weight:600 }.running::before { content:"● "; }
   .unknown { color:var(--muted) }.spark { letter-spacing:1px }
   ul { margin:6px 0; padding-left:20px } button { color:inherit; background:var(--card); border:1px solid var(--border); border-radius:7px; padding:4px 10px; cursor:pointer }
   /* First-run hint (refinement-todo, reframed by ADR-0017): a calm, board-level
@@ -567,7 +569,12 @@ function card(p) {
   // the leading status callout — a project with no curated deadline (and so
   // no real forecast, deadline-unknown) stays gray here, never green.
   const ragBand=forecastToRag(p.forecast);
-  return `<article class="card rag-${ragBand}">${forecastCallout(p,ragBand)}<div class="head"><h2>${esc(p.project.label)}</h2>${warnIcon}${statusChip}</div>
+  // 014-04: optional "running now" enrichment — an additive live-session badge
+  // beside the title when a marker's transcript mtime is recent (p.runningNow,
+  // attached by the read layer). Absent-safe: falsy/absent → no badge, today's
+  // card. It enriches, never overrides, the derived in-flight/worktree signals.
+  const runningBadge=p.runningNow?`<span class="running" title="a Claude Code session is active in this project now">running now</span>`:'';
+  return `<article class="card rag-${ragBand}">${forecastCallout(p,ragBand)}<div class="head"><h2>${esc(p.project.label)}</h2>${runningBadge}${warnIcon}${statusChip}</div>
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${velocityBlock(p)}
     ${trendBlock(p)}

@@ -134,7 +134,10 @@ test('AC4: --settings overridable path merges into an existing populated setting
   assert.equal(fs.readFileSync(`${settingsPath}.bak`, 'utf8'), JSON.stringify(original, null, 2));
 
   const afterFirst = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  for (const event of ['Notification', 'PermissionRequest', 'PostToolUse', 'PreToolUse', 'SessionStart', 'Stop', 'StopFailure', 'UserPromptSubmit']) {
+  // 014-04: the installer now registers TWO hooks — SessionEnd (capture) and
+  // SessionStart (marker) — so those two events are the only ones touched; all
+  // others, and every top-level key, are preserved byte-for-byte.
+  for (const event of ['Notification', 'PermissionRequest', 'PostToolUse', 'PreToolUse', 'Stop', 'StopFailure', 'UserPromptSubmit']) {
     assert.deepEqual(afterFirst.hooks[event], original.hooks[event], `${event} must be untouched`);
   }
   assert.deepEqual(afterFirst.worktree, original.worktree);
@@ -142,6 +145,11 @@ test('AC4: --settings overridable path merges into an existing populated setting
   assert.deepEqual(afterFirst.extraKnownMarketplaces, original.extraKnownMarketplaces);
   assert.equal(afterFirst.hooks.SessionEnd.length, 2, 'pre-existing SessionEnd group preserved + one new Gauge group');
   assert.deepEqual(afterFirst.hooks.SessionEnd[0], original.hooks.SessionEnd[0]);
+  // SessionStart pre-existed too → its group is preserved and the Gauge marker
+  // hook is appended as a new group.
+  assert.equal(afterFirst.hooks.SessionStart.length, 2, 'pre-existing SessionStart group preserved + one new Gauge marker group');
+  assert.deepEqual(afterFirst.hooks.SessionStart[0], original.hooks.SessionStart[0]);
+  assert.ok(afterFirst.hooks.SessionStart.flatMap((g) => g.hooks).some((h) => /session-start-hook\.mjs/.test(h.command)), 'the SessionStart marker hook is registered');
 
   const secondRun = runInstaller(['--settings', settingsPath]);
   assert.equal(secondRun.status, 0);
