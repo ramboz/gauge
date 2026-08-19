@@ -8,6 +8,7 @@ import { loadConfig, resolveConfigPath } from './config.mjs';
 import { observeAll, joinProjectProfileFields } from './observation.mjs';
 import { readObservationHistory } from './state.mjs';
 import { attachForecasts, attentionQueue } from './derive.mjs';
+import { spliceLiveObservation } from './live-tail.mjs';
 import { attachMilestones } from './milestone.mjs';
 import { gitVelocity, attachVelocity } from './velocity.mjs';
 import { gitTeamSignals, attachTeamSignals } from './team.mjs';
@@ -37,10 +38,23 @@ const server = http.createServer((req, res) => {
       // the read layer, never inside derive.mjs itself. deriveForecast (via
       // attachForecasts) stays a pure fold over the already-read history and
       // the deadline this loop just joined onto each project.
+      // 014-02 AC4: splice each project's LIVE current observation (from the
+      // `joined`/`observeAll` pass above — collectedAt = now, freshness
+      // recomputed this request) as the TAIL of its stored history, so
+      // deriveForecast's `latest` reflects now. This removes the false
+      // `on_track` a frozen old stored record would produce; Gate 2 then
+      // splits fresh-but-flat (→ at_risk) from quiet (→ stale-evidence)
+      // honestly. deriveForecast stays a pure, now-free fold (ADR-0006).
+      const liveByProjectId = Object.fromEntries(
+        joined.projects.map((observation) => [observation.project.id, observation]),
+      );
       const historiesByProjectId = Object.fromEntries(
         freshConfig.projects.map((project) => [
           project.id,
-          readObservationHistory(freshConfig.stateDir, project.id).observations,
+          spliceLiveObservation(
+            readObservationHistory(freshConfig.stateDir, project.id).observations,
+            liveByProjectId[project.id],
+          ),
         ]),
       );
       const withForecasts = attachForecasts(joined, historiesByProjectId);

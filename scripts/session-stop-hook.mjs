@@ -65,7 +65,11 @@ export async function run({ rawStdin, root = ROOT } = {}) {
 
   try {
     const observation = observeProject(project);
-    collectObservation(config, observation);
+    // 014-02 AC1: session ends fire unconditionally, so opt into keep-latest
+    // coalescing — a run of identical-state captures collapses to one record at
+    // the newest collectedAt (storage hygiene; the timestamp still advances, so
+    // a stall is never masked).
+    collectObservation(config, observation, { coalesce: true });
   } catch (error) {
     diagnostic(`failed to capture snapshot for ${project.label}: ${error.message}`);
   }

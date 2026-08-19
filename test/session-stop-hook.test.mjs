@@ -150,10 +150,12 @@ test('AC1: a SessionEnd payload whose cwd matches a configured project writes ex
 test('AC1: a nested cwd (subdirectory of project.path, e.g. a worktree) also matches and writes', { skip: process.platform !== 'darwin' }, () => {
   const nestedCwd = path.join(source, '.claude', 'worktrees', 'feature-x');
   fs.mkdirSync(nestedCwd, { recursive: true });
-  const before = recordCount();
   const result = runHook({ cwd: nestedCwd, sessionId: 's2', env: { GAUGE_CONFIG: configPath } });
   assert.equal(result.status, 0);
-  assert.equal(recordCount(), before + 1);
+  // 014-02: the hook coalesces identical-state captures (this run observes the
+  // same unchanged `source` main tree as prior runs), so the project keeps
+  // exactly one record at the newest capture rather than accreting one per run.
+  assert.equal(recordCount(), 1);
 });
 
 test('AC2: an unmatched cwd is a clean no-op — exit 0, no stdout, one stderr diagnostic, no new record', { skip: process.platform !== 'darwin' }, () => {
@@ -211,8 +213,7 @@ test('AC7: an unreadable/invalid stateDir (a file where a directory is expected)
 // The exported run() is both a test seam and the 014-04 extension point; this
 // drives the capture path in-process (no child, no real stdin) to keep the
 // export honest.
-test('run(): in-process capture writes exactly one record for a matched cwd', async () => {
-  const before = recordCount();
+test('run(): in-process capture writes a record for a matched cwd (coalesced to the newest)', async () => {
   const prevConfig = process.env.GAUGE_CONFIG;
   process.env.GAUGE_CONFIG = configPath;
   try {
@@ -221,7 +222,9 @@ test('run(): in-process capture writes exactly one record for a matched cwd', as
     if (prevConfig === undefined) delete process.env.GAUGE_CONFIG;
     else process.env.GAUGE_CONFIG = prevConfig;
   }
-  assert.equal(recordCount(), before + 1, 'run() should write one observation for the matched project');
+  // 014-02 coalescing: identical-state captures against the unchanged `source`
+  // collapse to one record at the newest collectedAt.
+  assert.equal(recordCount(), 1, 'run() captures the matched project (coalesced to one record)');
 });
 
 test('run(): an unmatched cwd writes nothing (in-process no-op)', async () => {

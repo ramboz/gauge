@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateObservation } from './observation.mjs';
+import { sameCaptureState } from './capture-hygiene.mjs';
 
 function identity(stats) {
   if (stats.dev === undefined || stats.ino === undefined) {
@@ -262,13 +263,53 @@ export function collectObservation(config, observation, options = {}) {
   qualifyStateFilesystem(projectDir, options);
   capabilityProbe(projectDir, options);
   const stamp = new Date(observation.collectedAt).toISOString().replace(/[^0-9A-Za-z]/g, '');
-  return atomicRecord(
+  const filename = `${stamp}-${observation.recordId}.json`;
+  const recordPath = atomicRecord(
     projectDir,
-    `${stamp}-${observation.recordId}.json`,
+    filename,
     observation,
     stateDescriptor,
     sources,
   );
+  // 014-02 AC1: keep-latest storage hygiene (opt-in — the session-stop hook
+  // captures unconditionally, so a run of identical-state session ends would
+  // otherwise bloat storage). After writing the new record, if the newest
+  // PRIOR record shares this capture's state (same HEAD + execution
+  // {done,denom}), remove it — collapsing the run to one record at the newest
+  // `collectedAt`. Keeps the newest (advancing the timestamp), never the
+  // oldest, so a stall is never masked by a frozen timestamp. Forecast-neutral
+  // (pace is endpoint-based). Existing callers (manual snapshot, backfill) do
+  // NOT opt in — backfill's records are genuinely spaced, not a dense run.
+  if (options.coalesce) coalescePriorIdentical(projectDir, filename, observation);
+  return recordPath;
+}
+
+// 014-02 AC1 helper: remove the single newest PRIOR record when it shares the
+// new record's capture state. Records are named `<stampedCollectedAt>-<id>.json`
+// so lexical sort is chronological (same ordering readObservationHistory uses);
+// the newest name other than the just-written file is the prior latest. A
+// malformed/unreadable prior record is left untouched (never deleted on a parse
+// failure), and any hygiene error is swallowed — hygiene must never fail a
+// capture.
+function coalescePriorIdentical(projectDir, newFilename, newObservation) {
+  try {
+    const priors = fs
+      .readdirSync(projectDir)
+      .filter((name) => name.endsWith('.json') && name !== newFilename)
+      .sort();
+    if (priors.length === 0) return;
+    const priorName = priors[priors.length - 1];
+    const priorPath = path.join(projectDir, priorName);
+    let prior;
+    try {
+      prior = JSON.parse(fs.readFileSync(priorPath, 'utf8'));
+    } catch {
+      return; // unreadable/malformed prior — never delete on a parse failure
+    }
+    if (sameCaptureState(newObservation, prior)) fs.unlinkSync(priorPath);
+  } catch {
+    // hygiene is best-effort; a failure here must never break the capture
+  }
 }
 
 export function readObservationHistory(stateDir, projectId) {
