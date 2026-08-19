@@ -10,6 +10,7 @@
     "collect": "node scripts/snapshot.mjs",
     "backfill": "node scripts/backfill.mjs",
     "onboard": "node scripts/onboard.mjs",
+    "install-hook": "node scripts/install-hook.mjs",
     "test": "node --test"
   },
   "engines": {

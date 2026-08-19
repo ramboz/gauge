@@ -76,6 +76,19 @@ requires stable project ids, and provides deterministic legacy migration.
 `src/state.mjs` validates observations and writes immutable JSON records beneath
 the explicit `stateDir`; it never derives a write path from a source root.
 
+**Self-owned write surfaces (spec 014 thin client).** Gauge writes to exactly two
+places it owns, never a configured source repository: (1) its own instance state
+(observations/history) under `stateDir`, always via `collectObservation`
+(`src/state.mjs`) with its `assertDisjoint` source/state isolation; and (2) at
+**install time only**, the user's own Claude Code config
+(`~/.claude/settings.json`) to register the session-stop capture hook
+(`scripts/install-hook.mjs`, spec 014-01) — the user's own tool configuration, not
+a source repo. The `SessionEnd` capture hook itself (`scripts/session-stop-hook.mjs`)
+writes only Gauge state via `collectObservation`; it observes each matched
+project's `project.path` (main tree), never the session `cwd`, so unmerged
+worktree state cannot enter the history. The read-only-source constraint
+(ADR-0005) holds unchanged.
+
 ### Source adapters
 
 Translate source evidence into normalized observations. Planned adapters are:
