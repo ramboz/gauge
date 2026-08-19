@@ -23,12 +23,17 @@ function sampleTimes(observationMs) {
   return (observationMs || []).filter((t) => Number.isFinite(t)).slice().sort((a, b) => a - b);
 }
 
-// AC1: a transcript record's stable, chronologically-correct timestamp. Claude
-// Code stamps each JSONL record with an ISO `timestamp`; a resumed session
-// REPLAYS earlier records verbatim, carrying their ORIGINAL timestamp, so the
-// dedup-surviving first occurrence keeps the original time (replay-stable). A
-// record with no parseable timestamp returns null and is never bucketed into a
-// guessed window.
+// AC1: a transcript record's chronologically-correct timestamp, grounded by a
+// probe of REAL transcripts (deviation log). Claude Code stamps each JSONL
+// record with an ISO `timestamp`. A `requestId` groups a request's *streamed*
+// records, whose timestamps drift only within the request's own emission
+// (probed: max 89.6s across 322 replayed requestIds in a real 14-session
+// project; NONE spanned >1 hour, and no cross-day replay re-stamping was
+// observed). At the week-bucket granularity of the trend, that sub-90s drift is
+// negligible — every copy of a request falls in the same window — so the
+// dedup-surviving first occurrence buckets the request's spend into the correct
+// window regardless of which streamed copy wins. A record with no parseable
+// timestamp returns null and is never bucketed into a guessed window.
 export function recordTimestampMs(record) {
   const ts = record?.timestamp;
   if (typeof ts !== 'string') return null;

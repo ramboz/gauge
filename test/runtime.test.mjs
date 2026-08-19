@@ -1186,6 +1186,10 @@ test('server /api/data wiring reads each project\'s transcripts exactly ONCE via
   assert.doesNotMatch(src, /\bprojectTokenCost\(/);
   assert.doesNotMatch(src, /\bprojectCostByActivity\(/);
   assert.doesNotMatch(src, /\bprojectCostBySkill\(/);
+  // 014-03 strengthens this guard: the cost TREND must also reuse the bundle's
+  // deduped records, never a second raw transcript read in the handler.
+  assert.doesNotMatch(src, /\breadTranscriptRecords\(/);
+  assert.doesNotMatch(src, /\bsessionFilesForProject\(/);
 });
 
 test('card shows "< 0.1 commits/wk" — never "≈ 0" — when a real, non-null velocity rounds to zero (AC4 zero-as-healthy guard)', () => {

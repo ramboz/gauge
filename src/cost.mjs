@@ -434,6 +434,11 @@ export function projectCostBundle(
       byActivity: costByActivity(deduped, priceTable),
       bySkill: costBySkill(deduped, skillBySession, priceTable),
     },
+    // 014-03: expose the already-deduped record set (timestamps intact) so the
+    // cost TREND reuses this single read instead of re-enumerating + re-parsing
+    // + re-deduping the same transcripts — preserving 012-04's single-read
+    // invariant rather than reintroducing the per-request duplicate I/O.
+    records: deduped,
   };
 }
 

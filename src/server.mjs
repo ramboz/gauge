@@ -12,10 +12,7 @@ import { spliceLiveObservation } from './live-tail.mjs';
 import { attachMilestones } from './milestone.mjs';
 import { gitVelocity, attachVelocity, gitCommitTimestamps } from './velocity.mjs';
 import { gitTeamSignals, attachTeamSignals } from './team.mjs';
-import {
-  projectCostBundle, attachTokenCost, attachCostBreakdown,
-  sessionFilesForProject, readTranscriptRecords, DEFAULT_TRANSCRIPTS_ROOT,
-} from './cost.mjs';
+import { projectCostBundle, attachTokenCost, attachCostBreakdown } from './cost.mjs';
 import {
   velocityTrend, costTrend, attachVelocityTrend, attachCostTrend, DEFAULT_TREND_WINDOW_WEEKS,
 } from './trends.mjs';
@@ -150,9 +147,9 @@ const server = http.createServer((req, res) => {
           commitTimestamps = []; // no git / unreadable → velocityTrend yields explicit null
         }
         velocityTrendById[project.id] = velocityTrend(commitTimestamps, observationMs);
-        const records = sessionFilesForProject(transcriptsRoot || DEFAULT_TRANSCRIPTS_ROOT, project.path)
-          .flatMap(readTranscriptRecords);
-        costTrendById[project.id] = costTrend(records, observationMs);
+        // Reuse the deduped record set projectCostBundle already read this
+        // request (012-04 single-read invariant) — no second transcript read.
+        costTrendById[project.id] = costTrend(costBundleByProjectId[project.id]?.records, observationMs);
       }
       const withVelocityTrend = attachVelocityTrend(withCostBreakdown, velocityTrendById);
       const withCostTrend = attachCostTrend(withVelocityTrend, costTrendById);

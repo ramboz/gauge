@@ -55,12 +55,26 @@ test('costTrend: buckets deduped record cost by stable timestamp into trailing w
   assert.equal(trend.points[1].usd, 1.6); // both r1 and r2 within the 8-week window ending 08-20
 });
 
-test('costTrend replay-stable: a request replayed across two session files (same requestId + original timestamp) is counted ONCE, in its original window (AC1/AC3)', () => {
+test('costTrend replay-stable: a request whose streamed copies share a requestId is counted ONCE, at the first copy (AC1/AC3)', () => {
+  // Grounded (deviation-log probe): a requestId groups a request's streamed
+  // records with sub-90s drift; dedup keeps the first, counted once.
   const obs = [ms('2026-08-05T00:00:00Z'), ms('2026-08-06T00:00:00Z')];
-  const original = costRecord('r1', '2026-08-04T00:00:00Z', { input: 1_000_000 });
-  const replay = costRecord('r1', '2026-08-04T00:00:00Z', { input: 1_000_000 }); // verbatim replay, same ts
-  const trend = costTrend([original, replay], obs);
+  const copy1 = costRecord('r1', '2026-08-04T00:00:00Z', { input: 1_000_000 });
+  const copy2 = costRecord('r1', '2026-08-04T00:00:30Z', { input: 1_000_000 }); // same request, +30s streamed
+  const trend = costTrend([copy1, copy2], obs);
   assert.equal(trend.points[0].usd, 0.8); // counted once, not doubled
+  assert.equal(trend.points[1].usd, 0.8);
+});
+
+test('costTrend: intra-request sub-90s drift never splits a request across week windows (AC1 real-data grounding)', () => {
+  // Two window samples one week apart; a request streamed with sub-minute drift
+  // lands wholly in the earlier window (its copies never straddle a week bound).
+  const obs = [ms('2026-08-05T00:00:00Z'), ms('2026-08-12T00:00:00Z')];
+  const copy1 = costRecord('r1', '2026-08-04T23:59:15Z', { input: 1_000_000 });
+  const copy2 = costRecord('r1', '2026-08-04T23:59:59Z', { input: 1_000_000 }); // +44s, still 08-04
+  const trend = costTrend([copy1, copy2], obs);
+  assert.equal(trend.points[0].usd, 0.8); // in the window ending 08-05
+  // 8-week window ending 08-12 still contains 08-04 → same single $0.80, not doubled
   assert.equal(trend.points[1].usd, 0.8);
 });
 
