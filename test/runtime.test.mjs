@@ -808,6 +808,21 @@ test('server /api/data wiring reads each project\'s history and attaches the for
   assert.match(src, /readObservationHistory\(/);
 });
 
+// --- 014-02 AC4: the read-layer live-tail splice is wired before the forecast
+// fold (mirrors the attach* wiring-test idiom above), so removing the splice
+// line in server.mjs fails a composition-level test, not only the unit tests.
+test('server /api/data wiring splices the live observation as the history tail before attachForecasts (014-02 AC4)', () => {
+  const src = read('src/server.mjs');
+  assert.match(src, /import\s*\{\s*spliceLiveObservation\s*\}\s*from\s*'\.\/live-tail\.mjs'/);
+  assert.match(src, /spliceLiveObservation\(/);
+  // The splice must feed the histories passed to attachForecasts (currency
+  // before the fold), not run after it.
+  const spliceIdx = src.search(/spliceLiveObservation\(/);
+  const attachIdx = src.search(/attachForecasts\(/);
+  assert.ok(spliceIdx !== -1 && attachIdx !== -1 && spliceIdx < attachIdx,
+    'spliceLiveObservation must be wired before attachForecasts');
+});
+
 // --- 009-01 AC5: runtime never reads/parses product-vision.md, a release doc, ---
 // or a README to derive a goal/deadline — the only reader of those source
 // artifacts (for goal/deadline purposes) is src/discover.mjs (surfacing) and

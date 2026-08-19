@@ -306,7 +306,17 @@ function coalescePriorIdentical(projectDir, newFilename, newObservation) {
     } catch {
       return; // unreadable/malformed prior — never delete on a parse failure
     }
-    if (sameCaptureState(newObservation, prior)) fs.unlinkSync(priorPath);
+    if (sameCaptureState(newObservation, prior)) {
+      // Keep the NEWEST of the two identical-state records — never regress the
+      // latest timestamp (AC1: hygiene advances, never masks). Normally the
+      // just-written record is newest; under backward clock skew (a capture
+      // whose collectedAt precedes an identical prior — a spec edge case) it is
+      // the prior that is newest, so we drop the just-written older record
+      // instead. Either way exactly one record survives, at the newest
+      // collectedAt.
+      const newIsNewer = Date.parse(newObservation.collectedAt) >= Date.parse(prior.collectedAt);
+      fs.unlinkSync(newIsNewer ? priorPath : path.join(projectDir, newFilename));
+    }
   } catch {
     // hygiene is best-effort; a failure here must never break the capture
   }

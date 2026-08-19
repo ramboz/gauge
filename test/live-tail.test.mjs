@@ -92,6 +92,29 @@ test('AC5 bar measured post-splice: 0 stored supported records + a single live t
   assert.equal(forecast.reason, 'insufficient-history');
 });
 
+// --- AC2: real RAG only where scope is stable — honest scope-changed otherwise
+// (driven through the splice path this slice owns: stored captures + live tail).
+
+test('AC2a: a stable-denom captured series + the live tail renders a real on_track/at_risk band', () => {
+  const storedStableDenom = [
+    obs('2026-08-01T00:00:00Z', { done: 1, denom: 4 }),
+    obs('2026-08-02T00:00:00Z', { done: 2, denom: 4 }),
+  ];
+  const spliced = spliceLiveObservation(storedStableDenom, obs('2026-08-15T00:00:00Z', { done: 2, denom: 4 }));
+  const forecast = deriveForecast(spliced, DEADLINE);
+  assert.ok(['on_track', 'at_risk'].includes(forecast.state)); // a real band, not unknown
+  assert.notEqual(forecast.reason, 'scope-changed');
+});
+
+test('AC2b: a churning-denom captured series renders honest unknown(scope-changed), never a fabricated band', () => {
+  // Latest denom differs from the trailing window → Gate 4 collapses the window.
+  const storedChurn = [obs('2026-08-01T00:00:00Z', { done: 2, denom: 4 })];
+  const spliced = spliceLiveObservation(storedChurn, obs('2026-08-15T00:00:00Z', { done: 3, denom: 6 }));
+  const forecast = deriveForecast(spliced, DEADLINE);
+  assert.equal(forecast.state, 'unknown');
+  assert.equal(forecast.reason, 'scope-changed');
+});
+
 test('AC5 bar measured post-splice: 1 stored supported (≥1 day old) + the live tail can clear the gate into a real band', () => {
   const stored = [obs('2026-08-01T00:00:00Z', { done: 1, denom: 4 })]; // one real, time-separated reading
   const spliced = spliceLiveObservation(stored, obs('2026-08-30T00:00:00Z', { done: 2, denom: 4 }));

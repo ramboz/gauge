@@ -72,3 +72,40 @@ test('coalesce: first capture into an empty history is retained (no prior to com
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('coalesce clock-skew edge: a backward-skewed identical capture never regresses the retained timestamp', { skip: process.platform !== 'darwin' }, () => {
+  const { dir, project, config, jsonCount } = setup();
+  try {
+    // Write the NEWER capture first, then an identical OLDER one (clock skew).
+    collectObservation(config, observeProject(project, { now: '2026-08-10T00:00:00.000Z' }), { coalesce: true });
+    collectObservation(config, observeProject(project, { now: '2026-08-01T00:00:00.000Z' }), { coalesce: true });
+    assert.equal(jsonCount(), 1); // still one record
+    const { observations } = readObservationHistory(config.stateDir, 'p');
+    assert.equal(observations[0].collectedAt, '2026-08-10T00:00:00.000Z'); // the NEWER survived; timestamp not regressed
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('AC3: a git-backfill-style seed record and a session capture compose as one ascending series (no double-count, correct order)', { skip: process.platform !== 'darwin' }, () => {
+  const { dir, project, config, jsonCount } = setup();
+  try {
+    // A backfilled seed (older, NOT coalesced — genuine spaced history) then a
+    // fresh session capture (coalesce opt-in). Distinct HEAD state so nothing
+    // coalesces them.
+    const seed = observeProject(project, { now: '2026-08-01T00:00:00.000Z' });
+    seed.provenance = { ...seed.provenance, sourceRevision: 'seed-commit' };
+    collectObservation(config, seed); // backfill path: no coalesce
+    collectObservation(config, observeProject(project, { now: '2026-08-05T00:00:00.000Z' }), { coalesce: true });
+    assert.equal(jsonCount(), 2);
+    const { observations, errors } = readObservationHistory(config.stateDir, 'p');
+    assert.equal(errors.length, 0);
+    assert.equal(observations.length, 2); // one series, no double-count
+    assert.deepEqual(
+      observations.map((o) => o.collectedAt),
+      ['2026-08-01T00:00:00.000Z', '2026-08-05T00:00:00.000Z'], // ascending
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
