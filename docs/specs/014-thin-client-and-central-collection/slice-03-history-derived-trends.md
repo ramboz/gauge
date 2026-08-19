@@ -1,7 +1,7 @@
 ---
-status: REVIEWED
+status: RECONCILED
 dependencies: [014-02]
-last_verified:
+last_verified: 2026-08-18
 frame_review: true
 arch_review: true
 claimed_by: claude/jig-orient-4db1fd
