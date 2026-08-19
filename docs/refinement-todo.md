@@ -189,6 +189,31 @@ reads `unknown` over a window that was real, or when the owner pulls cost
 durability into a committed release. (Deferred on leanness grounds — YAGNI until
 transcript rotation actually threatens the recompute source.)
 
+### Stale active-session marker GC (from spec 014-04 arch review)
+
+**Decision needed:** whether to reap orphaned active-session markers. A crashed
+session never fires `SessionEnd`, so its marker lingers in
+`<stateDir>/active-sessions/` indefinitely; the read layer `readdir`+`readFile`+
+`stat`s every marker on each `/api/data` request. Correctness is unaffected (a
+stale transcript mtime → `runningNow: false`), but nothing reaps stale markers or
+bounds the per-request scan. Candidate: the read layer (or the SessionStart hook)
+deletes markers whose transcript mtime is far past `RUNNING_STALE_AFTER_MS`.
+
+**Resolution trigger:** when session volume grows beyond the single-user MVP such
+that the unbounded `active-sessions/` scan is a measurable cost, or before hosted
+multi-user. (Deferred on leanness grounds — correct + cheap at MVP scale.)
+
+### Shared hook-scaffold helper (from spec 014-04 craft review)
+
+**Decision needed:** extract the hook boilerplate. `readStdin` is byte-identical
+and `diagnostic`/entrypoint (`run().finally(exit 0)`) differ only by a label
+across `scripts/session-stop-hook.mjs` and `scripts/session-start-hook.mjs` — now
+at ADR-0002's inline-mirror budget. A shared `src/hook-io.mjs` (`readStdin`,
+`makeDiagnostic(prefix)`, a `runHook(fn)` runner) would collapse it.
+
+**Resolution trigger:** before a **4th** hook script is added (the ADR-0002
+extract-on-third-caller line; two hooks is within the inline-mirror budget today).
+
 ### Hosted small-team access
 
 **Decision needed:** GitHub App registration, server-side session model,

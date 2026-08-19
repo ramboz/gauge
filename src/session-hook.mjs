@@ -8,7 +8,7 @@ import path from 'node:path';
 // Verified 2026-08-18 (spec `## Assumptions` A1): the SessionEnd hook
 // receives `{cwd, session_id, transcript_path, hook_event_name, exit_reason}`
 // on stdin as a single JSON object. Only `cwd` is required by this slice.
-export function parseSessionEndPayload(raw) {
+export function parseHookPayload(raw) {
   let payload;
   try {
     payload = JSON.parse(raw);

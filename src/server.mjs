@@ -16,7 +16,7 @@ import { projectCostBundle, attachTokenCost, attachCostBreakdown } from './cost.
 import {
   velocityTrend, costTrend, attachVelocityTrend, attachCostTrend, DEFAULT_TREND_WINDOW_WEEKS,
 } from './trends.mjs';
-import { runningProjectIds, attachRunningNow } from './session-marker.mjs';
+import { readActiveSessionMarkers, runningProjectIds, attachRunningNow } from './session-marker.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_PATH = resolveConfigPath(ROOT, process.env.GAUGE_CONFIG);
@@ -161,30 +161,9 @@ const server = http.createServer((req, res) => {
       // active-sessions dir / unreadable markers / missing transcript → nobody
       // running, today's derivation unchanged. Composes ALONGSIDE the forecast's
       // live-tail splice (a separate additive join), never duplicating it.
-      let runningIds = new Set();
-      try {
-        const markersDir = path.join(path.resolve(freshConfig.stateDir), 'active-sessions');
-        const markers = [];
-        const mtimeByPath = {};
-        for (const name of fs.readdirSync(markersDir).filter((n) => n.endsWith('.json'))) {
-          try {
-            const marker = JSON.parse(fs.readFileSync(path.join(markersDir, name), 'utf8'));
-            markers.push(marker);
-            if (typeof marker.transcriptPath === 'string' && mtimeByPath[marker.transcriptPath] === undefined) {
-              try {
-                mtimeByPath[marker.transcriptPath] = fs.statSync(marker.transcriptPath).mtimeMs;
-              } catch {
-                mtimeByPath[marker.transcriptPath] = null; // missing/unreadable transcript → not running
-              }
-            }
-          } catch {
-            // skip a malformed marker — never break the read
-          }
-        }
-        runningIds = runningProjectIds(markers, mtimeByPath, velocityNowMs, freshConfig.projects);
-      } catch {
-        // no active-sessions directory → nobody running (absent-safe, AC7)
-      }
+      const markersDir = path.join(path.resolve(freshConfig.stateDir), 'active-sessions');
+      const { markers, mtimeByPath } = readActiveSessionMarkers(markersDir);
+      const runningIds = runningProjectIds(markers, mtimeByPath, velocityNowMs, freshConfig.projects);
       const withRunningNow = attachRunningNow(withCostTrend, runningIds);
       // Global attention queue (spec 009-03, ADR-0013): a pure ranking over
       // the forecast/risk read this loop just attached — no additional I/O,

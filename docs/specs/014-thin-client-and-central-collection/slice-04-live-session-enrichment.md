@@ -1,9 +1,10 @@
 ---
-status: DRAFT
+status: IN_PROGRESS
 dependencies: [014-01]
 last_verified:
 frame_review: true
 arch_review: true
+claimed_by: claude/jig-orient-4db1fd
 ---
 
 <!-- jig grounding (spec 064-02 / ADR-0020): ground factual claims about
@@ -109,23 +110,81 @@ marker directory absent entirely (absent-safe, AC7); a marker read that throws
 (caught, degrades to absent).
 
 **DoD:**
-- [ ] All ACs pass; full test suite green (no regressions).
-- [ ] Implementer test coverage exercises each AC with at least one fixture.
+- [x] All ACs pass; full test suite green (no regressions).
+- [x] Implementer test coverage exercises each AC with at least one fixture.
       Edge cases above are covered explicitly.
-- [ ] Each new test has been shown to fail when its feature is removed.
-- [ ] Reviewed by `reviewer` subagent (compliance + craft + arch; frame-critique
+- [x] Each new test has been shown to fail when its feature is removed.
+- [x] Reviewed by `reviewer` subagent (compliance + craft + arch; frame-critique
       per `frame_review: true`).
-- [ ] Implementation review passed.
-- [ ] Deviation log produced under this slice heading.
-- [ ] Reconciliation sweep produced under this slice heading.
-- [ ] Reconciliation review passed.
-- [ ] `docs/refinement-todo.md` updated if any decisions were deferred.
+- [x] Implementation review passed.
+- [x] Deviation log produced under this slice heading.
+- [x] Reconciliation sweep produced under this slice heading.
+- [x] Reconciliation review passed.
+- [x] `docs/refinement-todo.md` updated if any decisions were deferred.
 
 **Anti-horizontal-phasing check:** After this slice the owner sees which projects
 have work running right now — a live, glanceable fact the point-in-time board
 could not show — while a machine without the source sees no regression.
 
+### Deviation log (after reconciliation)
+
+1. **Implemented directly in the main loop** (session-limit continuity).
+   Independent review stayed fresh-context subagents (compliance + craft + arch).
+2. **Converged design implemented.** `src/session-marker.mjs` (pure
+   `runningProjectIds` fold + `attachRunningNow` join + `markerFilename` +
+   `RUNNING_STALE_AFTER_MS = 15min`, plus the `readActiveSessionMarkers` /
+   `clearMarker` I/O wrappers). `scripts/session-start-hook.mjs` writes a 4-field
+   marker under `<stateDir>/active-sessions/` (atomic; isolation contract mirrors
+   014-01 — no stdout, never disrupts start, stderr diagnostic + exit 0);
+   014-01's `SessionEnd` hook clears it via `clearMarker`. Liveness = the
+   transcript's **mtime** (`statSync` only — never reads content, AC8). Read-layer
+   join composes **alongside** the forecast live-tail splice (a separate additive
+   boolean join, per the 014-03 arch note — no double-appended `now` endpoint).
+   Absent-safe throughout (AC7): missing dir / malformed marker / missing
+   transcript → nobody running, today's card unchanged.
+3. **Hook-install generalized (extends 014-01).** `installHook`/`uninstallHook`/
+   `hasHook` gained an `event` param (default `SessionEnd`, so 014-01 is
+   unchanged); the installer registers **both** the SessionEnd capture hook and
+   the SessionStart marker hook, and uninstall drops an event key that fully
+   empties — restoring the exact pre-install shape for a Gauge-created event.
+   Two 014-01 installer tests were updated (the installer now registers 2 hooks) —
+   honest reflection of the extension, not weakened coverage.
+4. **Review nits addressed post-review (all non-blocking).** (a) craft+compliance:
+   the server marker-I/O loop was source-asserted only → **extracted
+   `readActiveSessionMarkers`** (I/O wrapper mirroring `gitVelocity`) and added
+   behavioral cross-platform tests for the malformed-skip / missing-transcript-null
+   / absent-dir branches. (b) compliance darwin-skip: the AC2 clear logic was
+   **extracted to `clearMarker`** and unit-tested cross-platform; the remaining
+   integration test's darwin-skip is now documented (it drives `stopRun`'s
+   darwin-only capture step). (c) craft+arch: **renamed `parseSessionEndPayload`
+   → `parseHookPayload`** (event-agnostic). (d) `startedAt` is stored as
+   identity/provenance, intentionally unused for liveness (AC3 = mtime) — noted so
+   it is not later "cleaned up".
+5. **Recorded follow-ups (`docs/refinement-todo.md`).** Stale-marker GC / bounded
+   `active-sessions/` scan (arch — a crashed session's marker lingers; correct via
+   stale-mtime but unreaped); a shared `src/hook-io.mjs` scaffold before a **4th**
+   hook (craft — two hooks is within the ADR-0002 inline-mirror budget today).
+6. **AC7 byte-parity** is satisfied by decomposition (pure absent-safe fold + card
+   render with `runningNow:false` → no badge), consistent with the project's
+   source-match convention for `/api/data` joins (no slice boots the server), now
+   reinforced by the behavioral `readActiveSessionMarkers` tests.
+
+### Reconciliation sweep
+
+| Artifact | Disposition | Rationale |
+|----------|-------------|-----------|
+| `README.md` | `no-op` | No front-door change. |
+| `docs/specs/README.md` | `updated` | Regenerated by `workflow.py status-board` at close-out. |
+| `docs/product-vision.md` | `no-op` | The optional live-session seam is in-scope (thin-client enrichment); no scope drift. |
+| `docs/architecture.md` | `no-op` | ADR-0005 (write only to stateDir), ADR-0006 (pure fold + read-layer I/O), read-only-observer identity all upheld (arch pass concurred). |
+| Primer surfaces (`CLAUDE.md`/`AGENTS.md`/templates) | `updated` | Spec 014 CLOSES with this slice → primer hygiene applied at close-out (below). |
+| `docs/inbox.md` | `no-op` | Nothing resolved/added. |
+| `docs/refinement-todo.md` | `updated` | Added the stale-marker-GC and hook-io-scaffold follow-ups. |
+| `docs/memory/**` | `no-op` | No new durable term beyond the deviation log; memory-sync at spec close. |
+| `docs/decisions/` / ADR index | `no-op` | No ADR: additive optional signal, no schema change, no load-bearing decision with rejected alternatives beyond the recorded converged design. |
+
 ### Close-out (post-DONE)
 
 - [ ] `docs/specs/README.md` regenerated by `workflow.py status-board`.
-- [ ] Primer hygiene per spec 025-01 rule (only if this slice closes the spec).
+- [ ] Primer hygiene per spec 025-01 rule (spec 014 closes with this slice —
+      compress the Active-build entry to the shipped release + status-board Notes).

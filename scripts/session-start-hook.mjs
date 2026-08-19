@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, resolveConfigPath } from '../src/config.mjs';
-import { parseSessionEndPayload, matchProjectForCwd } from '../src/session-hook.mjs';
+import { parseHookPayload, matchProjectForCwd } from '../src/session-hook.mjs';
 import { markerFilename } from '../src/session-marker.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,7 +36,7 @@ function diagnostic(message) {
 export async function run({ rawStdin, root = ROOT, nowIso } = {}) {
   let payload;
   try {
-    payload = parseSessionEndPayload(rawStdin); // shares the {cwd, ...} shape; validates cwd
+    payload = parseHookPayload(rawStdin); // shares the {cwd, ...} shape; validates cwd
   } catch (error) {
     diagnostic(error.message);
     return;

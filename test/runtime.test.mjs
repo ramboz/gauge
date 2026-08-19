@@ -845,13 +845,18 @@ test('the card renders a velocity trend and a cost trend, with an explicit "not 
 // --- 014-04: live-session "running now" enrichment --------------------------
 test('server /api/data wiring computes running-now from active-session markers and attaches it (014-04)', () => {
   const src = read('src/server.mjs');
-  assert.match(src, /import\s*\{\s*runningProjectIds,\s*attachRunningNow\s*\}\s*from\s*'\.\/session-marker\.mjs'/);
+  assert.match(src, /import\s*\{[^}]*\breadActiveSessionMarkers\b[^}]*\brunningProjectIds\b[^}]*\battachRunningNow\b[^}]*\}\s*from\s*'\.\/session-marker\.mjs'/);
   assert.match(src, /active-sessions/);
+  assert.match(src, /readActiveSessionMarkers\(/);
   assert.match(src, /runningProjectIds\(/);
   assert.match(src, /attachRunningNow\(/);
-  // AC8 privacy: the read layer stats the transcript, never reads its content.
-  assert.match(src, /statSync\(/);
-  assert.doesNotMatch(src, /readFileSync\([^)]*transcriptPath/); // never reads transcript content
+});
+
+test('the active-session marker reader stats the transcript for mtime, NEVER reads its content (014-04 AC8 privacy)', () => {
+  const src = read('src/session-marker.mjs');
+  assert.match(src, /statSync\(/); // liveness = mtime
+  // the only readFileSync is the MARKER json, never the transcript content.
+  assert.doesNotMatch(src, /readFileSync\([^)]*transcriptPath/);
 });
 
 test('the card renders an additive "running now" badge only when p.runningNow (014-04 AC4/AC6)', () => {

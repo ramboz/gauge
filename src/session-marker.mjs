@@ -11,6 +11,8 @@
 // each marker's transcript mtime. All I/O (listing the marker dir, reading
 // markers, `stat`-ing transcripts — never reading their content) lives in the
 // read layer (src/server.mjs), mirroring velocity/cost/trends.
+import fs from 'node:fs';
+import path from 'node:path';
 import { matchProjectForCwd } from './session-hook.mjs';
 
 // The staleness window: a marker whose transcript mtime is older than this is
@@ -23,6 +25,51 @@ export const RUNNING_STALE_AFTER_MS = 15 * 60 * 1000; // 15 minutes
 // AC1: markers are named by session id so SessionEnd can clear exactly one.
 export function markerFilename(sessionId) {
   return `${String(sessionId).replace(/[^0-9A-Za-z_-]/g, '')}.json`;
+}
+
+// AC3/AC7/AC8 (the marker read — I/O wrapper, mirroring velocity.mjs's
+// gitVelocity around the pure velocityFromTimestamps). Reads the active-session
+// markers under `markersDir` and, for each distinct `transcriptPath`, its file
+// mtime — the liveness signal. NEVER reads a transcript's content, only `stat`s
+// it (AC8 privacy). Absent-safe (AC7): a missing markers dir returns empty; a
+// malformed marker file is skipped; a missing/unreadable transcript maps to
+// `null` (→ not running). Returns `{ markers, mtimeByPath }` to feed the pure
+// `runningProjectIds` fold.
+export function readActiveSessionMarkers(markersDir) {
+  let names;
+  try {
+    names = fs.readdirSync(markersDir).filter((name) => name.endsWith('.json'));
+  } catch {
+    return { markers: [], mtimeByPath: {} }; // no active-sessions directory → nobody running
+  }
+  const markers = [];
+  const mtimeByPath = {};
+  for (const name of names) {
+    let marker;
+    try {
+      marker = JSON.parse(fs.readFileSync(path.join(markersDir, name), 'utf8'));
+    } catch {
+      continue; // malformed marker — skipped, never breaks the read
+    }
+    markers.push(marker);
+    if (typeof marker.transcriptPath === 'string' && mtimeByPath[marker.transcriptPath] === undefined) {
+      try {
+        mtimeByPath[marker.transcriptPath] = fs.statSync(marker.transcriptPath).mtimeMs;
+      } catch {
+        mtimeByPath[marker.transcriptPath] = null; // missing/unreadable transcript → not running
+      }
+    }
+  }
+  return { markers, mtimeByPath };
+}
+
+// AC2: clear a session's active-session marker by id (the SessionEnd hook's
+// side of the start/end bracket). A missing marker — never started, unmatched,
+// or already cleared — is a clean no-op (`force: true`), never an error.
+export function clearMarker(stateDir, sessionId) {
+  if (!sessionId || typeof sessionId !== 'string') return;
+  const markerPath = path.join(path.resolve(stateDir), 'active-sessions', markerFilename(sessionId));
+  fs.rmSync(markerPath, { force: true });
 }
 
 // AC4/AC5 (pure fold): the set of configured project ids that have a live

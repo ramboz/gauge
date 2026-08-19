@@ -10,15 +10,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { parseSessionEndPayload, matchProjectForCwd } from '../src/session-hook.mjs';
+import { parseHookPayload, matchProjectForCwd } from '../src/session-hook.mjs';
 import { run } from '../scripts/session-stop-hook.mjs';
 
 const SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'session-stop-hook.mjs');
 
 // --- src/session-hook.mjs: pure logic --------------------------------------
 
-test('parseSessionEndPayload: accepts the verified SessionEnd stdin shape and extracts cwd', () => {
-  const payload = parseSessionEndPayload(JSON.stringify({
+test('parseHookPayload: accepts the verified SessionEnd stdin shape and extracts cwd', () => {
+  const payload = parseHookPayload(JSON.stringify({
     cwd: '/some/project',
     session_id: 'abc',
     transcript_path: '/tmp/t.jsonl',
@@ -28,17 +28,17 @@ test('parseSessionEndPayload: accepts the verified SessionEnd stdin shape and ex
   assert.equal(payload.cwd, '/some/project');
 });
 
-test('parseSessionEndPayload: rejects invalid JSON', () => {
-  assert.throws(() => parseSessionEndPayload('not json'), /invalid SessionEnd payload/);
+test('parseHookPayload: rejects invalid JSON', () => {
+  assert.throws(() => parseHookPayload('not json'), /invalid SessionEnd payload/);
 });
 
-test('parseSessionEndPayload: rejects a non-object payload', () => {
-  assert.throws(() => parseSessionEndPayload('[]'), /expected a JSON object/);
-  assert.throws(() => parseSessionEndPayload('"hello"'), /expected a JSON object/);
+test('parseHookPayload: rejects a non-object payload', () => {
+  assert.throws(() => parseHookPayload('[]'), /expected a JSON object/);
+  assert.throws(() => parseHookPayload('"hello"'), /expected a JSON object/);
 });
 
-test('parseSessionEndPayload: rejects a payload missing cwd', () => {
-  assert.throws(() => parseSessionEndPayload(JSON.stringify({ session_id: 'abc' })), /missing cwd/);
+test('parseHookPayload: rejects a payload missing cwd', () => {
+  assert.throws(() => parseHookPayload(JSON.stringify({ session_id: 'abc' })), /missing cwd/);
 });
 
 test('matchProjectForCwd: matches when cwd equals project.path exactly', () => {

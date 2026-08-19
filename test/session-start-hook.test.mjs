@@ -64,7 +64,11 @@ test('SessionStart with no session_id writes no marker (cannot address it)', asy
   assert.ok(!files.includes('.json'));
 });
 
-test('SessionEnd clears the matching marker by session_id (AC2)', { skip: process.platform !== 'darwin' }, async () => {
+// Skipped off-darwin only because this drives the full SessionEnd `stopRun`,
+// whose capture step (collectObservation) uses a darwin-only filesystem-identity
+// probe (mirrors test/session-stop-hook.test.mjs). The clear-by-session_id logic
+// itself is covered cross-platform by session-marker.test.mjs's `clearMarker` test.
+test('SessionEnd clears the matching marker by session_id (AC2, integration)', { skip: process.platform !== 'darwin' }, async () => {
   await withConfig(() => startRun({ rawStdin: JSON.stringify({ cwd: source, session_id: 'sess-clear', transcript_path: '/tmp/c.jsonl' }) }));
   const markerPath = path.join(markersDir, markerFilename('sess-clear'));
   assert.ok(fs.existsSync(markerPath), 'marker exists before SessionEnd');
