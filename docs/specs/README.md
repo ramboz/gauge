@@ -52,7 +52,7 @@
 | [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-01 — git-backfill seed lights the deadline forecast | **DONE** |  |
 | [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-02 — neutral date-free pace (advancing/stalled) | **DONE** |  |
 | [013-date-independent-forecast](013-date-independent-forecast/spec.md) | 013-03 — curated soft appetite-window (green/amber) | **DONE** |  |
-| [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-01 — session-stop capture hook + auto-installer | DRAFT |  |
+| [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-01 — session-stop capture hook + auto-installer | **DONE** |  |
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-02 — capture-validity hardening: honest RAG on captured history | DRAFT |  |
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-03 — history-derived velocity + cost trends | DRAFT |  |
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-04 — live-session "running now" enrichment (optional) | DRAFT |  |
@@ -86,4 +86,5 @@ Advisory (ADR-0040 auditability — never blocks). Regenerated from `reviews/sli
 
 - **0** pass(es) recorded `not-shown` (selection step did not run — the kill-criterion-1 defect signal).
 - **14** pass(es) recorded `non-interactive` (declared no-orchestrator / CI).
-- **0** shown-and-declined anomaly(ies) (a high-confidence richer skill was shown and not applied):
+- **1** shown-and-declined anomaly(ies) (a high-confidence richer skill was shown and not applied):
+  - `014-thin-client-and-central-collection/slice-01-craft.md` — applied `pr-review`; declined: scout-pr-review
