@@ -1,7 +1,7 @@
 ---
-status: IN_PROGRESS
+status: RECONCILED
 dependencies: [014-01]
-last_verified:
+last_verified: 2026-08-18
 frame_review: true
 arch_review: true
 claimed_by: claude/jig-orient-4db1fd
@@ -132,21 +132,21 @@ is *older* than the latest record (clock skew — never reorders incorrectly); a
 same-day backfill seed then a fresh capture (compose, AC3).
 
 **DoD:**
-- [ ] All ACs pass; full test suite green (no regressions).
-- [ ] Implementer test coverage exercises each AC with at least one fixture.
+- [x] All ACs pass; full test suite green (no regressions).
+- [x] Implementer test coverage exercises each AC with at least one fixture.
       Edge cases above are covered explicitly.
-- [ ] Each new test has been shown to fail when its feature is removed.
-- [ ] Reviewed by `reviewer` subagent (compliance + craft + arch; frame-critique
+- [x] Each new test has been shown to fail when its feature is removed.
+- [x] Reviewed by `reviewer` subagent (compliance + craft + arch; frame-critique
       per `frame_review: true`).
-- [ ] Implementation review passed.
-- [ ] **Dogfood probe:** captured (non-backfilled) history on at least one real
+- [x] Implementation review passed.
+- [x] **Dogfood probe:** captured (non-backfilled) history on at least one real
       stable-scope project lights a real RAG band, and a scope-churning project
       reads honest `scope-changed` — recorded in the deviation log, so the payoff
       is verified against real data, not fixtures alone.
-- [ ] Deviation log produced under this slice heading.
-- [ ] Reconciliation sweep produced under this slice heading.
-- [ ] Reconciliation review passed.
-- [ ] `docs/refinement-todo.md` updated if any decisions were deferred.
+- [x] Deviation log produced under this slice heading.
+- [x] Reconciliation sweep produced under this slice heading.
+- [x] Reconciliation review passed.
+- [x] `docs/refinement-todo.md` updated if any decisions were deferred.
 
 **Anti-horizontal-phasing check:** After this slice, a Gauge owner's captured
 history is a clean series of **genuine changes** — so a worked project with
@@ -155,6 +155,62 @@ own captured (non-backfilled) history, while a scope-churning project honestly
 reads `scope-changed` rather than a fabricated band or a false `at_risk`
 flatline. (The dogfood claim is backed by a probe against Gauge's own captured
 history in the DoD, not asserted on fixtures alone.)
+
+### Deviation log (after reconciliation)
+
+1. **Implemented directly in the main loop.** The first implementer subagent died
+   on a session limit mid-task with no partial code; the slice was re-implemented
+   in the orchestrator loop. Independent review remained separate fresh-context
+   subagents (compliance + craft + arch + a fresh compliance re-review), so review
+   independence held.
+2. **Two pure modules + opt-in capture hygiene + a read-layer splice.**
+   `src/capture-hygiene.mjs` (`sameCaptureState`, keyed on git HEAD + execution
+   `{done,denom}`) and `src/live-tail.mjs` (`spliceLiveObservation`, always-append)
+   are pure. `collectObservation` gained an **opt-in** `coalesce` option
+   (`src/state.mjs`) that removes the newest identical-state prior after writing —
+   default-off, so manual `snapshot` and `backfill` are unaffected; only the
+   session-stop hook opts in. `src/server.mjs` splices the live `observeAll`
+   observation as the history tail before `attachForecasts`; `deriveForecast` is
+   unchanged (pure, `now`-free — ADR-0006).
+3. **Cross-slice change to 014-01 (in-spec evolution).** Enabling `coalesce` in the
+   014-01 hook changed two 014-01 tests that had asserted append-count: identical
+   consecutive captures of the unchanged main tree now coalesce to one record at
+   the newest `collectedAt`. Updated to assert the coalesced outcome (not a
+   weakening — compliance confirmed). 014-02's charter is exactly to harden 014-01's
+   capture, so this is expected, not drift.
+4. **Review fixes (all reviewer findings addressed).** Clock-skew guard
+   (arch+craft+compliance): `coalescePriorIdentical` now compares `collectedAt` and
+   drops the *older* of two identical-state records, so a backward-skewed capture
+   never regresses the latest timestamp (+ witnessed test). Added AC2a/AC2b tests
+   (stable→band, churn→`scope-changed`), an AC3 backfill+capture compose test, and a
+   `server.mjs` live-tail wiring test matching the `attach*` idiom.
+5. **Dogfood probe (DoD) — verified on real captured history, not fixtures.** Ran
+   `npm run backfill --project-id gauge` (11 reconstructed points) + the live-tail
+   splice through the real read path: **gauge → `at_risk(no-forward-progress)`** (a
+   real RAG band on captured history, honest — milestone progress flat as the
+   2026-08-28 deadline nears), and scope-churning projects (jig, servo, shaper,
+   mystique-cwv) → honest `unknown('scope-changed')`. The splice demonstrably shifts
+   real readings (rtb `insufficient-history`→`stalled`; servo `stale-evidence`→
+   `scope-changed`) and never fabricates an `on_track`.
+6. **Forward notes carried (arch reconciliation).** 014-03 must **not** read
+   observation-record *count* as a trend signal (coalescing collapses flat runs but
+   preserves every genuine change point). 014-04's running-now join must **compose
+   with**, not duplicate, the live-tail splice (do not double-append a `now`
+   endpoint). Recorded here for the next slices; no `refinement-todo` change needed.
+
+### Reconciliation sweep
+
+| Artifact | Disposition | Rationale |
+|----------|-------------|-----------|
+| `README.md` | `no-op` | No user-facing front-door change; the capture/derive plumbing is internal. |
+| `docs/specs/README.md` | `updated` | Regenerated by `workflow.py status-board` at close-out (below). |
+| `docs/product-vision.md` | `no-op` | No scope/behavior drift; honest-unknown + read-only-observer contracts preserved. |
+| `docs/architecture.md` | `no-op` | ADR-0006 (pure derivation) and ADR-0005 (source/state isolation) upheld — the splice adds the clock only in the read layer, coalescing removes only Gauge's own records; no boundary moved. |
+| Primer surfaces: `CLAUDE.md` / `AGENTS.md` / templates | `no-op` | Spec 014 still in flight (014-03/04 pending); primer compression waits for spec close. |
+| `docs/inbox.md` | `no-op` | No items resolved or added by this slice. |
+| `docs/refinement-todo.md` | `no-op` | No new deferred decisions; forward notes for 014-03/04 live in the deviation log. |
+| `docs/memory/**` | `no-op` | No new durable term/learning beyond the deviation log; memory-sync at spec close. |
+| `docs/decisions/` / ADR index | `no-op` | No ADR: the `coalesce` state-contract evolution is opt-in and within ADR-0005's own-state scope (arch pass concurred); the splice is within ADR-0006. |
 
 ### Close-out (post-DONE)
 
