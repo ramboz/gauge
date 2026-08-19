@@ -78,6 +78,20 @@ test('costTrend: intra-request sub-90s drift never splits a request across week 
   assert.equal(trend.points[1].usd, 0.8);
 });
 
+test('costTrend: a request whose streamed copies straddle a week boundary is counted ONCE at its first occurrence — never doubled (AC1 boundary witness)', () => {
+  // copy1 just before midnight, copy2 ~40s later just after — the two-window
+  // samples sit on either side. Dedup keeps the first; the request's single
+  // spend is counted exactly once across the trend, never split or doubled.
+  const obs = [ms('2026-08-09T00:00:30Z'), ms('2026-08-16T00:00:00Z')]; // ~week apart
+  const copy1 = costRecord('r1', '2026-08-08T23:59:50Z', { input: 1_000_000 });
+  const copy2 = costRecord('r1', '2026-08-09T00:00:30Z', { input: 1_000_000 }); // +40s, across midnight
+  const trend = costTrend([copy1, copy2], obs);
+  // Both window samples' trailing 8-week windows contain 08-08/08-09, so each
+  // point shows the single $0.80 — counted once, never $1.60.
+  assert.equal(trend.points[0].usd, 0.8);
+  assert.equal(trend.points[1].usd, 0.8);
+});
+
 test('costTrend: records with no timestamp or an unpriced model are EXCLUDED — never dropped into a guessed window (AC3)', () => {
   const obs = [ms('2026-08-05T00:00:00Z'), ms('2026-08-20T00:00:00Z')];
   const noTs = { requestId: 'r1', message: { model: 'claude-haiku-4-5-20251001', usage: { input_tokens: 1_000_000 } } };

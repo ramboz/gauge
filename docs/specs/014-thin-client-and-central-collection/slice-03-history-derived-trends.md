@@ -1,5 +1,5 @@
 ---
-status: IN_PROGRESS
+status: REVIEWED
 dependencies: [014-02]
 last_verified:
 frame_review: true
@@ -87,17 +87,17 @@ point value); a gap in the series (missing window buckets); a metric that is
 recompute chosen).
 
 **DoD:**
-- [ ] All ACs pass; full test suite green (no regressions).
-- [ ] Implementer test coverage exercises each AC with at least one fixture.
+- [x] All ACs pass; full test suite green (no regressions).
+- [x] Implementer test coverage exercises each AC with at least one fixture.
       Edge cases above are covered explicitly.
-- [ ] Each new test has been shown to fail when its feature is removed.
-- [ ] Reviewed by `reviewer` subagent (compliance + craft + arch; frame-critique
+- [x] Each new test has been shown to fail when its feature is removed.
+- [x] Reviewed by `reviewer` subagent (compliance + craft + arch; frame-critique
       per `frame_review: true`).
-- [ ] Implementation review passed.
-- [ ] Deviation log produced under this slice heading.
-- [ ] Reconciliation sweep produced under this slice heading.
-- [ ] Reconciliation review passed.
-- [ ] `docs/refinement-todo.md` carries the cost-durability follow-up (persist
+- [x] Implementation review passed.
+- [x] Deviation log produced under this slice heading.
+- [x] Reconciliation sweep produced under this slice heading.
+- [x] Reconciliation review passed.
+- [x] `docs/refinement-todo.md` carries the cost-durability follow-up (persist
       cost when transcripts rotate) with its resolution trigger.
 
 **Anti-horizontal-phasing check:** After this slice the owner sees, on each card,
