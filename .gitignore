@@ -36,3 +36,4 @@ credentials/
 # servo design-eval tooling (scoped, dev-only; see ADR-0001 note)
 .servo/design-eval/node_modules/
 .servo/design-eval/shots/
+.servo/design-eval/ledger.jsonl
