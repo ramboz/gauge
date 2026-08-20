@@ -24,7 +24,11 @@ import {
   projectCostBySkill,
   projectCostBundle,
   attachCostBreakdown,
+  projectTranscriptDirs,
+  trackTranscriptDirs,
+  trackOptionsForProjects,
 } from '../src/cost.mjs';
+import os from 'node:os';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_ROOT = path.join(HERE, 'fixtures', 'cost-transcripts');
@@ -78,6 +82,54 @@ test('readTranscriptRecords: a missing file returns an empty array rather than t
 });
 
 // --- sessionFilesForProject (AC1/AC4) ---------------------------------------
+
+test('projectTranscriptDirs / sessionFilesForProject: worktree session dirs are included (worktree-undercount fix), without grabbing a sibling project by prefix', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-cost-wt-'));
+  try {
+    const enc = encodeProjectPath('/Users/fake/wt-proj'); // -Users-fake-wt-proj
+    const wt = `${enc}--claude-worktrees-slice-01`;
+    const sibling = encodeProjectPath('/Users/fake/wt-proj-experiments'); // must NOT be grabbed
+    for (const [dir, file] of [[enc, 'main.jsonl'], [wt, 'wt.jsonl'], [sibling, 'other.jsonl']]) {
+      fs.mkdirSync(path.join(root, dir));
+      fs.writeFileSync(path.join(root, dir, file), '');
+    }
+    const dirs = projectTranscriptDirs(root, '/Users/fake/wt-proj');
+    assert.ok(dirs.includes(enc) && dirs.includes(wt), 'exact + worktree dirs are both included');
+    assert.ok(!dirs.includes(sibling), 'the -experiments sibling project is not grabbed by the prefix');
+    assert.equal(sessionFilesForProject(root, '/Users/fake/wt-proj').length, 2); // main + worktree, not the sibling
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('trackTranscriptDirs: a monorepo track claims its slug-matched worktrees; the primary (most matches) also gets the repo-root + unmatched worktrees; a never-touched track gets nothing (Superpowers → 0)', () => {
+  const enc = '-Users-x-mystique';
+  const dirs = [
+    enc,
+    `${enc}--claude-worktrees-alt-text-cwv-review`,
+    `${enc}--claude-worktrees-cwv-audit`,
+    `${enc}--claude-worktrees-random-cleanup`,
+  ];
+  const slugs = ['cwv', 'superpowers'];
+  const cwv = trackTranscriptDirs(dirs, enc, 'cwv', slugs);
+  const superpowers = trackTranscriptDirs(dirs, enc, 'superpowers', slugs);
+  // cwv owns its 2 matched worktrees AND, as primary, the repo-root + the unmatched cleanup worktree.
+  assert.equal(cwv.length, 4);
+  assert.ok(cwv.includes(enc), 'primary track gets the repo-root sessions');
+  // superpowers matched no worktree and is not primary → nothing (0 cost), never the full repo total.
+  assert.deepEqual(superpowers, []);
+});
+
+test('trackOptionsForProjects: path-sharing projects become tracks with slugs from the shared id-prefix; a unique-path project maps to undefined', () => {
+  const opts = trackOptionsForProjects([
+    { id: 'mystique-cwv', path: '/m' },
+    { id: 'mystique-superpowers', path: '/m' },
+    { id: 'gauge', path: '/g' },
+  ]);
+  assert.deepEqual(opts['mystique-cwv'], { claimSlug: 'cwv', siblingSlugs: ['cwv', 'superpowers'] });
+  assert.deepEqual(opts['mystique-superpowers'], { claimSlug: 'superpowers', siblingSlugs: ['cwv', 'superpowers'] });
+  assert.equal(opts.gauge, undefined);
+});
 
 test('sessionFilesForProject: enumerates every .jsonl session file under the encoded project dir', () => {
   const files = sessionFilesForProject(FIXTURE_ROOT, ALPHA_PATH);

@@ -95,4 +95,14 @@ fields), so the documented shape and the helper output agree.
 
 **Scope:** `public/index.html` (card render), `src/cost.mjs` (pricing fallback)
 
+**Commit:** 38c034d
+
+### 2026-08-20 — Cost: attribute worktree sessions + partition monorepo tracks
+
+**Decision:** Two corrections to token-cost attribution in `src/cost.mjs`: (1) **`sessionFilesForProject` now includes worktree transcript dirs** (`<encoded-path>--claude-worktrees-*`), not just the exact repo dir — via a new `projectTranscriptDirs` helper; (2) **multi-track (monorepo) projects partition the repo's cost by worktree evidence** — `trackTranscriptDirs` (heuristic v1) gives each track its slug-matched worktrees, routes the repo-root + unmatched worktrees to the **primary** (most-matched) track, and gives a never-touched track **0**. The server derives per-track slugs via `trackOptionsForProjects` (projects sharing a `path` → slugs from the shared id-prefix).
+
+**Context:** The owner observed cost looked "low-balled" vs a maxed $4K license. Root cause #1: work runs in git worktrees (a slice/PR/ceremony per worktree), each a separate transcript dir that the exact-match reader **silently dropped** — a **~4× undercount** (Jig $645→$2610, Gauge $0→$2018, Servo $95→$1363). Root cause #2: decomposed tracks (`mystique-cwv`, `mystique-superpowers`) share one repo `path`, so every track inherited the full repo total (CWV≡Superpowers $946) — now CWV **$3300**, Superpowers **0** (owner never touched it), Offer-Management primary for its repo, RTB/Contextual 0. Grand total across all transcripts is ~$16K API-equivalent, consistent with a $4K subscription (~4× value). **Caveats:** pricing stays illustrative (not real rates); the multi-track split is a **worktree-name heuristic** — a track worked on only from the shared repo root, with no slug-named worktree, would be mis-attributed to the primary. The robust fix is **per-track working-dir declaration in config** (deferred; relates to the personalization `repos.yaml` scope-tags note in inbox). +3 regression tests.
+
+**Scope:** `src/cost.mjs` (transcript mapping + track partition), `src/server.mjs` (per-track wiring)
+
 **Commit:** _pending_

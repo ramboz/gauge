@@ -12,7 +12,7 @@ import { spliceLiveObservation } from './live-tail.mjs';
 import { attachMilestones } from './milestone.mjs';
 import { gitVelocity, attachVelocity, gitCommitTimestamps } from './velocity.mjs';
 import { gitTeamSignals, attachTeamSignals } from './team.mjs';
-import { projectCostBundle, attachTokenCost, attachCostBreakdown } from './cost.mjs';
+import { projectCostBundle, attachTokenCost, attachCostBreakdown, trackOptionsForProjects } from './cost.mjs';
 import {
   velocityTrend, costTrend, attachVelocityTrend, attachCostTrend, DEFAULT_TREND_WINDOW_WEEKS,
 } from './trends.mjs';
@@ -111,8 +111,13 @@ const server = http.createServer((req, res) => {
       // projectCostBundle's own default-parameter fallback, so no separate
       // branch is needed.
       const transcriptsRoot = process.env.GAUGE_TRANSCRIPTS_ROOT || undefined;
+      // Multi-track cost attribution: projects sharing a repo `path` (monorepo
+      // tracks) get per-track worktree-partitioned options so a never-touched
+      // track reads 0 instead of the full repo total; single-repo projects get
+      // undefined (worktree-inclusive whole).
+      const trackOptionsById = trackOptionsForProjects(freshConfig.projects);
       const costBundleByProjectId = Object.fromEntries(
-        freshConfig.projects.map((project) => [project.id, projectCostBundle(project.path, transcriptsRoot)]),
+        freshConfig.projects.map((project) => [project.id, projectCostBundle(project.path, transcriptsRoot, undefined, undefined, trackOptionsById[project.id])]),
       );
       const costByProjectId = Object.fromEntries(
         freshConfig.projects.map((project) => [project.id, costBundleByProjectId[project.id]?.tokenCost ?? null]),

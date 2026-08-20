@@ -198,15 +198,119 @@ export function costFromRecords(records, priceTable = DEFAULT_PRICE_TABLE) {
 // exist — an unmapped/temp/probe path or a project with no captured
 // sessions is NOT an error, just nothing to enumerate (the caller turns
 // that into explicit unknown, never $0).
-export function sessionFilesForProject(projectsRoot, projectPath) {
-  const dir = path.join(projectsRoot, encodeProjectPath(projectPath));
-  let entries;
+// A project's transcript directory NAMES under projectsRoot: the exact encoded
+// dir PLUS every worktree dir (`<encoded>--claude-worktrees-*`). Sessions run in
+// a git worktree land in their own encoded dir; the prior exact-only match
+// silently dropped them, so a worktree-heavy workflow (a slice/PR/ceremony per
+// worktree) undercounted cost several-fold. The `--claude-worktrees-` separator
+// (`/.claude/worktrees/` encoded) is distinctive enough to not grab a sibling
+// project like `<repo>-experiments`.
+export function projectTranscriptDirs(projectsRoot, projectPath) {
+  const encoded = encodeProjectPath(projectPath);
+  const worktreePrefix = `${encoded}--claude-worktrees-`;
+  let names;
   try {
-    entries = fs.readdirSync(dir);
+    names = fs.readdirSync(projectsRoot);
   } catch {
     return [];
   }
-  return entries.filter((name) => name.endsWith('.jsonl')).sort().map((name) => path.join(dir, name));
+  return names.filter((name) => name === encoded || name.startsWith(worktreePrefix)).sort();
+}
+
+// Multi-track attribution (heuristic v1). A monorepo whose per-track cards share
+// one repo path can't be split by CWD — every track sees the same transcripts.
+// This partitions the repo's transcript dirs among its track slugs by WORKTREE
+// evidence: a worktree dir goes to the track whose slug its name contains
+// (longest slug wins on overlap); the repo-root dir + any unmatched worktrees go
+// to the PRIMARY track — the one owning the most matched worktrees (ties: first
+// slug). A track with no matched worktrees that is not primary gets NO dirs, so
+// a never-touched track (e.g. "superpowers" with no `*superpowers*` worktree)
+// reads 0 instead of inheriting the full repo total. `siblingSlugs` is every
+// track slug sharing the repo path (incl. `claimSlug`). The robust long-term
+// answer is per-track working-dir declaration in config; this is the best
+// available signal until then.
+export function trackTranscriptDirs(dirs, encoded, claimSlug, siblingSlugs) {
+  const slugs = (siblingSlugs && siblingSlugs.length) ? siblingSlugs : [claimSlug];
+  const worktreePrefix = `${encoded}--claude-worktrees-`;
+  const claimed = new Map(slugs.map((s) => [s, []]));
+  const matchCount = new Map(slugs.map((s) => [s, 0]));
+  const unassigned = [];
+  for (const dir of dirs) {
+    const wtName = dir.startsWith(worktreePrefix) ? dir.slice(worktreePrefix.length) : null;
+    let best = null;
+    if (wtName !== null) {
+      for (const s of slugs) if (s && wtName.includes(s) && (!best || s.length > best.length)) best = s;
+    }
+    if (best) { claimed.get(best).push(dir); matchCount.set(best, matchCount.get(best) + 1); } else unassigned.push(dir);
+  }
+  let primary = slugs[0];
+  for (const s of slugs) if (matchCount.get(s) > matchCount.get(primary)) primary = s;
+  for (const dir of unassigned) claimed.get(primary).push(dir);
+  return claimed.get(claimSlug) || [];
+}
+
+// The longest common id prefix across a set of ids, trimmed to a whole `-`
+// segment (so `['mystique-cwv','mystique-superpowers']` → `'mystique-'`).
+function commonIdPrefix(ids) {
+  if (!ids.length) return '';
+  let prefix = ids[0];
+  for (const id of ids.slice(1)) {
+    let i = 0;
+    while (i < prefix.length && i < id.length && prefix[i] === id[i]) i += 1;
+    prefix = prefix.slice(0, i);
+  }
+  const dash = prefix.lastIndexOf('-');
+  return dash >= 0 ? prefix.slice(0, dash + 1) : '';
+}
+
+// Given the configured projects, compute per-id multi-track cost options.
+// Projects sharing a `path` are tracks of one repo; their slugs are their ids
+// with the shared id-prefix removed (`mystique-cwv` → `cwv`). A single-repo
+// project (unique path) maps to `undefined` — no partition, the whole
+// worktree-inclusive dir set. The server threads each project's entry into
+// projectCostBundle so a monorepo's per-track cards no longer all inherit the
+// full repo cost.
+export function trackOptionsForProjects(projects) {
+  const byPath = new Map();
+  for (const p of projects || []) {
+    if (!byPath.has(p.path)) byPath.set(p.path, []);
+    byPath.get(p.path).push(p);
+  }
+  const out = {};
+  for (const group of byPath.values()) {
+    if (group.length < 2) {
+      for (const p of group) out[p.id] = undefined;
+      continue;
+    }
+    const ids = group.map((p) => String(p.id));
+    const prefix = commonIdPrefix(ids);
+    const siblingSlugs = ids.map((id) => id.slice(prefix.length));
+    group.forEach((p, i) => { out[p.id] = { claimSlug: siblingSlugs[i], siblingSlugs }; });
+  }
+  return out;
+}
+
+// Enumerate a project's `.jsonl` session files (worktree-inclusive). For a
+// multi-track project, pass `{ claimSlug, siblingSlugs }` (≥2 siblings) to get
+// only this track's partitioned share; a single-repo project (or no track
+// options) gets every dir's files.
+export function sessionFilesForProject(projectsRoot, projectPath, { claimSlug, siblingSlugs } = {}) {
+  const dirs = projectTranscriptDirs(projectsRoot, projectPath);
+  const chosen = (siblingSlugs && siblingSlugs.length > 1)
+    ? trackTranscriptDirs(dirs, encodeProjectPath(projectPath), claimSlug, siblingSlugs)
+    : dirs;
+  const files = [];
+  for (const dirName of chosen) {
+    const dir = path.join(projectsRoot, dirName);
+    let entries;
+    try {
+      entries = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of entries) if (name.endsWith('.jsonl')) files.push(path.join(dir, name));
+  }
+  return files.sort();
 }
 
 // Thin I/O wrapper (AC1/AC6): reads and JSON-parses one session's records,
@@ -240,8 +344,8 @@ export function readTranscriptRecords(filePath) {
 // returns null (AC4's honest "unknown", never $0) before ever calling the
 // pure fold. Deterministic given a fixed fixture (AC6): no clock, no
 // randomness, same files in → same cost out.
-export function projectTokenCost(projectPath, projectsRoot = DEFAULT_TRANSCRIPTS_ROOT, priceTable = DEFAULT_PRICE_TABLE) {
-  const files = sessionFilesForProject(projectsRoot, projectPath);
+export function projectTokenCost(projectPath, projectsRoot = DEFAULT_TRANSCRIPTS_ROOT, priceTable = DEFAULT_PRICE_TABLE, trackOptions = undefined) {
+  const files = sessionFilesForProject(projectsRoot, projectPath, trackOptions);
   if (files.length === 0) return null;
   const records = files.flatMap(readTranscriptRecords);
   return costFromRecords(records, priceTable);
@@ -454,8 +558,9 @@ export function projectCostBundle(
   projectsRoot = DEFAULT_TRANSCRIPTS_ROOT,
   priceTable = DEFAULT_PRICE_TABLE,
   skillUsagePath = skillUsagePathForProject(projectPath),
+  trackOptions = undefined,
 ) {
-  const files = sessionFilesForProject(projectsRoot, projectPath);
+  const files = sessionFilesForProject(projectsRoot, projectPath, trackOptions);
   if (files.length === 0) return null;
   const deduped = dedupeRecords(files.flatMap(readTranscriptRecords));
   const skillBySession = buildSkillBySession(readSkillUsageRecords(skillUsagePath));
