@@ -58,6 +58,20 @@ This is an index. Durable detail lives in `docs/`; update it through
   milestone(s) with an **unassociated** bucket. The read-layer join is
   `attachMilestones` in `src/milestone.mjs` (`milestone: {active, next}` on
   `/api/data`, `active.specProgress` + `referencedSpecs`).
+  [Spec 015 — manager-card redesign](docs/specs/015-manager-card-redesign/spec.md)
+  is **DONE** (all 4 slices; **landed directly to main, formal review waived** —
+  honest per-slice deviation logs record it). Rebuilds the `public/index.html`
+  card to the spec-012 mockup: RAG-tinted **callout band** (`cardCallout`),
+  compact milestone line + **scope-labeled progress bar** ("milestone · 6/7" vs
+  "overall · 11/13" — the render half of the 100%-vs-behind-pace fix), a **2×2
+  metric grid** (`statsRow`: big numbers cost/LLM-ratio over velocity/cost-trend
+  graphs), **SVG sparklines** (`sparkline`, replacing unicode blocks), and CSS
+  overflow discipline (`.card{min-width:0}`). The old all-releases workstream
+  dump is gone. Gated by a servo **`design-eval`** (`.servo/design-eval/`, `cli`
+  vision judge, Playwright scoped so the product `package.json` stays `{}`);
+  fidelity 0.25 → 0.55. **Rebaseline pending:** the frozen mockup is single-row,
+  so the 2×2 diverges deliberately — update `manager-dashboard-mockup.html` +
+  re-freeze to make the gate track the real target (see lightweight-decisions).
   [Spec 012 — portfolio-manager analytics](docs/specs/012-portfolio-manager-analytics/spec.md)
   is **DONE** (spike + all 5 raw-layer/RAG slices landed): git **velocity**
   (`src/velocity.mjs`, sparkline), **token cost** total + by-model and the

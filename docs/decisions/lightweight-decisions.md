@@ -75,4 +75,14 @@ fields), so the documented shape and the helper output agree.
 
 **Scope:** `.servo/design-eval/` tooling (spec 015 design-fidelity gate)
 
+**Commit:** 82845c3
+
+### 2026-08-20 — Manager-card metrics as a 2×2 grid; spec 015 landed directly
+
+**Decision:** The per-card metrics render as a tight **2×2 grid** — the two "big number" tiles (token cost · agent-coauthored LLM ratio) on the top row, the two graph tiles (velocity · cost trend) side by side below — rather than the mockup's single stat row. The separate velocity-trend row is retired (redundant with the velocity sparkline). Spec 015 (all 4 slices) was **landed directly to `main` with the formal independent-review passes waived** by owner decision.
+
+**Context:** Owner design direction during the 015 polish pass: the 2×2 reads tighter and more consistent than a single row. It intentionally diverges from the frozen spec-012 mockup — yet the servo design-fidelity score *rose* 0.35 → 0.55, because removing the extra trend rows tightened the whole card. **Consequence:** the servo `design-eval` still scores against the single-row mockup, so it now measures fidelity to a superseded layout. Follow-up (deferred): update `manager-dashboard-mockup.html` to the 2×2 and re-freeze the eval so the gate tracks the real target. Slices carry honest per-slice deviation logs noting the review waiver; the board reflects DONE via `JIG_REVIEW_EVIDENCE_GATE=0`.
+
+**Scope:** `public/index.html` stat grid (spec 015); servo eval reference (rebaseline pending)
+
 **Commit:** _pending_
