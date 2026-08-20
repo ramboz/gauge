@@ -1,8 +1,9 @@
 ---
-status: DRAFT
+status: IN_PROGRESS
 dependencies: []
 last_verified:
 design_review: true
+claimed_by: claude/jig-orient-3599d4
 ---
 
 ## Slice 015-01 — card shell, overflow discipline, drop the workstream dump

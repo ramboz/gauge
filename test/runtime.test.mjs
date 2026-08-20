@@ -1536,14 +1536,18 @@ test('card RAG callout carries the forecast reason string in its ⚠ tooltip (AC
   assert.match(html, /behind pace/);
 });
 
-test('card RAG callout leads the card — it renders before the existing head/title markup (AC3)', () => {
+test('card RAG callout BAND leads the card and carries the title (015-01: the separate `.head` row is retired; title moved into the band, before the body)', () => {
   const context = cardContext();
   const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, forecast: { state: 'at_risk', reason: 'deadline-passed' } };
   const html = context.card(project);
   const calloutIndex = html.indexOf('rag-callout');
-  const headIndex = html.indexOf('class="head"');
-  assert.ok(calloutIndex >= 0 && headIndex >= 0);
-  assert.ok(calloutIndex < headIndex);
+  assert.ok(calloutIndex >= 0, 'callout band present');
+  // 015-01: the title now lives INSIDE the callout band — no separate `.head` row.
+  assert.doesNotMatch(html, /class="head"/);
+  assert.match(ragCalloutMarkup(html), /class="card-title">Alpha</);
+  // The band still leads: it renders before the padded card body.
+  const cbodyIndex = html.indexOf('class="cbody"');
+  assert.ok(cbodyIndex >= 0 && calloutIndex < cbodyIndex, 'band precedes the body');
 });
 
 test('card RAG callout\'s ⚠ flag is keyboard-reachable, not hover-only (accessibility, mirrors 011-04\'s warn-icon affordance)', () => {

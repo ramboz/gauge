@@ -9,16 +9,24 @@
   @media (prefers-color-scheme:dark) { :root { --bg:#1d1d1a; --card:#262622; --inset:#31312c; --text:#eceae4; --muted:#aaa89f; --border:#3a3a34; --accent:#85b7eb; --good:#97c459; --warn:#ef9f27; --bad:#f09595; } }
   * { box-sizing:border-box } body { margin:0; padding:24px; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,sans-serif }
   header,.grid { max-width:1200px; margin:auto } header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:18px } h1 { font-size:20px; margin:0 }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px }.card { background:var(--card); border:1px solid var(--border); border-left-width:4px; border-radius:12px; padding:16px 18px }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px }.card { background:var(--card); border:1px solid var(--border); border-left-width:4px; border-radius:12px; padding:0; overflow:hidden; min-width:0 }
   /* 012-06: RAG health chip — colored left border (per-band, on the card itself) */
   /* plus the leading status callout (headline + ⚠ tooltip) rendered inside it. */
   .card.rag-green { border-left-color:var(--good) }.card.rag-yellow { border-left-color:var(--warn) }
   .card.rag-red { border-left-color:var(--bad) }.card.rag-gray { border-left-color:var(--muted) }
-  .rag-callout { display:flex; align-items:center; gap:8px; margin-bottom:10px }
-  .rag-headline { font-weight:600; font-size:13px }
-  .rag-callout.rag-green .rag-headline { color:var(--good) }.rag-callout.rag-yellow .rag-headline { color:var(--warn) }
-  .rag-callout.rag-red .rag-headline { color:var(--bad) }.rag-callout.rag-gray .rag-headline { color:var(--muted) }
-  .rag-flag { margin-left:auto; cursor:help; font-weight:700 }.rag-flag:focus { outline:2px solid var(--accent); outline-offset:2px }
+  /* 015-01: RAG-tinted callout BAND across the card top — dot + title + status + flag. */
+  .rag-callout { display:flex; align-items:center; gap:8px; padding:10px 16px; margin:0 }
+  .rag-dot { width:9px; height:9px; border-radius:50%; flex:none; background:var(--muted) }
+  .card-title { font-size:15px; font-weight:700; margin:0 }
+  .rag-headline { font-size:12px; font-weight:600; color:var(--muted); overflow-wrap:anywhere }
+  .rag-callout.rag-green { background:color-mix(in srgb,var(--good) 12%,transparent) }.rag-callout.rag-green .rag-dot { background:var(--good) }.rag-callout.rag-green .rag-headline { color:var(--good) }
+  .rag-callout.rag-yellow { background:color-mix(in srgb,var(--warn) 12%,transparent) }.rag-callout.rag-yellow .rag-dot { background:var(--warn) }.rag-callout.rag-yellow .rag-headline { color:var(--warn) }
+  .rag-callout.rag-red { background:color-mix(in srgb,var(--bad) 12%,transparent) }.rag-callout.rag-red .rag-dot { background:var(--bad) }.rag-callout.rag-red .rag-headline { color:var(--bad) }
+  .rag-callout.rag-gray { background:color-mix(in srgb,var(--muted) 12%,transparent) }.rag-callout.rag-gray .rag-dot { background:var(--muted) }.rag-callout.rag-gray .rag-headline { color:var(--muted) }
+  .rag-flag { margin-left:auto; cursor:help; font-weight:700; color:var(--warn) }.rag-flag:focus { outline:2px solid var(--accent); outline-offset:2px }
+  /* 015-01: padded body + overflow discipline so long titles/sparklines never escape the card. */
+  .cbody { padding:12px 16px 14px; min-width:0 }
+  .cbody .counts,.cbody .meta,.cbody .ws,.cbody .sect { overflow-wrap:anywhere }
   .head { display:flex; justify-content:space-between; gap:8px }.head h2 { font-size:15px; margin:0 }.chip { font-size:11px; padding:2px 9px; border-radius:10px; background:var(--inset) }.ok { color:var(--good) }.partial { color:var(--warn) }.error,.err { color:var(--bad) }.meta,.counts { color:var(--muted); font-size:12px }
   .barrow { display:flex; align-items:center; gap:10px; margin-top:10px }.bar { flex:1; height:6px; background:var(--inset); border-radius:4px; overflow:hidden }.bar div { height:100%; background:var(--accent) }.pct { min-width:38px; text-align:right; font-weight:600 }
   .sect { border-top:1px solid var(--border); margin-top:10px; padding-top:8px }.ws { padding:5px 0 }.infobox { background:var(--inset); color:var(--text); padding:7px 9px; border-radius:8px; margin-top:8px }.wtsec { margin-top:7px }.wthdr { font-weight:600; font-size:13px }.stale { opacity:.65 }
@@ -58,16 +66,14 @@ function relativeTime(date) {
 }
 const SIGNAL_VERSIONS = Object.freeze({ repository:1, execution:1, workstreams:1, hygiene:1, narrative:1 });
 function signal(p,type) { if(!Object.hasOwn(SIGNAL_VERSIONS,type)) return undefined; return p.signals.find((entry) => entry.type === type && entry.version === SIGNAL_VERSIONS[type]); }
-function shorten(value,n=90) { value=String(value); return value.length>n?value.slice(0,n-1)+'…':value; }
-function workstreamRow(item) { const steps=item.steps?.total?`${item.steps.done}/${item.steps.total}`:''; const next=item.next?`<div class="counts">Next: ${esc(shorten(item.next.text))}</div>`:''; return `<div class="ws"><b>${esc(item.title||item.path)}</b> <span class="meta">${esc(item.kind)} ${steps}</span>${next}</div>`; }
 // 011-03 AC3: discovered checklist workstreams (src/scan.mjs's ≥3-checkbox
 // docs, surfaced in the fallback card for projects with no active milestone)
 // get a compact title + step-count row, with a "done" treatment applied only
 // where inferable — every checkbox checked (steps.total>0 && done===total).
 // Where it isn't inferable (no steps, or partial), the item is simply listed,
 // never a fabricated status. A pure summarizer (no DOM) so it stays testable
-// independent of the row markup, mirroring workstreamRow's title||path
-// fallback (no raw path shown once a title exists — AC4).
+// independent of the row markup — title||path fallback, no raw path shown once
+// a title exists (AC4). (015-01 retired the release-plan `workstreamRow` dump.)
 function summarizeDiscovered(discovered) {
   return (discovered||[]).map((item)=>({ title: item.title||item.path, steps: item.steps, done: Boolean(item.steps?.total) && item.steps.done===item.steps.total }));
 }
@@ -475,11 +481,19 @@ function ragReasonText(forecast) {
 // all name a gate the owner can clear), so wrapping them in a warning glyph
 // would misread as an alarm. The colored headline chip already carries the
 // neutral state on its own, exactly like green.
-function forecastCallout(p, band) {
+// 015-01: the card's top RAG-tinted callout BAND — dot + project title + the
+// forecast status phrase + the forecast ⚠ flag. The title now lives IN the band
+// (replacing the old separate `.head` row). The flag stays FORECAST-driven with
+// the exact prior semantics (suppressed on green and on the neutral
+// advancing/stalled states; tooltip = the forecast reason) — it is deliberately
+// distinct from the 011-04 `warn-icon` (collection/repo/cleanup warnings), which
+// the tested model keeps separate and which now renders in the card body.
+function cardCallout(p, band) {
   const reasonText = ragReasonText(p.forecast);
   const neutralState = p.forecast?.state === 'advancing' || p.forecast?.state === 'stalled';
   const flag = band === 'green' || neutralState ? '' : `<span class="rag-flag" tabindex="0" role="img" aria-label="${esc('Forecast: ' + reasonText)}" title="${esc(reasonText)}">⚠</span>`;
-  return `<div class="rag-callout rag-${band}"><span class="rag-headline">${esc(reasonText)}</span>${flag}</div>`;
+  const running = p.runningNow?`<span class="running" title="a Claude Code session is active in this project now">running now</span>`:'';
+  return `<div class="rag-callout rag-${band}"><span class="rag-dot"></span><h2 class="card-title">${esc(p.project.label)}</h2><span class="rag-headline">${esc(reasonText)}</span>${running}${flag}</div>`;
 }
 function warningItems(p) {
   const items=[];
@@ -496,9 +510,10 @@ function warningItems(p) {
 function card(p) {
   const execution=signal(p,'execution'), workstreams=signal(p,'workstreams'), narrative=signal(p,'narrative'), repository=signal(p,'repository');
   const progress=execution?.status==='supported'?execution.value.progress:null;
-  const items=workstreams?.status==='supported'?(workstreams.value.items||[]):[];
+  // 015-01: the release-plan `items` dump is retired (#2) — only the fallback
+  // discovered-checklist workstreams still render (011-03), so we no longer read
+  // `items` or build a merged `streams` list here.
   const discoveredItems=workstreams?.status==='supported'?(workstreams.value.discovered||[]):[];
-  const streams=[...items,...discoveredItems];
   const problems=(p.errors||[]).map((error)=>esc(error.message)).join(' · ');
   // Active/next milestone (spec 011-01): attached by the server read layer
   // (src/milestone.mjs's attachMilestones) as {active, next} over the
@@ -569,12 +584,13 @@ function card(p) {
   // the leading status callout — a project with no curated deadline (and so
   // no real forecast, deadline-unknown) stays gray here, never green.
   const ragBand=forecastToRag(p.forecast);
-  // 014-04: optional "running now" enrichment — an additive live-session badge
-  // beside the title when a marker's transcript mtime is recent (p.runningNow,
-  // attached by the read layer). Absent-safe: falsy/absent → no badge, today's
-  // card. It enriches, never overrides, the derived in-flight/worktree signals.
-  const runningBadge=p.runningNow?`<span class="running" title="a Claude Code session is active in this project now">running now</span>`:'';
-  return `<article class="card rag-${ragBand}">${forecastCallout(p,ragBand)}<div class="head"><h2>${esc(p.project.label)}</h2>${runningBadge}${warnIcon}${statusChip}</div>
+  // 014-04 "running now" enrichment (additive live-session badge) now renders
+  // inside cardCallout beside the title from p.runningNow; absent-safe.
+  // 015-01: callout band + a single padded `.cbody`; the old all-workstreams
+  // dump (#2) is removed — release context now lives only in the milestone line
+  // (milestoneBlock), never a repeated row list.
+  return `<article class="card rag-${ragBand}">${cardCallout(p,ragBand)}<div class="cbody">
+    ${warnIcon||statusChip?`<div class="counts warn-row">${warnIcon}${statusChip}</div>`:''}
     ${metaLine?`<div class="counts">${metaLine}</div>`:''}
     ${velocityBlock(p)}
     ${trendBlock(p)}
@@ -583,12 +599,10 @@ function card(p) {
     ${milestoneBlock}${fallbackNote}
     ${forecastBlock}
     ${barProgress?`<div class="barrow"><div class="bar"><div style="width:${barPct??0}%"></div></div><span class="pct">${barPct===null?'—':barPct+'%'}</span></div><div class="counts">${barProgress.done} / ${barProgress.denom} specs${milestoneProgress?'':' done'}${barProgress.deferred?` · ${barProgress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
-    ${active
-      ? (streams.length?`<div class="sect"><span class="meta">workstreams</span>${streams.map(workstreamRow).join('')}</div>`:'')
-      : ((items.length||discoveredItems.length)?`<div class="sect"><span class="meta">workstreams</span>${items.map(workstreamRow).join('')}${summarizeDiscovered(discoveredItems).map(discoveredRow).join('')}</div>`:'')}
+    ${(!active&&discoveredItems.length)?`<div class="sect"><span class="meta">workstreams</span>${summarizeDiscovered(discoveredItems).map(discoveredRow).join('')}</div>`:''}
     ${worktreeInfo(p)}
     ${narrativeBlock}${problems?`<p class="err">${problems}</p>`:''}
-    ${costDetailBlock(p)}</article>`;
+    ${costDetailBlock(p)}</div></article>`;
 }
 function safeCard(project) { try { return card(project); } catch(error) { const label=project?.project?.label||project?.project?.id||'malformed project'; return `<article class="card"><div class="head"><h2>${esc(label)}</h2><span class="chip error">error</span></div><p class="err">Invalid project observation: ${esc(error?.message||error)}</p></article>`; } }
 // Global attention queue (spec 009-03, ADR-0013): a single ranked, explained
