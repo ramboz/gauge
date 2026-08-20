@@ -128,7 +128,7 @@ test('card renders the active milestone\'s appetite inline as timebox text (011-
   assert.match(html, /≤ 2 weeks from start/);
 });
 
-test('card renders "unknown" timebox when the active milestone has no appetite ("TBD"/absent) — never a fabricated date or blank (011-01 AC4)', () => {
+test('card renders "unknown" appetite when the active milestone has no appetite ("TBD"/absent) — never a fabricated date or blank (011-01 AC4; 015-02 compact milestone line)', () => {
   const context = cardContext();
   const project = {
     ...cardBase,
@@ -136,7 +136,9 @@ test('card renders "unknown" timebox when the active milestone has no appetite (
     milestone: { active: { title: 'Ship the MVP', appetite: null }, next: [] },
   };
   const html = context.card(project);
-  assert.match(html, /Timebox:\s*unknown/);
+  // 015-02 replaced the "Timebox: <x>" label with the compact `.appet` cell in
+  // the milestone `.mrow`; an absent appetite still reads the honest "unknown".
+  assert.match(html, /class="appet">unknown</);
 });
 
 test('card renders a compact Next list from remaining candidate/committed releases (011-01 AC2)', () => {
@@ -986,22 +988,24 @@ test('card renders the commits/wk headline and a sparkline from a supported velo
   };
   const html = context.card(project);
   assert.match(html, /3\.5 commits\/wk/i);
-  assert.doesNotMatch(html, /velocity.*unknown/i);
+  // 015-03: velocity is now a stat tile; a supported reading never carries the
+  // "velocity unknown" tile label (scoped to that exact phrase so a sibling
+  // tile's own "team unknown"/"cost unknown" can't cross-pollute the match).
+  assert.doesNotMatch(html, /velocity unknown/i);
 });
 
 test('card renders explicit "unknown" (never a fabricated 0) when velocity is null (AC4)', () => {
   const context = cardContext();
   const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, velocity: null };
   const html = context.card(project);
-  // Scoped to the velocity block's own markup, not just any "unknown" text on
-  // the card (the card's unrelated execution-signal fallback also renders
-  // "Execution signal unknown.", which would make a bare /\bunknown\b/i
-  // assertion pass even if velocityBlock rendered nothing at all).
-  assert.match(html, /velocity <span class="unknown">unknown<\/span>/);
+  // 015-03: velocity is a stat tile — a null reading renders the explicit
+  // "velocity unknown" tile label with a "—" value, never a fabricated 0.
+  assert.match(html, /velocity unknown/);
+  assert.match(html, /class="unknown">—<\/span>/);
   assert.doesNotMatch(html, /0 commits\/wk/i);
 });
 
-test('card renders the headline AND an empty (non-crashing) sparkline span on an empty bucket series', () => {
+test('card renders the headline AND a valid (non-crashing) SVG sparkline on an empty bucket series (015-04: flat baseline, never a JS error)', () => {
   const context = cardContext();
   const project = {
     ...cardBase,
@@ -1010,7 +1014,9 @@ test('card renders the headline AND an empty (non-crashing) sparkline span on an
   };
   const html = context.card(project);
   assert.match(html, /≈ 0\.1 commits\/wk/);
-  assert.match(html, /<span class="spark"[^>]*><\/span>/);
+  // 015-04: an empty series degrades to a valid flat-baseline SVG polyline,
+  // not an empty span — the sparkline is always well-formed markup.
+  assert.match(html, /<svg class="spark-svg"[^>]*><polyline points="0,16 64,16"/);
 });
 
 // --- 012-03: token cost total + by-model on the card -----------------------
@@ -1036,19 +1042,23 @@ test('card renders the total cost headline and a compact by-model legend (AC5)',
     },
   };
   const html = context.card(project);
-  assert.match(html, /cost \$12\.50/);
+  // 015-03: cost is a stat tile — the total is the tile value ("token cost"
+  // label) and the by-model legend (012-03 AC5) moves to the tile's title
+  // tooltip, still present in the DOM.
+  assert.match(html, /\$12\.50/);
+  assert.match(html, /token cost/);
   assert.match(html, /illustrative-model-a/);
   assert.match(html, /\$10\.00/);
   assert.match(html, /illustrative-model-b/);
   assert.match(html, /\$2\.50/);
-  assert.doesNotMatch(html, /cost.*unknown/);
+  assert.doesNotMatch(html, /cost unknown/);
 });
 
 test('card renders explicit "unknown" (never a fabricated $0) when tokenCost is null (AC4)', () => {
   const context = cardContext();
   const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, tokenCost: null };
   const html = context.card(project);
-  assert.match(html, /cost <span class="unknown">unknown<\/span>/);
+  assert.match(html, /cost unknown/);
   assert.doesNotMatch(html, /\$0\.00/);
 });
 
@@ -1056,7 +1066,7 @@ test('card render does not regress when tokenCost is entirely absent (pre-012-03
   const context = cardContext();
   const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
   assert.doesNotThrow(() => context.card(project));
-  assert.match(context.card(project), /cost <span class="unknown">unknown<\/span>/);
+  assert.match(context.card(project), /cost unknown/);
 });
 
 test('card flags an unknown-model bucket by turning the total into a floor ("$X+"), never implying it is complete (AC3)', () => {
@@ -1074,7 +1084,7 @@ test('card flags an unknown-model bucket by turning the total into a floor ("$X+
     },
   };
   const html = context.card(project);
-  assert.match(html, /cost \$5\.00\+/);
+  assert.match(html, /\$5\.00\+/);
   assert.match(html, /unknown-model/);
 });
 
@@ -1117,7 +1127,7 @@ test('card shows "< $0.01" — never a bare "$0.00" — when a real, non-null to
     },
   };
   const html = context.card(project);
-  assert.match(html, /cost &lt; \$0\.01/);
+  assert.match(html, /&lt; \$0\.01/);
   assert.doesNotMatch(html, /cost \$0\.00/);
 });
 
@@ -1136,7 +1146,7 @@ test('card combines the sub-cent floor with the unknown-model "+" marker sensibl
     },
   };
   const html = context.card(project);
-  assert.match(html, /cost &lt; \$0\.01\+/);
+  assert.match(html, /&lt; \$0\.01\+/);
 });
 
 // --- 012-04: cost detail (by-activity / by-skill) in the DETAIL tier -------
@@ -1260,18 +1270,21 @@ test('card renders the agent-coauthored split as an explicit proxy, plus the con
     team: { agentCoauthoredPct: 42, commitCount: 10, contributorCount: 3 },
   };
   const html = context.card(project);
-  assert.match(html, /~42% agent-coauthored/);
+  // 015-03: team is a stat tile — the percentage is the value, the
+  // "agent-coauthored (proxy)" term and contributor count are the label.
+  assert.match(html, /~42%/);
+  assert.match(html, /agent-coauthored/);
   assert.match(html, /proxy/i);
   assert.match(html, /3 contributors/);
-  assert.doesNotMatch(html, /team.*unknown/i);
+  assert.doesNotMatch(html, /team unknown/i);
 });
 
 test('card renders explicit "unknown" (never a fabricated 0%/0 contributors) when team is null (AC4)', () => {
   const context = cardContext();
   const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' }, team: null };
   const html = context.card(project);
-  assert.match(html, /team <span class="unknown">unknown<\/span>/);
-  assert.doesNotMatch(html, /0% agent-coauthored/);
+  assert.match(html, /team unknown/);
+  assert.doesNotMatch(html, /0%/);
   assert.doesNotMatch(html, /0 contributors/);
 });
 
@@ -1279,7 +1292,7 @@ test('card render does not regress when team is entirely absent (pre-012-05 iden
   const context = cardContext();
   const project = { ...cardBase, project: { id: 'alpha', label: 'Alpha' } };
   assert.doesNotThrow(() => context.card(project));
-  assert.match(context.card(project), /team <span class="unknown">unknown<\/span>/);
+  assert.match(context.card(project), /team unknown/);
 });
 
 test('card never renders raw author identities from the team signal — only the aggregate percentage and count (AC5, no PII)', () => {
@@ -1324,9 +1337,10 @@ test('card shows "< 1% agent-coauthored" — never "0%" — when a real, non-zer
     team: { agentCoauthoredPct: 0, agentCoauthoredCount: 1, commitCount: 300, contributorCount: 4 },
   };
   const html = context.card(project);
-  assert.match(html, /&lt; 1% agent-coauthored/);
-  assert.doesNotMatch(html, /~0% agent-coauthored/);
-  assert.doesNotMatch(html, /(?<!&lt; )0% agent-coauthored/);
+  assert.match(html, /&lt; 1%/);
+  assert.match(html, /agent-coauthored/);
+  assert.doesNotMatch(html, /~0%/);
+  assert.doesNotMatch(html, /(?<!&lt; )0%/);
 });
 
 test('card shows a plain "0% agent-coauthored" (not "< 1%") when agentCoauthoredCount is a TRUE zero — a real, known reading, not the unknown state', () => {
@@ -1337,8 +1351,9 @@ test('card shows a plain "0% agent-coauthored" (not "< 1%") when agentCoauthored
     team: { agentCoauthoredPct: 0, agentCoauthoredCount: 0, commitCount: 5, contributorCount: 2 },
   };
   const html = context.card(project);
-  assert.match(html, /(?<!&lt; )0% agent-coauthored/);
-  assert.doesNotMatch(html, /&lt; 1% agent-coauthored/);
+  assert.match(html, /(?<!&lt; )0%/);
+  assert.match(html, /agent-coauthored/);
+  assert.doesNotMatch(html, /&lt; 1%/);
 });
 
 test('card escapes team-signal values — no raw markup injected (XSS safety)', () => {

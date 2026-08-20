@@ -1,8 +1,9 @@
 ---
-status: DRAFT
+status: IN_PROGRESS
 dependencies: [015-03]
 last_verified:
 design_review: true
+claimed_by: claude/jig-orient-3599d4
 ---
 
 ## Slice 015-04 — SVG sparklines
