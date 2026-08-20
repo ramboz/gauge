@@ -56,6 +56,10 @@
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-02 — capture-validity hardening: honest RAG on captured history | **DONE** |  |
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-03 — history-derived velocity + cost trends | **DONE** |  |
 | [014-thin-client-and-central-collection](014-thin-client-and-central-collection/spec.md) | 014-04 — live-session "running now" enrichment (optional) | **DONE** |  |
+| [015-manager-card-redesign](015-manager-card-redesign/spec.md) | 015-01 — card shell, overflow discipline, drop the workstream dump | DRAFT |  |
+| [015-manager-card-redesign](015-manager-card-redesign/spec.md) | 015-02 — compact milestone line + progress-scope label | DRAFT |  |
+| [015-manager-card-redesign](015-manager-card-redesign/spec.md) | 015-03 — stat-tile row | DRAFT |  |
+| [015-manager-card-redesign](015-manager-card-redesign/spec.md) | 015-04 — SVG sparklines | DRAFT |  |
 
 ## Deferred slices
 
