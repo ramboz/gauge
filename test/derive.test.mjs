@@ -143,6 +143,23 @@ test('unknown scope-changed: denom moved at the latest step, trailing run collap
   assert.deepEqual(deriveForecast(history, '2026-09-01'), { state: 'unknown', reason: 'scope-changed' });
 });
 
+test('a ±1 denom drift within the trailing window is tolerated and reaches a colour (DENOM_TOLERANCE re-tune, dogfood corpus)', () => {
+  // Real Gauge dogfood finding: an actively-authored project's denom creeps
+  // by one nearly every observation as specs land (…11 → 12 → 13…), so under
+  // exact-equality scope stability the trailing window never spans ≥1 day and
+  // the card is pinned at unknown forever. ADR-0012 always allowed a "small
+  // tolerance"; the re-tune to ±1 absorbs single-spec drift so slow steady
+  // growth reaches a colour instead of reading unknown.
+  const history = [
+    obsSupported('2026-08-01T00:00:00Z', { done: 8, denom: 12 }),
+    obsSupported('2026-08-04T00:00:00Z', { done: 9, denom: 12 }),
+    // One spec shaped at the latest step: denom drifts 12 → 13 (a ±1 step).
+    obsSupported('2026-08-06T00:00:00Z', { done: 10, denom: 13 }),
+  ];
+  const result = deriveForecast(history, '2026-09-01');
+  assert.notEqual(result.state, 'unknown', `expected a colour, got unknown/${result.reason}`);
+});
+
 test('trailing stable-scope window reaches a colour despite earlier scope churn (DoR pace-window resolution)', () => {
   const history = [
     // Earlier scope churn (denom 8 → 10) should not poison a colour once the

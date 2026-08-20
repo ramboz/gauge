@@ -56,3 +56,13 @@ fields), so the documented shape and the helper output agree.
 **Context:** Found running gauge against the real corpus: a project with an authored goal but no deadline reads deadline-unknown, yet the queue said 'needs a goal set' — wrong, since this reason is about the missing deadline (forecast Gate 1), not the goal. Goal and deadline are independent fields; the copy must name the deadline. Regression test added (test/attention-queue.test.mjs).
 
 **Scope:** src/derive.mjs tierReason (attention queue, spec 009-03)
+
+### 2026-08-19 — Forecast Gate 4 scope-stability tolerance re-tuned 0 → ±1
+
+**Decision:** `DENOM_TOLERANCE` in `src/derive.mjs` is raised from `0` (exact-equality scope stability) to `1`. The trailing stable-scope window now absorbs a single-spec (±1) `denom` drift; a genuine scope shift (≥2) still routes to `unknown('scope-changed')`.
+
+**Context:** Dogfood finding — Gauge run against its own 13-observation git-backfilled history read `unknown('insufficient-history')` forever despite a real deadline (2026-08-28), because an actively-authored project's `denom` creeps by one nearly every observation as specs land, so exact-equality collapsed the trailing window to a single point and no ≥1-day stable-scope span ever formed. This is a parameter tune *within* ADR-0012's fixed gate shape, not a new decision: ADR-0012 already gates on scope stable "beyond a small tolerance", and the derive.mjs threshold comment explicitly designates these constants as re-tunable against a real corpus. With the tune live, Gauge computes an honest `at_risk('pace-behind-required')` instead of unknown. Red→green witness + a ±2 boundary guard added (test/derive.test.mjs); the backfill AC4 churn fixture updated to a ≥2 jump so it still asserts scope-changed (test/backfill.test.mjs). Full suite 595/595 green.
+
+**Scope:** src/derive.mjs `DENOM_TOLERANCE` (forecast Gate 4, ADR-0012 tier 1 / ADR-0018 tiers 2–3)
+
+**Commit:** _pending_

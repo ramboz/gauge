@@ -208,15 +208,19 @@ test('deriveForecast computes a real pace-driven at_risk/on_track split on an in
 
 // --- AC4: Gate 4 honesty is preserved on churning scope ----------------------
 
-test('deriveForecast still reads unknown(scope-changed) on a churning-denom reconstructed series (AC4)', () => {
+test('deriveForecast still reads unknown(scope-changed) on a genuinely churning-denom reconstructed series (AC4)', () => {
   const { root, commitDay } = initSpecRepo();
   try {
+    // The denom must churn BEYOND DENOM_TOLERANCE (±1) at the latest step for
+    // Gate 4 to route to scope-changed: a single-spec (±1) drift is now
+    // deliberately absorbed (see derive.mjs DENOM_TOLERANCE re-tune), so a
+    // genuine scope shift here jumps by two (2 → 4) at the final commit-day.
     commitDay('2026-07-01T10:00:00', { a: 'IN_PROGRESS' });
     commitDay('2026-07-02T10:00:00', { a: 'IN_PROGRESS', b: 'IN_PROGRESS' });
-    commitDay('2026-07-03T10:00:00', { a: 'IN_PROGRESS', b: 'IN_PROGRESS', c: 'IN_PROGRESS' });
+    commitDay('2026-07-03T10:00:00', { a: 'IN_PROGRESS', b: 'IN_PROGRESS', c: 'IN_PROGRESS', d: 'IN_PROGRESS' });
     const series = gitBackfillSeries(root, { specsDirRel: 'docs/specs' });
     assert.equal(series.length, 3);
-    assert.deepEqual(series.map((p) => p.progress.denom), [1, 2, 3]); // denom churns every step
+    assert.deepEqual(series.map((p) => p.progress.denom), [1, 2, 4]); // denom shifts by 2 at the latest step (beyond ±1 tolerance)
     const nowMs = Date.parse('2026-07-03T12:00:00.000Z');
     const observations = series.map((point) => buildBackfillObservation({ id: 'p', label: 'P', path: root }, point, nowMs));
     const forecast = deriveForecast(observations, '2026-12-31');

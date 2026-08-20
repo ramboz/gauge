@@ -20,12 +20,18 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ADR-0012 leaves the exact thresholds tunable within a fixed gate shape.
-// These start conservative (exact-equality scope stability, the documented
-// ≥2 observations / ≥1 day span) and are re-tuned later against a real
-// corpus — a parameter change within the shape, not a new decision.
+// These are re-tuned against a real corpus — a parameter change within the
+// shape, not a new decision (ADR-0012 itself gates on scope stable "beyond a
+// small tolerance", so a small non-zero tolerance is within its design).
+// DENOM_TOLERANCE was seeded at 0 (exact-equality) and re-tuned to 1 after a
+// dogfood run: an actively-authored project's `denom` creeps by one nearly
+// every observation as specs land, so exact-equality collapsed the trailing
+// stable-scope window to a single point and pinned the card at unknown
+// forever. ±1 absorbs single-spec drift while still routing a genuine scope
+// shift (≥2) to `scope-changed`.
 const MIN_SUPPORTED_OBSERVATIONS = 2;
 const MIN_SPAN_DAYS = 1;
-const DENOM_TOLERANCE = 0;
+const DENOM_TOLERANCE = 1;
 
 function unknown(reason) {
   return { state: 'unknown', reason };
