@@ -924,41 +924,9 @@ test('server /api/data wiring reads each project\'s git history and attaches vel
   assert.match(src, /attachVelocity\(/);
 });
 
-test('dashboard renders a ranked attention queue region distinct from the per-project cards (AC5)', () => {
-  const html = read('public/index.html');
-  // A distinct container/section, rendered by a distinct function from the
-  // per-project safeCard/.grid render — not folded into the cards grid.
-  assert.match(html, /class="queue-section"/);
-  assert.match(html, /<ol class="queue" id="queue">/);
-  assert.match(html, /function queueRow\(/);
-  assert.match(html, /data\.attention/);
-  // The queue section markup appears before the per-project .grid container.
-  assert.ok(html.indexOf('id="queue"') < html.indexOf('id="grid"'));
-});
-
-test('queueRow renders the project and its explained reason', () => {
-  const context = cardContext();
-  const html = context.queueRow({ id: 'alpha', label: 'Alpha', tier: 1, reason: 'at risk · deadline in 3 days' });
-  assert.match(html, /Alpha/);
-  assert.match(html, /at risk · deadline in 3 days/);
-});
-
-test('queueRow escapes attention-entry text — no raw markup injected from a project label or reason (AC5, XSS safety)', () => {
-  const context = cardContext();
-  const payload = '"><img src=x onerror=alert(1)>';
-  const html = context.queueRow({ id: 'x', label: payload, tier: 1, reason: payload });
-  // The dangerous characters (< > ") must be entity-escaped, not passed
-  // through raw — the payload text itself is expected to survive (as inert
-  // text), just never as a live tag.
-  assert.doesNotMatch(html, /<img/);
-  assert.match(html, /&lt;img/);
-});
-
-test('safeQueueRow isolates a malformed attention entry instead of breaking the whole queue render', () => {
-  const context = cardContext();
-  assert.doesNotThrow(() => context.safeQueueRow(null));
-  assert.match(context.safeQueueRow(null), /Invalid attention entry/);
-});
+// The dashboard's attention-queue UI was removed per owner feedback (the
+// server still computes `attention` on /api/data — the wiring test above stays
+// — but the dashboard no longer renders a queue region / queueRow).
 
 test('no runtime module (outside discover.mjs) computes a "goal" or "deadline" value from file content (AC3/AC5)', () => {
   // observation.mjs's join (joinProjectProfileFields) only ever echoes

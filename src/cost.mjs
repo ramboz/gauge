@@ -43,6 +43,37 @@ export const DEFAULT_PRICE_TABLE = {
   'claude-3-5-haiku-20241022': { input: 0.8, output: 4, cacheWrite: 1, cacheRead: 0.08 },
 };
 
+// Family-tier prices (illustrative, $/1M tokens) used as a FALLBACK when a model
+// id is not an exact table entry — so a new dated/point release
+// (claude-opus-4-8, claude-sonnet-5, claude-fable-5, …) is still priced at its
+// tier instead of dropping to the unknown-model bucket. Without this, every
+// model refresh silently zeroed out cost until someone edited the table; this is
+// what keeps token-cost estimates working across releases.
+const FAMILY_PRICES = {
+  opus: { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 },
+  sonnet: { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3 },
+  fable: { input: 0.8, output: 4, cacheWrite: 1, cacheRead: 0.08 },
+  haiku: { input: 0.8, output: 4, cacheWrite: 1, cacheRead: 0.08 },
+};
+
+// Resolve a model id to a price: exact table entry first, else a family-tier
+// fallback matched on the model-family keyword (opus/sonnet/fable/haiku). The
+// fallback applies ONLY to the default production table — a custom priceTable
+// (tests, or a caller pinning exact prices) is honored verbatim, so an id absent
+// from it still resolves to null (the honest unknown-model bucket, never $0). A
+// non-Anthropic or unrecognizable id (a local model, "<synthetic>") also
+// resolves to null.
+export function resolvePrice(model, priceTable = DEFAULT_PRICE_TABLE) {
+  const exact = priceTable[model];
+  if (exact) return exact;
+  if (priceTable !== DEFAULT_PRICE_TABLE) return null;
+  const m = String(model || '').toLowerCase();
+  for (const family of ['opus', 'sonnet', 'fable', 'haiku']) {
+    if (m.includes(family)) return FAMILY_PRICES[family];
+  }
+  return null;
+}
+
 // AC3: the explicit bucket name unpriced/unrecognized models are grouped
 // under — never silently priced at $0, and never dropped.
 export const UNKNOWN_MODEL_BUCKET = 'unknown-model';
@@ -115,7 +146,7 @@ export function recordUsd(record, priceTable = DEFAULT_PRICE_TABLE) {
   const model = record?.message?.model;
   const usage = record?.message?.usage;
   if (!model || !usage) return null;
-  const price = priceTable[model];
+  const price = resolvePrice(model, priceTable);
   if (!price) return null; // unknown-model: not attributed to a trend window
   const bucket = emptyTokenBucket();
   addUsageInto(bucket, usage);
@@ -139,7 +170,7 @@ export function costFromRecords(records, priceTable = DEFAULT_PRICE_TABLE) {
   const unknownTokens = emptyTokenBucket();
   let hasUnknownModel = false;
   for (const [model, tokens] of tokensByModel) {
-    const price = priceTable[model];
+    const price = resolvePrice(model, priceTable);
     if (!price) {
       hasUnknownModel = true;
       unknownTokens.input += tokens.input;

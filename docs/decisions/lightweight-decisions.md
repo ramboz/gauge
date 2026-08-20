@@ -85,4 +85,14 @@ fields), so the documented shape and the helper output agree.
 
 **Scope:** `public/index.html` stat grid (spec 015); servo eval reference (rebaseline pending)
 
+**Commit:** 1c26686
+
+### 2026-08-20 — Dashboard feedback round: queue removed, cost pricing fixed, 2×2 column order
+
+**Decision:** Five owner-requested refinements to the manager card: (1) **removed the attention-queue UI** (the server still computes `attention` on `/api/data` — src/derive.mjs — but the dashboard no longer renders it); (2) the warn-icon ⚠ shares one line with the "last commit" heading; (3) the 2×2 metric grid's top row is reordered to **[LLM ratio] [token cost]** so both cost tiles occupy the right column; (4) **token-cost pricing gained a family-tier fallback** (`resolvePrice` in `src/cost.mjs`) so current models (opus-4-8/4-7/5, sonnet-5/4-6, fable-5) are priced instead of dropping to `$0`; (5) the LLM/human tile shows its commit basis (`· N commits`).
+
+**Context:** #4 root cause — the pricing table only listed `-4-5`/`-3-5`-era ids, so every current-model token (opus-4-8 alone was 33k+ records in the corpus) fell to the unknown-model bucket and cost read `$0.00+`. The family fallback (default-table-only; custom tables honored verbatim) makes cost work across model refreshes. Result: Jig $0.25→$644, Servo $0→$95, CWV/Superpowers $0→$946 (illustrative opus/sonnet pricing). **Known follow-ups (not fixed here):** several projects still read cost `null`/`$0` (Gauge, Shaper) or share an identical figure (CWV/Superpowers $946.82) — a **transcript path→project mapping** issue for nested/self projects, separate from pricing; and the LLM-vs-human split stays a windowed (8-week) `Co-Authored-By` proxy — a truer signal would need session-transcript attribution (deferred).
+
+**Scope:** `public/index.html` (card render), `src/cost.mjs` (pricing fallback)
+
 **Commit:** _pending_

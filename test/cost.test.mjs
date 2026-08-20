@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_PRICE_TABLE,
+  resolvePrice,
   UNKNOWN_MODEL_BUCKET,
   UNATTRIBUTED,
   encodeProjectPath,
@@ -163,6 +164,26 @@ test('costFromRecords: an unpriced/unknown model is surfaced in an explicit unkn
 
 test('costFromRecords: an empty record set returns null (explicit unknown, not a fabricated $0)', () => {
   assert.equal(costFromRecords([], DEFAULT_PRICE_TABLE), null);
+});
+
+test('resolvePrice: current-family models price via the family fallback so a model refresh never silently zeroes cost (#4)', () => {
+  // Real ids seen in session transcripts that the exact table does not list.
+  for (const model of ['claude-opus-4-8', 'claude-opus-4-7', 'claude-opus-5', 'claude-sonnet-5', 'claude-sonnet-4-6', 'claude-fable-5']) {
+    assert.ok(resolvePrice(model), `${model} should resolve a price via the family fallback`);
+  }
+  // Non-Anthropic / synthetic ids stay honestly unknown (null), never $0.
+  assert.equal(resolvePrice('qwen3.6:27b'), null);
+  assert.equal(resolvePrice('<synthetic>'), null);
+  // The fallback is DEFAULT-table only — a custom price table is honored verbatim.
+  assert.equal(resolvePrice('claude-opus-4-8', { other: { input: 1, output: 1, cacheWrite: 1, cacheRead: 1 } }), null);
+});
+
+test('costFromRecords: a current-family model (claude-opus-4-8) is priced into a real by-model bucket via the fallback, not dumped into unknown-model (#4)', () => {
+  const records = [{ requestId: 'r1', message: { id: 'm1', model: 'claude-opus-4-8', usage: { input_tokens: 1_000_000, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } } }];
+  const result = costFromRecords(records); // default table → family fallback active
+  assert.equal(result.hasUnknownModel, false);
+  assert.ok(result.totalUsd > 0, 'opus-4-8 tokens must produce a real cost, not $0');
+  assert.ok(result.byModel.find((b) => b.model === 'claude-opus-4-8' && b.usd > 0));
 });
 
 test('costFromRecords: records lacking usage/model (e.g. user turns) are ignored, never crash, never counted', () => {
