@@ -2,7 +2,15 @@
 
 ## Status
 
-`committed`
+`shipped` — closed out 2026-08-19. The complete local pull portfolio loop was
+delivered: curated goal/deadline onboarding (ADR-0011), history-derived
+forecast/risk (ADR-0012), and the cross-project attention queue (ADR-0013) —
+spec 009 all DONE. Superseded and extended by the `manager-dashboard-local-data`
+and `thin-client-and-central-collection` releases (both shipped). Status
+corrected from a stale `committed`: the loop had long since shipped, but the
+unflipped status made Gauge pick this as its "active milestone" and read 100%
+milestone-progress beside a behind-pace whole-project forecast (dogfood finding,
+2026-08-19).
 
 Allowed statuses: `candidate`, `committed`, `shipping`, `shipped`, `dropped`.
 Do not move a plan from `candidate` to `committed` without an explicit user decision.
