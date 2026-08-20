@@ -835,13 +835,12 @@ test('server /api/data wiring computes velocity + cost trends and attaches them 
   assert.match(src, /attachCostTrend\(/);
 });
 
-test('the card renders a velocity trend and a cost trend, with an explicit "not enough history yet" fallback (014-03 AC2/AC3/AC5)', () => {
+test('the card renders the cost trend as a history-derived graph cell, honestly degrading when history is thin (014-03 AC2/AC3/AC5; 2×2 polish retired the separate velocity-trend row)', () => {
   const html = read('public/index.html');
-  assert.match(html, /function trendBlock\(/);
-  assert.match(html, /velocityTrend/);
+  assert.match(html, /function trendGraphTile\(/);
   assert.match(html, /costTrend/);
-  assert.match(html, /not enough history yet/);
-  assert.match(html, /\$\{trendBlock\(p\)\}/); // wired into the card
+  assert.match(html, /· n\/a/); // explicit thin-history fallback, never a fabricated line
+  assert.match(html, /\$\{statsRow\(p\)\}/); // the trend cell lives in the 2×2 stat grid, wired into the card
 });
 
 // --- 014-04: live-session "running now" enrichment --------------------------
@@ -871,17 +870,17 @@ test('the card renders an additive "running now" badge only when p.runningNow (0
   assert.doesNotMatch(context.card({ project: { id: 'x', label: 'X' }, runningNow: false, signals: [], collection: { status: 'ok' } }), /running now/);
 });
 
-test('trendBlock: renders sparklines for present trends and the unknown fallback for null (014-03)', () => {
+test('card renders the cost-trend graph cell as an SVG sparkline, degrading to a "· n/a" label when history is too thin (014-03; 2×2 polish)', () => {
   const context = cardContext();
-  const withTrends = context.trendBlock({
-    velocityTrend: { points: [{ atMs: 1, perWeek: 1 }, { atMs: 2, perWeek: 3 }] },
-    costTrend: { points: [{ atMs: 1, usd: 0.5 }, { atMs: 2, usd: 1.2 }] },
-  });
-  assert.match(withTrends, /velocity trend/);
-  assert.match(withTrends, /cost trend/);
-  assert.doesNotMatch(withTrends, /not enough history yet/); // both present → sparklines
-  const nullTrends = context.trendBlock({ velocityTrend: null, costTrend: null });
-  assert.match(nullTrends, /not enough history yet/); // AC5 honest fallback
+  // 2×2 polish: the velocity-trend row was retired; the cost trend (014-03) is
+  // now the second graph cell of the stat grid — a sparkline when there are ≥2
+  // points, an honest "cost trend · n/a" otherwise (never a fabricated line).
+  const withTrend = context.card({ ...cardBase, project: { id: 'a', label: 'A' }, costTrend: { points: [{ atMs: 1, usd: 0.5 }, { atMs: 2, usd: 1.2 }] } });
+  assert.match(withTrend, /cost trend/);
+  assert.match(withTrend, /<svg class="spark-svg"/); // the trend cell draws a graph (velocity is absent here, so this SVG is the trend's)
+  assert.doesNotMatch(withTrend, /cost trend · n\/a/);
+  const noTrend = context.card({ ...cardBase, project: { id: 'a', label: 'A' }, costTrend: null });
+  assert.match(noTrend, /cost trend · n\/a/); // AC5 honest fallback
 });
 
 // --- 009-01 AC5: runtime never reads/parses product-vision.md, a release doc, ---

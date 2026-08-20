@@ -33,8 +33,10 @@
   .appet { color:var(--muted); font-weight:400; font-size:12px; text-align:right; flex:none; max-width:45% }
   .fallnote { font-size:12px; color:var(--muted); font-style:italic; margin-top:6px }
   .mnext { margin-top:6px; overflow-wrap:anywhere }
-  /* 015-03: compact stat-tile row (velocity · cost · team). */
-  .stats { display:flex; gap:16px; margin-top:11px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap }
+  /* 015-03 + polish: metrics as a tight 2×2 grid — big numbers (cost · LLM
+     ratio) on the top row, the two graphs (velocity · cost trend) side by side
+     on the second row. */
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:11px 16px; margin-top:11px; padding-top:10px; border-top:1px solid var(--border) }
   .stat { min-width:0 }.stat .n { font-weight:700; font-size:14px }.stat .l { font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin-top:2px; overflow-wrap:anywhere }
   .head { display:flex; justify-content:space-between; gap:8px }.head h2 { font-size:15px; margin:0 }.chip { font-size:11px; padding:2px 9px; border-radius:10px; background:var(--inset) }.ok { color:var(--good) }.partial { color:var(--warn) }.error,.err { color:var(--bad) }.meta,.counts { color:var(--muted); font-size:12px }
   .barrow { display:flex; align-items:center; gap:10px; margin-top:10px }.bar { flex:1; height:6px; background:var(--inset); border-radius:4px; overflow:hidden }.bar div { height:100%; background:var(--accent) }.pct { min-width:38px; text-align:right; font-weight:600 }
@@ -320,16 +322,15 @@ function velocityHeadline(perWeek) {
 // null trend (too few observations, or no attributable data) reads an explicit
 // "not enough history yet", never a fabricated flat line. The point-in-time
 // values above stay; this adds the direction-over-time read.
-function trendSpark(trend, key) {
-  if (!trend || !Array.isArray(trend.points) || trend.points.length < 2) {
-    return `<span class="meta">not enough history yet</span>`;
-  }
-  const values = trend.points.map((pt) => Number(pt[key]) || 0);
-  return `<span class="spark" aria-hidden="true" title="over accrued observations, oldest → newest">${sparkline(values)}</span>`;
-}
-function trendBlock(p) {
-  return `<div class="counts">velocity trend ${trendSpark(p.velocityTrend, 'perWeek')}</div>`
-    + `<div class="counts">cost trend ${trendSpark(p.costTrend, 'usd')}</div>`;
+// A graph tile for a history-derived TREND (014-03) — a sparkline over accrued
+// observations — used as one of the 2×2 stat grid's second-row graph cells. Too
+// few points (or a null trend) degrades to a "—" value with a "· n/a" label,
+// never a fabricated flat line presented as data (AC5).
+function trendGraphTile(trend, key, label) {
+  const has = trend && Array.isArray(trend.points) && trend.points.length >= 2;
+  return statTile(
+    has ? `<span class="spark" aria-hidden="true" title="over accrued observations, oldest → newest">${sparkline(trend.points.map((pt) => Number(pt[key]) || 0))}</span>` : '<span class="unknown">—</span>',
+    has ? label : `${label} · n/a`);
 }
 // 012-05: team signals — human-vs-agent split + contributor count, attached
 // by the server read layer (src/team.mjs's attachTeamSignals) as `p.team` —
@@ -355,17 +356,15 @@ function teamHeadline(t) {
   if (t.agentCoauthoredPct > 0) return `~${esc(t.agentCoauthoredPct)}%`;
   return t.agentCoauthoredCount > 0 ? '&lt; 1%' : '0%';
 }
-// 015-03: the three point-in-time signals (velocity · cost · team) render as a
-// compact `.stats` flex-wrap row of `.stat` tiles (mockup) — a `.n` value over a
-// small uppercase `.l` label — replacing the old stacked full-width `<div
-// class="counts">` lines (velocityBlock/teamBlock/costBlock). Honest unknowns
-// render a "—" value with an explicit "<x> unknown" label, never a fabricated 0.
+// 015-03 + polish: the metrics render as a tight 2×2 `.stats` grid — a `.n`
+// value over a small uppercase `.l` label per cell — replacing the old stacked
+// full-width lines (velocityBlock/teamBlock/costBlock). TOP ROW = the two "big
+// number" tiles (token cost · agent-coauthored LLM ratio); SECOND ROW = the two
+// graph tiles side by side (velocity · cost trend). Honest unknowns render a
+// "—" value with an explicit "<x> unknown" label, never a fabricated 0.
 function statTile(nHtml, label) { return `<div class="stat"><div class="n">${nHtml}</div><div class="l">${label}</div></div>`; }
 function statsRow(p) {
   const v = p.velocity, t = p.team, c = p.tokenCost;
-  const velTile = statTile(
-    v ? `<span class="spark" aria-hidden="true" title="weekly commits, oldest → newest">${sparkline(v.buckets)}</span>` : '<span class="unknown">—</span>',
-    v ? `velocity · ${velocityHeadline(v.perWeek)}` : 'velocity unknown');
   // The 012-03 by-model legend no longer clutters the compact face — it moves to
   // the tile's title tooltip (still present in the DOM, AC5), while the by-
   // activity/by-skill detail keeps its own costDetailBlock expander below.
@@ -376,7 +375,12 @@ function statsRow(p) {
   const teamTile = statTile(
     t ? teamHeadline(t) : '<span class="unknown">—</span>',
     t ? `agent-coauthored (proxy) · ${esc(t.contributorCount)} contributor${t.contributorCount === 1 ? '' : 's'}` : 'team unknown');
-  return `<div class="stats">${velTile}${costTile}${teamTile}</div>`;
+  const velTile = statTile(
+    v ? `<span class="spark" aria-hidden="true" title="weekly commits, oldest → newest">${sparkline(v.buckets)}</span>` : '<span class="unknown">—</span>',
+    v ? `velocity · ${velocityHeadline(v.perWeek)}` : 'velocity unknown');
+  const costTrendTile = trendGraphTile(p.costTrend, 'usd', 'cost trend');
+  // Row-major fill: [cost] [ratio] on top, [velocity] [cost trend] below.
+  return `<div class="stats">${costTile}${teamTile}${velTile}${costTrendTile}</div>`;
 }
 // 012-03: token cost, attached by the server read layer (src/cost.mjs's
 // attachTokenCost) as `p.tokenCost` — either `{ totalUsd, hasUnknownModel,
@@ -637,7 +641,6 @@ function card(p) {
     ${barProgress?`<div class="barrow"><div class="bar"><div style="width:${barPct??0}%"></div></div><span class="pct">${barPct===null?'—':barPct+'%'}</span></div><div class="counts">${milestoneProgress?'milestone':'overall'} · ${barProgress.done} / ${barProgress.denom} specs${barProgress.deferred?` · ${barProgress.deferred} deferred`:''}</div>`:`<p class="counts">Execution signal ${esc(execution?.status||'unknown')}.</p>`}
     ${milestoneNext}
     ${statsRow(p)}
-    ${trendBlock(p)}
     ${(!active&&discoveredItems.length)?`<div class="sect"><span class="meta">workstreams</span>${summarizeDiscovered(discoveredItems).map(discoveredRow).join('')}</div>`:''}
     ${worktreeInfo(p)}
     ${narrativeBlock}${problems?`<p class="err">${problems}</p>`:''}
