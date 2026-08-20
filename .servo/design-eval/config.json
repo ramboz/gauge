@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "approval_status": "approved",
+  "app_url": "http://localhost:5111/",
+  "viewport": {
+    "width": 1280,
+    "height": 1600,
+    "deviceScaleFactor": 2
+  },
+  "judge": {
+    "model": "claude-sonnet-5",
+    "transport": "cli",
+    "temperature": 0.6,
+    "max_tokens": 1024
+  },
+  "samples": {
+    "n": 2,
+    "k": 1.0,
+    "delta": 0.03
+  },
+  "threshold": 0.35,
+  "rubric": "Score, in [0,1], how faithfully the FIRST image (the implemented Gauge manager dashboard) reproduces the design system of the SECOND image (the frozen mockup's project-card grid). The FIRST image is a full dashboard page \u2014 it may include a page header and an 'Attention queue' list ABOVE the project cards; judge ONLY the project cards' fidelity to the reference cards, ignoring the header and the attention queue. Assess: (1) card layout & internal section order \u2014 a RAG-tinted status callout BAND across the top of each card, then a compact single milestone line, a progress bar, and a horizontal STAT-TILE row; (2) spacing & proportion \u2014 tight cards with NO content overflowing the card box and no tall runaway columns; (3) colour palette \u2014 accent blue, warm neutrals, and RAG green/amber/red/gray semantics on the card's left border and callout; (4) typography \u2014 families, weights, relative sizes, small UPPERCASE stat-tile labels; (5) component shapes \u2014 rounded cards with a colored left border, pill chips, compact stat tiles, and crisp SVG sparklines (NOT unicode block characters). IGNORE dynamic content values (specific project names, numbers, dates, commit counts), exact pixel positions, and how many cards are shown. 1.0 = the cards are visually indistinguishable in design intent from the reference; 0.5 = right structure but wrong styling (e.g. stacked full-width text blocks instead of a stat-tile row, unicode-block sparklines, or content overflowing the card); 0.0 = unrelated.",
+  "screens": [
+    {
+      "id": "portfolio-cards",
+      "reference": "refs/portfolio-cards.png",
+      "referenceSource": {
+        "file": "docs/specs/012-portfolio-manager-analytics/design/manager-dashboard-mockup.html",
+        "selector": ".grid",
+        "crop": {},
+        "settleMs": 1500
+      },
+      "setup": "setups/portfolio-cards.mjs",
+      "weight": 1.0
+    }
+  ],
+  "hashes": {
+    "rubric": "sha256:aa98b90e02361c5b53395bb5ef0d1304138c59517aa8b2c4abe7f7932f4e6525",
+    "refs/portfolio-cards.png": "sha256:3b7a4d209be6b576100c32b2ca756d5f1f32e7a6c3323ec524b88b7c9fbd26a6",
+    "setups/portfolio-cards.mjs": "sha256:80d69186fd0e6a5a5e54e255c5ab63128319317963b1869291dcbeef177b7bfc"
+  },
+  "approved_content_hash": "sha256:108a2079b3e19f463996f801b3ed6358a84795b10af57bd233f7eb8611e95a1f",
+  "approved_at": "2026-08-20T01:13:08Z"
+}

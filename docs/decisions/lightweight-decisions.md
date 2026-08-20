@@ -65,4 +65,14 @@ fields), so the documented shape and the helper output agree.
 
 **Scope:** src/derive.mjs `DENOM_TOLERANCE` (forecast Gate 4, ADR-0012 tier 1 / ADR-0018 tiers 2–3)
 
+**Commit:** 0fe9d8e
+
+### 2026-08-19 — Playwright scoped to `.servo/design-eval/`, not a product dependency
+
+**Decision:** The servo design-fidelity eval (spec 015's gate) requires Playwright + Chromium. Install it in `.servo/design-eval/package.json` with its own gitignored `node_modules`, so Gauge's product `package.json` stays `{}` (zero dependencies of any kind).
+
+**Context:** ADR-0001 forbids **runtime** dependencies; Playwright is dev/eval-only tooling that never ships, so it does not violate ADR-0001's letter — but Gauge has zero deps of *any* kind as a point of identity, and this would have been its first. Scoping the dep to the eval tooling keeps the product manifest pristine while still enabling the servo `design-eval` machine-gate the owner chose. Chromium installs to the global `~/Library/Caches/ms-playwright` cache, not the repo. Judge transport is `cli` (`claude -p`, subscription auth) since no `ANTHROPIC_API_KEY` is set. Known follow-up: the live judge is blocked until the `claude` CLI OAuth session is refreshed (or an API key is provided) — servo returns an honest `env_error`, never a silent pass.
+
+**Scope:** `.servo/design-eval/` tooling (spec 015 design-fidelity gate)
+
 **Commit:** _pending_

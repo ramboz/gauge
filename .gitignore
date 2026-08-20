@@ -32,3 +32,7 @@ credentials/
 .jig/semantic-index-events.jsonl
 .jig/servo-hint-shown
 # <<< jig secret-ignore <<<
+
+# servo design-eval tooling (scoped, dev-only; see ADR-0001 note)
+.servo/design-eval/node_modules/
+.servo/design-eval/shots/

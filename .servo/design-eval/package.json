@@ -1,0 +1,8 @@
+{
+  "name": "gauge-design-eval",
+  "private": true,
+  "description": "Servo design-fidelity eval tooling (dev-only). Isolated from Gauge's zero-dependency product manifest per ADR-0001 — see docs/decisions/lightweight-decisions.md.",
+  "devDependencies": {
+    "playwright": "^1.48.0"
+  }
+}
