@@ -115,4 +115,6 @@ fields), so the documented shape and the helper output agree.
 
 **Scope:** `project-profile-v1` schema + `src/{profile,config,cost,server}.mjs` (config contract lives in the repo; the owner's actual `costPaths` values live in the gitignored config)
 
-**Commit:** _pending_
+**Applied (methodology, values in the gitignored config):** All configured multi-track projects now declare `costPaths` explicitly rather than relying on the heuristic. Mapping rule used: a track's `costPaths` = the working-directory paths where its Claude sessions actually run — cross-checked against the source's own scope manifest when present (the personalization workspace ships a `repos.yaml` tagging each code repo with its owning track). **Key finding:** for that workspace, *all* sessions ran in the umbrella workspace repo (+ worktrees); the individual code repos had **zero** transcripts. So the umbrella's real cost is attributed to the track with observable worktree evidence (offer-management), each track additionally lists its own scoped code repos (forward-looking — currently $0, but future sessions there will count), and tracks with neither evidence nor sessions declare `[]` (explicit $0). Consequence to revisit: work done for several tracks from ONE shared umbrella CWD still can't be split per-track by transcripts alone — the umbrella-→-primary-track attribution is a judgment, not ground truth.
+
+**Commit:** a75ad44 (feature); config values are gitignored (private paths, sensitive-data constraint)
