@@ -105,4 +105,14 @@ fields), so the documented shape and the helper output agree.
 
 **Scope:** `src/cost.mjs` (transcript mapping + track partition), `src/server.mjs` (per-track wiring)
 
+**Commit:** a55a88a
+
+### 2026-08-20 — Per-track `costPaths`: explicit multi-track cost attribution
+
+**Decision:** Add an optional `costPaths` field to a profile **entry** (a monorepo track) — an array of repo working-directory paths (absolute or config-relative) whose Claude Code transcripts, worktrees included, count toward THAT track's token cost. It is the durable replacement for the worktree-name heuristic: declaring it **overrides** the heuristic; an empty list `[]` reads **$0** (a track never worked on); and a track spanning multiple external repos can aggregate them. Additive `project-profile-v1` field (ADR-0009 territory) — a profile with no `costPaths` validates and behaves exactly as before (heuristic when multi-track, whole-repo when single).
+
+**Context:** Follows the worktree/multi-track cost fixes above; the owner asked for the robust fix so a never-touched track (Superpowers) reads 0 predictably rather than by worktree-name luck. Attribution precedence is now: explicit `costPaths` → multi-track worktree heuristic → single-repo whole. Implemented across the schema (`schemas/project-profile-v1.schema.json`), the runtime validator (`src/profile.mjs`), decomposition (`src/config.mjs` `expandEntries` resolves each entry's paths absolute), and attribution (`src/cost.mjs` `sessionFilesForProject` honors a `costPaths` scope; `src/server.mjs` prefers it). The gitignored `gauge.config.json` now declares `cwv.costPaths = ["…/mystique"]` and `superpowers.costPaths = []`, giving CWV **$3301** and Superpowers an **explicit $0** (verified). +3 regression tests (validator / decomposition / attribution); full suite 599/599 green.
+
+**Scope:** `project-profile-v1` schema + `src/{profile,config,cost,server}.mjs` (config contract lives in the repo; the owner's actual `costPaths` values live in the gitignored config)
+
 **Commit:** _pending_

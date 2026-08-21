@@ -97,7 +97,7 @@ function compositeId(baseId, entryId, projectName) {
 // signal, per D3) but each carrying its own single-entry, artifactRoot-scoped
 // profile. observation.mjs/state.mjs see only ordinary single-entry projects
 // afterward — no change required there.
-function expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinnedWorkstreams, hiddenWorkstreams, seen) {
+function expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinnedWorkstreams, hiddenWorkstreams, seen, base) {
   const profileValue = project.profile;
   const seenEntryIds = new Set();
   return profileValue.entries.map((entry) => {
@@ -135,6 +135,11 @@ function expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinn
       signalPolicies,
       pinnedWorkstreams,
       hiddenWorkstreams,
+      // costPaths (per-track cost attribution): resolved absolute repo paths
+      // whose transcripts count toward THIS track's cost. Only attached when
+      // declared — an absent field keeps the worktree-name heuristic; an empty
+      // array is carried through as an explicit "$0" (never-touched track).
+      ...(entry.costPaths ? { costPaths: entry.costPaths.map((p) => resolveFrom(base, p)) } : {}),
       profile: resolvedSingleProfile(merged, resolvedPath),
     };
   });
@@ -212,7 +217,7 @@ export function normalizeConfig(input, configPath) {
     // seam, since observation.mjs/state.mjs downstream see only ordinary
     // single-entry projects either way (AC1).
     if (project.profile && Array.isArray(project.profile.entries)) {
-      return expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinnedWorkstreams, hiddenWorkstreams, seen)
+      return expandEntries(project, id, resolvedPath, adapters, signalPolicies, pinnedWorkstreams, hiddenWorkstreams, seen, base)
         .map((entry) => ({ ...entry, resolvePullRequests }));
     }
 

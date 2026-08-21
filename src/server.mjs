@@ -111,13 +111,16 @@ const server = http.createServer((req, res) => {
       // projectCostBundle's own default-parameter fallback, so no separate
       // branch is needed.
       const transcriptsRoot = process.env.GAUGE_TRANSCRIPTS_ROOT || undefined;
-      // Multi-track cost attribution: projects sharing a repo `path` (monorepo
-      // tracks) get per-track worktree-partitioned options so a never-touched
-      // track reads 0 instead of the full repo total; single-repo projects get
-      // undefined (worktree-inclusive whole).
+      // Cost attribution precedence: an explicit per-track `costPaths`
+      // declaration (config) wins; else monorepo tracks sharing a repo `path`
+      // get the worktree-name heuristic partition (never-touched track → 0);
+      // else a single-repo project reads its own path (worktree-inclusive).
       const trackOptionsById = trackOptionsForProjects(freshConfig.projects);
+      const costScopeFor = (project) => (project.costPaths !== undefined
+        ? { costPaths: project.costPaths }
+        : trackOptionsById[project.id]);
       const costBundleByProjectId = Object.fromEntries(
-        freshConfig.projects.map((project) => [project.id, projectCostBundle(project.path, transcriptsRoot, undefined, undefined, trackOptionsById[project.id])]),
+        freshConfig.projects.map((project) => [project.id, projectCostBundle(project.path, transcriptsRoot, undefined, undefined, costScopeFor(project))]),
       );
       const costByProjectId = Object.fromEntries(
         freshConfig.projects.map((project) => [project.id, costBundleByProjectId[project.id]?.tokenCost ?? null]),

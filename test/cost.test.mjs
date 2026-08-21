@@ -131,6 +131,33 @@ test('trackOptionsForProjects: path-sharing projects become tracks with slugs fr
   assert.equal(opts.gauge, undefined);
 });
 
+test('explicit costPaths: sessionFilesForProject / projectCostBundle union transcripts across declared repos (worktree-inclusive); an empty list reads $0 (per-track config declaration)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gauge-cost-paths-'));
+  try {
+    const rec = (id) => JSON.stringify({ requestId: id, message: { id: `m${id}`, model: 'claude-opus-4-8', usage: { input_tokens: 1_000_000, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } } });
+    const repoA = '/Users/fake/repo-a';
+    const repoB = '/Users/fake/repo-b';
+    const layout = {
+      [encodeProjectPath(repoA)]: 'a1',
+      [`${encodeProjectPath(repoA)}--claude-worktrees-wt`]: 'a2',
+      [encodeProjectPath(repoB)]: 'b1',
+    };
+    for (const [dir, r] of Object.entries(layout)) {
+      fs.mkdirSync(path.join(root, dir));
+      fs.writeFileSync(path.join(root, dir, 's.jsonl'), rec(r));
+    }
+    // Union across repoA (main + worktree) + repoB (main) = 3 files.
+    assert.equal(sessionFilesForProject(root, '/ignored', { costPaths: [repoA, repoB] }).length, 3);
+    const bundle = projectCostBundle('/ignored', root, DEFAULT_PRICE_TABLE, undefined, { costPaths: [repoA, repoB] });
+    assert.ok(bundle.tokenCost.totalUsd > 0, 'declared repos produce a real cost');
+    // An empty list → no files → null (explicit $0 for a never-touched track).
+    assert.deepEqual(sessionFilesForProject(root, '/ignored', { costPaths: [] }), []);
+    assert.equal(projectCostBundle('/ignored', root, DEFAULT_PRICE_TABLE, undefined, { costPaths: [] }), null);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('sessionFilesForProject: enumerates every .jsonl session file under the encoded project dir', () => {
   const files = sessionFilesForProject(FIXTURE_ROOT, ALPHA_PATH);
   assert.equal(files.length, 3);

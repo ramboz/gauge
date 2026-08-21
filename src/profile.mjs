@@ -96,6 +96,14 @@ function validateEntry(entry, index, errors) {
       validateGoalOrDeadline(`entries[${index}].appetiteWindow`, value, DEADLINE_PROVENANCE, DEADLINE_VALUE_PATTERN, errors);
       continue;
     }
+    if (key === 'costPaths') {
+      // Array of non-empty path strings; an empty array is valid (explicit $0
+      // for a never-worked-on track).
+      if (!Array.isArray(value) || value.some((p) => typeof p !== 'string' || !p.trim())) {
+        errors.push(`profile.entries[${index}].costPaths must be an array of non-empty path strings`);
+      }
+      continue;
+    }
     if (typeof value !== 'string' || !value.trim()) {
       errors.push(`profile.entries[${index}].${key} must be a non-empty string`);
     }

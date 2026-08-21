@@ -139,6 +139,11 @@
           "appetiteWindow": {
             "$ref": "#/$defs/deadline",
             "description": "Optional per-entry soft appetite-window (slice 013-03), same shape as the top-level profile's appetiteWindow. Defaults to the profile's appetiteWindow, then absent."
+          },
+          "costPaths": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Optional explicit token-cost attribution for a monorepo TRACK: the repo working-directory paths (absolute, or relative to the config file) whose Claude Code session transcripts — worktrees included — count toward THIS entry's cost. Declaring it overrides the worktree-name heuristic; an empty list `[]` reads $0 (a track never worked on). Lets a track that spans multiple external repos aggregate their cost, and keeps sibling tracks from each inheriting the full umbrella-repo total."
           }
         }
       }

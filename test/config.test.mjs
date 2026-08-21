@@ -639,3 +639,14 @@ test('configuration rejects malformed public fields before observation', () => {
     );
   }
 });
+
+test('multi-entry decomposition carries a track\'s resolved (absolute) costPaths onto the normalized project; a track that declares none carries no key', () => {
+  const cfg = normalizeConfig({ version: 1, projects: [{ id: 'm', path: '/Users/fake/mono', profile: { entries: [
+    { id: 'cwv', label: 'CWV', artifactRoot: 'docs/cwv', costPaths: ['/Users/fake/mono', '/Users/fake/other'] },
+    { id: 'sp', label: 'SP', artifactRoot: 'docs/sp', costPaths: [] },
+    { id: 'x', label: 'X', artifactRoot: 'docs/x' },
+  ] } }] }, '/tmp/gauge.config.json');
+  assert.deepEqual(cfg.projects.find((p) => p.id === 'm-cwv').costPaths, ['/Users/fake/mono', '/Users/fake/other']);
+  assert.deepEqual(cfg.projects.find((p) => p.id === 'm-sp').costPaths, []); // explicit $0 preserved
+  assert.equal('costPaths' in cfg.projects.find((p) => p.id === 'm-x'), false); // undeclared → heuristic path
+});

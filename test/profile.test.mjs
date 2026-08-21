@@ -520,3 +520,10 @@ test('entry-level appetiteWindow never hits the generic non-empty-string check (
   });
   assert.ok(errors.every((message) => !message.includes('.appetiteWindow must be a non-empty string')), errors.join('; '));
 });
+
+test('validateProfile: an entry costPaths accepts an array of paths (empty = explicit $0); rejects a non-array or a blank member', () => {
+  assert.deepEqual(validateProfile({ entries: [{ id: 'a', label: 'A', artifactRoot: 'docs', costPaths: ['/x', '/y'] }] }), []);
+  assert.deepEqual(validateProfile({ entries: [{ id: 'a', label: 'A', artifactRoot: 'docs', costPaths: [] }] }), []);
+  assert.ok(validateProfile({ entries: [{ id: 'a', label: 'A', artifactRoot: 'docs', costPaths: '/x' }] }).length, 'a non-array costPaths is rejected');
+  assert.ok(validateProfile({ entries: [{ id: 'a', label: 'A', artifactRoot: 'docs', costPaths: ['  '] }] }).length, 'a blank member is rejected');
+});

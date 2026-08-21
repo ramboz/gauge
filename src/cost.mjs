@@ -290,17 +290,9 @@ export function trackOptionsForProjects(projects) {
   return out;
 }
 
-// Enumerate a project's `.jsonl` session files (worktree-inclusive). For a
-// multi-track project, pass `{ claimSlug, siblingSlugs }` (≥2 siblings) to get
-// only this track's partitioned share; a single-repo project (or no track
-// options) gets every dir's files.
-export function sessionFilesForProject(projectsRoot, projectPath, { claimSlug, siblingSlugs } = {}) {
-  const dirs = projectTranscriptDirs(projectsRoot, projectPath);
-  const chosen = (siblingSlugs && siblingSlugs.length > 1)
-    ? trackTranscriptDirs(dirs, encodeProjectPath(projectPath), claimSlug, siblingSlugs)
-    : dirs;
+function collectJsonl(projectsRoot, dirNames) {
   const files = [];
-  for (const dirName of chosen) {
+  for (const dirName of dirNames) {
     const dir = path.join(projectsRoot, dirName);
     let entries;
     try {
@@ -310,7 +302,27 @@ export function sessionFilesForProject(projectsRoot, projectPath, { claimSlug, s
     }
     for (const name of entries) if (name.endsWith('.jsonl')) files.push(path.join(dir, name));
   }
-  return files.sort();
+  return files;
+}
+
+// Enumerate a project's `.jsonl` session files (worktree-inclusive). Resolution,
+// in precedence order:
+//   `{ costPaths }`  — EXPLICIT per-track attribution (config-declared): the
+//                      union of transcripts across the declared repo paths, each
+//                      worktree-inclusive. An empty list yields no files → $0
+//                      (a track deliberately never worked on).
+//   `{ claimSlug, siblingSlugs }` — multi-track HEURISTIC partition (≥2 siblings)
+//                      when no explicit costPaths were declared.
+//   (neither)        — a single-repo project: every dir under its own path.
+export function sessionFilesForProject(projectsRoot, projectPath, { claimSlug, siblingSlugs, costPaths } = {}) {
+  if (costPaths !== undefined) {
+    return collectJsonl(projectsRoot, costPaths.flatMap((p) => projectTranscriptDirs(projectsRoot, p))).sort();
+  }
+  const dirs = projectTranscriptDirs(projectsRoot, projectPath);
+  const chosen = (siblingSlugs && siblingSlugs.length > 1)
+    ? trackTranscriptDirs(dirs, encodeProjectPath(projectPath), claimSlug, siblingSlugs)
+    : dirs;
+  return collectJsonl(projectsRoot, chosen).sort();
 }
 
 // Thin I/O wrapper (AC1/AC6): reads and JSON-parses one session's records,
